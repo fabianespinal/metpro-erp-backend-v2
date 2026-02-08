@@ -115,7 +115,7 @@ CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status);
 INSERT OR IGNORE INTO users (username, password_hash, email, full_name, role, is_active)
 VALUES (
     'admin',
-    '$argon2id$v=19$m=65536,t=3,p=4$Wm9uZUxvZ2luU2FsdA$8xJq6u7xY1l0u7xJq6u7xY1l0u7xJq6u7xY1l0u7xJq6u7xY1l0u7xJq6u7xY1l0',
+    '$argon2id$v=19$m=65536,t=3,p=4$M3VhZ2VxZ3N0c2FsdA$3y7xJq6u7xY1l0u7xJq6u7xY1l0u7xJq6u7xY1l0u7xJq6u7xY1l0u7xJq6u7xY1l0',
     'admin@metpro.com',
     'System Administrator',
     'admin',

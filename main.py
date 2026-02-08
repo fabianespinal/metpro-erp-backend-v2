@@ -31,14 +31,18 @@ app = FastAPI(
 # ============================================================
 @app.on_event("startup")
 def startup():
-    base_dir = os.path.dirname(__file__)
+    base_dir = os.path.dirname(os.path.abspath(__file__))
 
-    # Absolute paths
     schema_path = os.path.join(base_dir, "schema.sql")
     db_path = os.path.join(base_dir, "database.db")
 
+    print("🚀 STARTUP EVENT EXECUTED ON RENDER")
+    print("Schema path:", schema_path)
+    print("DB path:", db_path)
+
     # Create DB file if missing
     if not os.path.exists(db_path):
+        print("Creating new database file...")
         open(db_path, "w").close()
 
     conn = sqlite3.connect(db_path)

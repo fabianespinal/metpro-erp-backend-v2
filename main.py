@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from datetime import datetime
 
-# Import all routers
+# Import routers
 from auth.router import router as auth_router
 from users.router import router as users_router
 from clients.router import router as clients_router
@@ -19,14 +19,32 @@ from projects.router import router as projects_router
 from reports.router import router as reports_router
 from pdf.router import router as pdf_router
 
-# Create FastAPI app
+# Create ONE FastAPI app
 app = FastAPI(
     title='METPRO ERP API',
     description='Modular ERP System for Construction & Services',
     version='2.0.0'
 )
 
-# CORS Configuration - MUST COME BEFORE ROUTERS
+# Startup: initialize SQLite database
+@app.on_event("startup")
+def startup():
+    if not os.path.exists("database.db"):
+        open("database.db", "w").close()
+
+    conn = sqlite3.connect("database.db")
+    cursor = conn.cursor()
+
+    try:
+        with open("schema.sql", "r") as f:
+            cursor.executescript(f.read())
+    except Exception as e:
+        print("Error loading schema:", e)
+
+    conn.commit()
+    conn.close()
+
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -40,11 +58,11 @@ app.add_middleware(
     expose_headers=["*"]
 )
 
-# Static files (optional - only if you have assets folder)
+# Static files
 if os.path.exists("assets"):
     app.mount("/assets", StaticFiles(directory="assets"), name="assets")
 
-# Register all routers
+# Routers
 app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(clients_router)
@@ -55,52 +73,23 @@ app.include_router(projects_router)
 app.include_router(reports_router)
 app.include_router(pdf_router)
 
-# Root endpoints
-@app.get('/')
+# Root
+@app.get("/")
 def read_root():
     return {
-        'message': 'METPRO ERP API is running!',
-        'version': '2.0.0',
-        'architecture': 'Modular',
-        'database': 'SQLite'
+        "message": "METPRO ERP API is running!",
+        "version": "2.0.0",
+        "architecture": "Modular",
+        "database": "SQLite"
     }
 
-@app.get('/health')
+@app.get("/health")
 def health_check():
     return {
-        'status': 'healthy',
-        'timestamp': datetime.now().isoformat(),
-        'modules': [
-            'auth', 'users', 'clients', 'products',
-            'quotes', 'invoices', 'projects', 'reports', 'pdf'
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "modules": [
+            "auth", "users", "clients", "products",
+            "quotes", "invoices", "projects", "reports", "pdf"
         ]
     }
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
-
-
-
-app = FastAPI()
-
-@app.on_event("startup")
-def startup():
-    # Create database file if it doesn't exist
-    if not os.path.exists("database.db"):
-        open("database.db", "w").close()
-
-    # Connect to SQLite
-    conn = sqlite3.connect("database.db")
-    cursor = conn.cursor()
-
-    # Load schema.sql and execute it
-    try:
-        with open("schema.sql", "r") as f:
-            schema = f.read()
-            cursor.executescript(schema)
-    except Exception as e:
-        print("Error loading schema:", e)
-
-    conn.commit()
-    conn.close()

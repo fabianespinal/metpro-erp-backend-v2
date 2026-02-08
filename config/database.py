@@ -2,14 +2,18 @@ import os
 import sqlite3
 from contextlib import contextmanager
 
-# Database configuration
-DATABASE_PATH = os.environ.get("DATABASE_PATH", "metpro_erp.db")
+# Absolute path to database.db (same file created in startup)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.abspath(os.path.join(BASE_DIR, "..", "database.db"))
 
+@contextmanager
 def get_db_connection():
-    """Get a new database connection to SQLite"""
-    conn = sqlite3.connect(DATABASE_PATH, timeout=10)
+    conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
-    return conn
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 @contextmanager
 def get_db():

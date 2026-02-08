@@ -14,16 +14,3 @@ def get_db_connection():
         yield conn
     finally:
         conn.close()
-
-@contextmanager
-def get_db():
-    """Context manager for database connections"""
-    conn = get_db_connection()
-    try:
-        yield conn
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()

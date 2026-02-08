@@ -139,9 +139,41 @@ def register(user_data: RegisterRequest):
 @router.get('/me')
 def get_current_user(current_user: dict = None):
     """Get current authenticated user info"""
-    # This would use the verify_token dependency in practice
-    # For now, return placeholder
     return {
         'username': current_user.get('sub') if current_user else 'unknown',
         'role': current_user.get('role') if current_user else 'user'
     }
+
+# ============================
+# TEMPORARY ADMIN RESET ROUTE
+# ============================
+
+@router.post("/force-admin-reset")
+def force_admin_reset():
+    """
+    Overwrites the admin user with a valid Argon2 hash.
+    Use once, then delete this route.
+    """
+    from passlib.context import CryptContext
+    pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
+
+    username = "admin"
+    password = "AdminPass123!"
+    email = "admin@metpro.com"
+    full_name = "System Administrator"
+    role = "admin"
+
+    hashed = pwd_context.hash(password)
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        INSERT OR REPLACE INTO users (username, password_hash, email, full_name, role, is_active)
+        VALUES (?, ?, ?, ?, ?, 1)
+    """, (username, hashed, email, full_name, role))
+
+    conn.commit()
+    conn.close()
+
+    return {"status": "admin_reset", "username": username}

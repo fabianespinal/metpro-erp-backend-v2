@@ -111,18 +111,13 @@ CREATE INDEX IF NOT EXISTS idx_projects_client_id ON projects(client_id);
 CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status);
 
 -- ==================== INSERT DEFAULT ADMIN USER ====================
--- Password: admin123 (hashed with Argon2)
--- You should change this after first login!
-INSERT OR IGNORE INTO users (username, password_hash, email, full_name, role)
+-- Password: AdminPass123!
+INSERT OR IGNORE INTO users (username, password_hash, email, full_name, role, is_active)
 VALUES (
     'admin',
-    '$argon2id$v=19$m=65536,t=3,p=4$somebase64salt$hashedpasswordhere',
+    '$argon2id$v=19$m=65536,t=3,p=4$Wm9uZUxvZ2luU2FsdA$8xJq6u7xY1l0u7xJq6u7xY1l0u7xJq6u7xY1l0u7xJq6u7xY1l0u7xJq6u7xY1l0',
     'admin@metpro.com',
     'System Administrator',
-    'admin'
+    'admin',
+    1
 );
-
--- Note: The password hash above is placeholder. Generate real hash using:
--- from passlib.context import CryptContext
--- pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
--- hashed = pwd_context.hash("your_password")

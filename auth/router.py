@@ -1,9 +1,20 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
-from .service import verify_password, create_access_token, get_password_hash
+from .service import (
+    verify_password,
+    create_access_token,
+    get_password_hash,
+    get_current_user_from_bearer,
+    require_role
+)
 from config.database import get_db_connection
 
-router = APIRouter(prefix='/auth', tags=['authentication'])
+router = APIRouter(prefix="/auth", tags=["authentication"])
+
+
+# ============================
+# MODELS
+# ============================
 
 class LoginRequest(BaseModel):
     username: str
@@ -20,110 +31,102 @@ class LoginResponse(BaseModel):
     token_type: str = "bearer"
     username: str
 
-@router.post('/login', response_model=LoginResponse)
+class ChangePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str
+
+
+# ============================
+# LOGIN
+# ============================
+
+@router.post("/login", response_model=LoginResponse)
 def login(credentials: LoginRequest):
     """Authenticate user and return JWT token"""
     conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
-        # Get user by username
-        cursor.execute('SELECT * FROM users WHERE username = ?', (credentials.username,))
+
+        cursor.execute("SELECT * FROM users WHERE username = ?", (credentials.username,))
         user = cursor.fetchone()
-        
+
         if not user:
-            raise HTTPException(
-                status_code=401,
-                detail='Invalid username or password'
-            )
-        
+            raise HTTPException(status_code=401, detail="Invalid username or password")
+
         user = dict(user)
-        
-        # Check if user is active
-        if not user.get('is_active', 1):
-            raise HTTPException(
-                status_code=401,
-                detail='Account is disabled'
-            )
-        
-        # Verify password
-        if not verify_password(credentials.password, user['password_hash']):
-            raise HTTPException(
-                status_code=401,
-                detail='Invalid username or password'
-            )
-        
-        # Create access token
+
+        if not user.get("is_active", 1):
+            raise HTTPException(status_code=401, detail="Account is disabled")
+
+        if not verify_password(credentials.password, user["password_hash"]):
+            raise HTTPException(status_code=401, detail="Invalid username or password")
+
         token_data = {
-            'sub': user['username'],
-            'user_id': user['id'],
-            'role': user.get('role', 'user')
+            "sub": user["username"],
+            "user_id": user["id"],
+            "role": user.get("role", "user")
         }
+
         access_token = create_access_token(token_data)
-        
+
         return LoginResponse(
             access_token=access_token,
-            username=user['username']
+            username=user["username"]
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f'Login failed: {str(e)}')
+        raise HTTPException(status_code=500, detail=f"Login failed: {str(e)}")
     finally:
         if conn:
             conn.close()
 
-@router.post('/register')
+
+# ============================
+# REGISTER
+# ============================
+
+@router.post("/register")
 def register(user_data: RegisterRequest):
     """Register a new user"""
     conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
-        # Check if username already exists
-        cursor.execute('SELECT id FROM users WHERE username = ?', (user_data.username,))
+
+        cursor.execute("SELECT id FROM users WHERE username = ?", (user_data.username,))
         if cursor.fetchone():
-            raise HTTPException(
-                status_code=400,
-                detail='Username already exists'
-            )
-        
-        # Check if email already exists
-        cursor.execute('SELECT id FROM users WHERE email = ?', (user_data.email,))
+            raise HTTPException(status_code=400, detail="Username already exists")
+
+        cursor.execute("SELECT id FROM users WHERE email = ?", (user_data.email,))
         if cursor.fetchone():
-            raise HTTPException(
-                status_code=400,
-                detail='Email already exists'
-            )
-        
-        # Hash password
+            raise HTTPException(status_code=400, detail="Email already exists")
+
         password_hash = get_password_hash(user_data.password)
-        
-        # Insert user
-        cursor.execute('''
+
+        cursor.execute("""
             INSERT INTO users (username, password_hash, email, full_name, role, is_active)
             VALUES (?, ?, ?, ?, ?, ?)
-        ''', (
+        """, (
             user_data.username,
             password_hash,
             user_data.email,
             user_data.full_name,
-            'user',  # Default role
-            1  # Active by default
+            "user",
+            1
         ))
-        
+
         user_id = cursor.lastrowid
         conn.commit()
-        
+
         return {
-            'message': 'User registered successfully',
-            'user_id': user_id,
-            'username': user_data.username
+            "message": "User registered successfully",
+            "user_id": user_id,
+            "username": user_data.username
         }
-        
+
     except HTTPException:
         if conn:
             conn.rollback()
@@ -131,49 +134,69 @@ def register(user_data: RegisterRequest):
     except Exception as e:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f'Registration failed: {str(e)}')
+        raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
     finally:
         if conn:
             conn.close()
 
-@router.get('/me')
-def get_current_user(current_user: dict = None):
-    """Get current authenticated user info"""
+
+# ============================
+# AUTHENTICATED USER INFO
+# ============================
+
+@router.get("/me")
+def get_current_user(user = Depends(get_current_user_from_bearer)):
+    """Return the authenticated user's identity"""
     return {
-        'username': current_user.get('sub') if current_user else 'unknown',
-        'role': current_user.get('role') if current_user else 'user'
+        "username": user.get("sub"),
+        "user_id": user.get("user_id"),
+        "role": user.get("role")
     }
 
+
 # ============================
-# TEMPORARY ADMIN RESET ROUTE
+# CHANGE PASSWORD
 # ============================
 
-@router.post("/force-admin-reset")
-def force_admin_reset():
-    """
-    Overwrites the admin user with a valid Argon2 hash.
-    Use once, then delete this route.
-    """
-    from passlib.context import CryptContext
-    pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
-
-    username = "admin"
-    password = "AdminPass123!"
-    email = "admin@metpro.com"
-    full_name = "System Administrator"
-    role = "admin"
-
-    hashed = pwd_context.hash(password)
+@router.post("/change-password")
+def change_password(
+    data: ChangePasswordRequest,
+    user = Depends(get_current_user_from_bearer)
+):
+    """Allow authenticated users to change their password"""
+    username = user.get("sub")
 
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute("""
-        INSERT OR REPLACE INTO users (username, password_hash, email, full_name, role, is_active)
-        VALUES (?, ?, ?, ?, ?, 1)
-    """, (username, hashed, email, full_name, role))
+    cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
+    db_user = cursor.fetchone()
+
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    db_user = dict(db_user)
+
+    if not verify_password(data.old_password, db_user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Old password incorrect")
+
+    new_hash = get_password_hash(data.new_password)
+
+    cursor.execute(
+        "UPDATE users SET password_hash = ? WHERE username = ?",
+        (new_hash, username)
+    )
 
     conn.commit()
     conn.close()
 
-    return {"status": "admin_reset", "username": username}
+    return {"message": "Password updated successfully"}
+
+
+# ============================
+# ADMIN-ONLY TEST ROUTE
+# ============================
+
+@router.get("/admin-only")
+def admin_only(user = Depends(require_role("admin"))):
+    return {"message": "Admin access confirmed"}

@@ -40,23 +40,19 @@ def startup():
     print("Schema path:", schema_path)
     print("DB path:", db_path)
 
-    # Create DB file if missing
-    if not os.path.exists(db_path):
-        print("Creating new database file...")
-        open(db_path, "w").close()
+    # Absolute path to database.db
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    DB_PATH = os.path.abspath(os.path.join(BASE_DIR, "..", "database.db"))
 
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
+    @contextmanager
+    def get_db_connection():
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        try:
+            yield conn
+        finally:
+            conn.close()
 
-    try:
-        with open(schema_path, "r") as f:
-            cursor.executescript(f.read())
-        print("Schema loaded successfully.")
-    except Exception as e:
-        print("Error loading schema:", e)
-
-    conn.commit()
-    conn.close()
 
 # ============================================================
 # CORS

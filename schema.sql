@@ -121,3 +121,13 @@ VALUES (
     'admin',
     1
 );
+
+INSERT OR IGNORE INTO users (username, password_hash, email, full_name, role, is_active)
+VALUES (
+    'manager',
+    '$argon2id$v=19$m=65536,t=3,p=4$N2J1d0p3b0p3b0p3b0p3bQ$1xq0p0Fq3uYxq2Q9V5m7p6u4z8T0xq1F5u6p7x9y2Q',
+    'manager@metpro.com',
+    'Manager User',
+    'manager',
+    1
+);

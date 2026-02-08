@@ -9,55 +9,39 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from datetime import datetime
 
-# Import routers
-from auth.router import router as auth_router
-from users.router import router as users_router
-from clients.router import router as clients_router
-from products.router import router as products_router
-from quotes.router import router as quotes_router
-from invoices.router import router as invoices_router
-from projects.router import router as projects_router
-from reports.router import router as reports_router
-from pdf.router import router as pdf_router
+# ============================================================
+# GLOBAL DATABASE PATH + CONNECTION FUNCTION
+# ============================================================
 
-# Create ONE FastAPI app
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.abspath(os.path.join(BASE_DIR, "..", "database.db"))
+
+@contextmanager
+def get_db_connection():
+    """Global SQLite connection available to all modules."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
+# ============================================================
+# FASTAPI APP
+# ============================================================
+
 app = FastAPI(
     title='METPRO ERP API',
     description='Modular ERP System for Construction & Services',
     version='2.0.0'
 )
 
-# ============================================================
-# Startup: initialize SQLite database with absolute paths
-# ============================================================
-@app.on_event("startup")
-def startup():
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-
-    schema_path = os.path.join(base_dir, "schema.sql")
-    db_path = os.path.join(base_dir, "database.db")
-
-    print("🚀 STARTUP EVENT EXECUTED ON RENDER")
-    print("Schema path:", schema_path)
-    print("DB path:", db_path)
-
-    # Absolute path to database.db
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    DB_PATH = os.path.abspath(os.path.join(BASE_DIR, "..", "database.db"))
-
-    @contextmanager
-    def get_db_connection():
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
-        try:
-            yield conn
-        finally:
-            conn.close()
-
 
 # ============================================================
-# CORS
+# CORS CONFIGURATION
 # ============================================================
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -71,15 +55,29 @@ app.add_middleware(
     expose_headers=["*"]
 )
 
+
 # ============================================================
-# Static files
+# STATIC FILES
 # ============================================================
+
 if os.path.exists("assets"):
     app.mount("/assets", StaticFiles(directory="assets"), name="assets")
 
+
 # ============================================================
-# Routers
+# ROUTERS
 # ============================================================
+
+from auth.router import router as auth_router
+from users.router import router as users_router
+from clients.router import router as clients_router
+from products.router import router as products_router
+from quotes.router import router as quotes_router
+from invoices.router import router as invoices_router
+from projects.router import router as projects_router
+from reports.router import router as reports_router
+from pdf.router import router as pdf_router
+
 app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(clients_router)
@@ -90,9 +88,11 @@ app.include_router(projects_router)
 app.include_router(reports_router)
 app.include_router(pdf_router)
 
+
 # ============================================================
-# Root
+# ROOT & HEALTH ENDPOINTS
 # ============================================================
+
 @app.get("/")
 def read_root():
     return {
@@ -101,6 +101,7 @@ def read_root():
         "architecture": "Modular",
         "database": "SQLite"
     }
+
 
 @app.get("/health")
 def health_check():

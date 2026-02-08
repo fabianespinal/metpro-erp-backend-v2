@@ -26,25 +26,37 @@ app = FastAPI(
     version='2.0.0'
 )
 
-# Startup: initialize SQLite database
+# ============================================================
+# Startup: initialize SQLite database with absolute paths
+# ============================================================
 @app.on_event("startup")
 def startup():
-    if not os.path.exists("database.db"):
-        open("database.db", "w").close()
+    base_dir = os.path.dirname(__file__)
 
-    conn = sqlite3.connect("database.db")
+    # Absolute paths
+    schema_path = os.path.join(base_dir, "schema.sql")
+    db_path = os.path.join(base_dir, "database.db")
+
+    # Create DB file if missing
+    if not os.path.exists(db_path):
+        open(db_path, "w").close()
+
+    conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
     try:
-        with open("schema.sql", "r") as f:
+        with open(schema_path, "r") as f:
             cursor.executescript(f.read())
+        print("Schema loaded successfully.")
     except Exception as e:
         print("Error loading schema:", e)
 
     conn.commit()
     conn.close()
 
+# ============================================================
 # CORS
+# ============================================================
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -58,11 +70,15 @@ app.add_middleware(
     expose_headers=["*"]
 )
 
+# ============================================================
 # Static files
+# ============================================================
 if os.path.exists("assets"):
     app.mount("/assets", StaticFiles(directory="assets"), name="assets")
 
+# ============================================================
 # Routers
+# ============================================================
 app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(clients_router)
@@ -73,7 +89,9 @@ app.include_router(projects_router)
 app.include_router(reports_router)
 app.include_router(pdf_router)
 
+# ============================================================
 # Root
+# ============================================================
 @app.get("/")
 def read_root():
     return {

@@ -3,6 +3,7 @@ import sqlite3
 from dotenv import load_dotenv
 load_dotenv()
 
+from contextlib import contextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles

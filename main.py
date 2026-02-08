@@ -1,4 +1,5 @@
 import os
+import sqlite3
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -78,3 +79,28 @@ def health_check():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
+
+app = FastAPI()
+
+@app.on_event("startup")
+def startup():
+    # Create database file if it doesn't exist
+    if not os.path.exists("database.db"):
+        open("database.db", "w").close()
+
+    # Connect to SQLite
+    conn = sqlite3.connect("database.db")
+    cursor = conn.cursor()
+
+    # Load schema.sql and execute it
+    try:
+        with open("schema.sql", "r") as f:
+            schema = f.read()
+            cursor.executescript(schema)
+    except Exception as e:
+        print("Error loading schema:", e)
+
+    conn.commit()
+    conn.close()

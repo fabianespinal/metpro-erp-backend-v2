@@ -39,7 +39,7 @@ app = FastAPI(
 
 
 # ============================================================
-# CORS CONFIGURATION
+# CORS CONFIGURATION (supports all Vercel preview URLs)
 # ============================================================
 
 app.add_middleware(
@@ -50,6 +50,23 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"]
 )
+
+
+# ============================================================
+# INITIALIZE DATABASE SCHEMA ON STARTUP
+# ============================================================
+
+@app.on_event("startup")
+def startup():
+    schema_path = os.path.join(BASE_DIR, "schema.sql")
+
+    if os.path.exists(schema_path):
+        with sqlite3.connect(DB_PATH) as conn:
+            with open(schema_path, "r") as f:
+                conn.executescript(f.read())
+            conn.commit()
+
+    print("🚀 Database initialized at:", DB_PATH)
 
 
 # ============================================================

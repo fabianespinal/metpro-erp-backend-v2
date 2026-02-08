@@ -11,7 +11,6 @@ from config.database import get_db_connection
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
-
 # ============================
 # MODELS
 # ============================
@@ -34,6 +33,16 @@ class LoginResponse(BaseModel):
 class ChangePasswordRequest(BaseModel):
     old_password: str
     new_password: str
+
+
+# ============================
+# CORS PREFLIGHT FIX
+# ============================
+
+@router.options("/login")
+def login_options():
+    """Handle CORS preflight for /auth/login"""
+    return {"message": "OK"}
 
 
 # ============================

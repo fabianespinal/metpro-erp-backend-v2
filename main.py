@@ -39,11 +39,21 @@ app = FastAPI(
 
 
 # ============================================================
-# CORS CONFIGURATION (supports all Vercel preview URLs)
+# CORS CONFIGURATION — FIXED FOR VERCEL + LOCALHOST
 # ============================================================
+
+allowed_origins = [
+    # Local development
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+
+    # Your exact Vercel deployment
+    "https://metpro-erp-frontend-7a1xrqtgl-fabianespinals-projects.vercel.app",
+]
 
 app.add_middleware(
     CORSMiddleware,
+    allow_origins=allowed_origins,
     allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],

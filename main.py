@@ -1,30 +1,17 @@
 import os
-import sqlite3
 from dotenv import load_dotenv
-load_dotenv()
-
-from contextlib import contextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from datetime import datetime
 
+load_dotenv()
+
 # ============================================================
-# GLOBAL DATABASE PATH + CONNECTION FUNCTION
+# GLOBAL DATABASE CONNECTION (PostgreSQL via database.py)
 # ============================================================
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "database.db")
-
-@contextmanager
-def get_db_connection():
-    """Global SQLite connection available to all modules."""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    try:
-        yield conn
-    finally:
-        conn.close()
+from database import get_db_connection
 
 
 # ============================================================
@@ -60,23 +47,6 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"]
 )
-
-
-# ============================================================
-# INITIALIZE DATABASE SCHEMA ON STARTUP
-# ============================================================
-
-@app.on_event("startup")
-def startup():
-    schema_path = os.path.join(BASE_DIR, "schema.sql")
-
-    if os.path.exists(schema_path):
-        with sqlite3.connect(DB_PATH) as conn:
-            with open(schema_path, "r") as f:
-                conn.executescript(f.read())
-            conn.commit()
-
-    print("🚀 Database initialized at:", DB_PATH)
 
 
 # ============================================================
@@ -122,7 +92,7 @@ def read_root():
         "message": "METPRO ERP API is running!",
         "version": "2.0.0",
         "architecture": "Modular",
-        "database": "SQLite"
+        "database": "PostgreSQL (Supabase)"
     }
 
 

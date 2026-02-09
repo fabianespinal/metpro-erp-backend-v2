@@ -3,285 +3,325 @@ from fastapi import HTTPException
 import csv
 import io
 from datetime import datetime
-from config.database import get_db_connection
+from database import get_db_connection
+from psycopg2.extras import RealDictCursor
 
-def create_client(company_name: str, contact_name: Optional[str], email: Optional[str], 
-                  phone: Optional[str], address: Optional[str], tax_id: Optional[str], 
+
+# ============================================================
+# CREATE CLIENT
+# ============================================================
+
+def create_client(company_name: str, contact_name: Optional[str], email: Optional[str],
+                  phone: Optional[str], address: Optional[str], tax_id: Optional[str],
                   notes: Optional[str]) -> dict:
-    """Create a new client"""
+
     conn = None
     try:
         conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+        cursor.execute("""
             INSERT INTO clients
             (company_name, contact_name, email, phone, address, tax_id, notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (company_name, contact_name, email, phone, address, tax_id, notes))
-        
-        client_id = cursor.lastrowid
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """, (company_name, contact_name, email, phone, address, tax_id, notes))
+
+        new_id = cursor.fetchone()["id"]
         conn.commit()
 
-        cursor.execute('SELECT * FROM clients WHERE id = ?', (client_id,))
-        new_client = dict(cursor.fetchone())
-        return new_client
+        cursor.execute("SELECT * FROM clients WHERE id = %s", (new_id,))
+        return cursor.fetchone()
 
     except Exception as e:
         if conn:
             conn.rollback()
         raise HTTPException(status_code=500, detail=str(e))
+
     finally:
         if conn:
             conn.close()
+
+
+# ============================================================
+# GET ALL CLIENTS
+# ============================================================
 
 def get_all_clients() -> List[dict]:
-    """Get all clients"""
     conn = None
     try:
         conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM clients ORDER BY company_name')
-        rows = cursor.fetchall()
-        return [dict(row) for row in rows]
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+        cursor.execute("SELECT * FROM clients ORDER BY company_name")
+        return cursor.fetchall()
+
     finally:
         if conn:
             conn.close()
+
+
+# ============================================================
+# GET CLIENT BY ID
+# ============================================================
 
 def get_client_by_id(client_id: int) -> dict:
-    """Get a single client by ID"""
     conn = None
     try:
         conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM clients WHERE id = ?', (client_id,))
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+        cursor.execute("SELECT * FROM clients WHERE id = %s", (client_id,))
         row = cursor.fetchone()
-        if row is None:
-            raise HTTPException(status_code=404, detail='Client not found')
-        return dict(row)
+
+        if not row:
+            raise HTTPException(status_code=404, detail="Client not found")
+
+        return row
+
     finally:
         if conn:
             conn.close()
 
-def update_client(client_id: int, company_name: str, contact_name: Optional[str], 
-                  email: Optional[str], phone: Optional[str], address: Optional[str], 
+
+# ============================================================
+# UPDATE CLIENT
+# ============================================================
+
+def update_client(client_id: int, company_name: str, contact_name: Optional[str],
+                  email: Optional[str], phone: Optional[str], address: Optional[str],
                   tax_id: Optional[str], notes: Optional[str]) -> dict:
-    """Update an existing client"""
+
     conn = None
     try:
         conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # Check if client exists
-        cursor.execute('SELECT id FROM clients WHERE id = ?', (client_id,))
-        existing = cursor.fetchone()
-        if not existing:
-            raise HTTPException(status_code=404, detail=f'Client with ID {client_id} not found')
-        
-        # Validate email format if provided
-        if email and '@' not in email:
-            raise HTTPException(status_code=400, detail='Invalid email format')
-        
-        # Check for duplicate email (excluding current client)
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+        # Check existence
+        cursor.execute("SELECT id FROM clients WHERE id = %s", (client_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail=f"Client with ID {client_id} not found")
+
+        # Validate email
+        if email and "@" not in email:
+            raise HTTPException(status_code=400, detail="Invalid email format")
+
+        # Duplicate email
         if email:
             cursor.execute(
-                'SELECT id FROM clients WHERE email = ? AND id != ?',
+                "SELECT id FROM clients WHERE email = %s AND id != %s",
                 (email, client_id)
             )
             if cursor.fetchone():
                 raise HTTPException(
-                    status_code=400, 
-                    detail=f'Email {email} is already in use by another client'
+                    status_code=400,
+                    detail=f"Email {email} is already in use by another client"
                 )
-        
-        # Check for duplicate tax_id (excluding current client)
+
+        # Duplicate tax_id
         if tax_id:
             cursor.execute(
-                'SELECT id FROM clients WHERE tax_id = ? AND id != ?',
+                "SELECT id FROM clients WHERE tax_id = %s AND id != %s",
                 (tax_id, client_id)
             )
             if cursor.fetchone():
                 raise HTTPException(
-                    status_code=400, 
-                    detail=f'Tax ID {tax_id} is already in use by another client'
+                    status_code=400,
+                    detail=f"Tax ID {tax_id} is already in use by another client"
                 )
-        
-        # Update client
-        cursor.execute('''
-            UPDATE clients 
-            SET 
-                company_name = ?, 
-                contact_name = ?, 
-                email = ?, 
-                phone = ?, 
-                address = ?, 
-                tax_id = ?,
-                notes = ?,
+
+        # Update
+        cursor.execute("""
+            UPDATE clients
+            SET
+                company_name = %s,
+                contact_name = %s,
+                email = %s,
+                phone = %s,
+                address = %s,
+                tax_id = %s,
+                notes = %s,
                 updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-        ''', (company_name, contact_name, email, phone, address, tax_id, notes, client_id))
-        
+            WHERE id = %s
+        """, (company_name, contact_name, email, phone, address, tax_id, notes, client_id))
+
         conn.commit()
-        
-        cursor.execute('SELECT * FROM clients WHERE id = ?', (client_id,))
-        updated_client = dict(cursor.fetchone())
-        
-        return updated_client
-        
+
+        cursor.execute("SELECT * FROM clients WHERE id = %s", (client_id,))
+        return cursor.fetchone()
+
     except HTTPException:
         if conn:
             conn.rollback()
         raise
+
     except Exception as e:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f'Failed to update client: {str(e)}')
+        raise HTTPException(status_code=500, detail=f"Failed to update client: {str(e)}")
+
     finally:
         if conn:
             conn.close()
+
+
+# ============================================================
+# DELETE CLIENT
+# ============================================================
 
 def delete_client(client_id: int) -> dict:
-    """Delete a client"""
     conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute('DELETE FROM clients WHERE id = ?', (client_id,))
+
+        cursor.execute("DELETE FROM clients WHERE id = %s", (client_id,))
         if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail='Client not found')
+            raise HTTPException(status_code=404, detail="Client not found")
+
         conn.commit()
-        return {'message': 'Client deleted successfully'}
+        return {"message": "Client deleted successfully"}
+
     except HTTPException:
         raise
+
     except Exception as e:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f'Delete failed: {str(e)}')
+        raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
+
     finally:
         if conn:
             conn.close()
 
+
+# ============================================================
+# CSV IMPORT
+# ============================================================
+
 async def import_clients_from_csv(file_content: bytes, filename: str, skip_duplicates: bool, current_user: dict) -> dict:
-    """Import clients from CSV with full response structure"""
     conn = None
     errors = []
-    
+
     try:
-        # Decode file
+        # Decode CSV
         try:
-            csv_text = file_content.decode('utf-8-sig')
+            csv_text = file_content.decode("utf-8-sig")
         except UnicodeDecodeError:
-            raise HTTPException(status_code=400, detail='File must be UTF-8 encoded')
-        
+            raise HTTPException(status_code=400, detail="File must be UTF-8 encoded")
+
         rows = list(csv.DictReader(io.StringIO(csv_text)))
+
         if not rows:
-            raise HTTPException(status_code=400, detail='CSV file is empty')
-        
-        if 'company_name' not in rows[0]:
-            raise HTTPException(
-                status_code=400, 
-                detail='Missing required column: company_name'
-            )
-        
-        # Process clients
+            raise HTTPException(status_code=400, detail="CSV file is empty")
+
+        if "company_name" not in rows[0]:
+            raise HTTPException(status_code=400, detail="Missing required column: company_name")
+
         conn = get_db_connection()
-        cursor = conn.cursor()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+
         inserted = updated = skipped = 0
-        
+
         for idx, row in enumerate(rows, start=2):
-            company = row.get('company_name', '').strip()
+            company = row.get("company_name", "").strip()
             if not company:
-                errors.append(f'Row {idx}: Skipped (empty company_name)')
+                errors.append(f"Row {idx}: Skipped (empty company_name)")
                 skipped += 1
                 continue
-            
-            # Validate email
-            email = row.get('email', '').strip()
-            if email and '@' not in email:
-                errors.append(f'Row {idx} ({company}): Invalid email format')
+
+            email = row.get("email", "").strip()
+            if email and "@" not in email:
+                errors.append(f"Row {idx} ({company}): Invalid email format")
                 skipped += 1
                 continue
-            
+
             # Check duplicates
             existing_id = None
-            if row.get('tax_id'):
-                cursor.execute('SELECT id FROM clients WHERE tax_id = ?', (row['tax_id'].strip(),))
+
+            if row.get("tax_id"):
+                cursor.execute("SELECT id FROM clients WHERE tax_id = %s", (row["tax_id"].strip(),))
                 result = cursor.fetchone()
                 if result:
-                    existing_id = result['id']
-            
+                    existing_id = result["id"]
+
             if not existing_id and email:
-                cursor.execute('SELECT id FROM clients WHERE email = ?', (email,))
+                cursor.execute("SELECT id FROM clients WHERE email = %s", (email,))
                 result = cursor.fetchone()
                 if result:
-                    existing_id = result['id']
-            
-            # Handle duplicate
+                    existing_id = result["id"]
+
+            # Duplicate handling
             if existing_id:
                 if skip_duplicates:
-                    errors.append(f'Row {idx} ({company}): Skipped (duplicate found)')
+                    errors.append(f"Row {idx} ({company}): Skipped (duplicate found)")
                     skipped += 1
                 else:
-                    cursor.execute('''
-                        UPDATE clients SET contact_name = ?, phone = ?, address = ?, notes = ?
-                        WHERE id = ?
-                    ''', (
-                        row.get('contact_name', '').strip(),
-                        row.get('phone', '').strip(),
-                        row.get('address', '').strip(),
-                        row.get('notes', '').strip(),
+                    cursor.execute("""
+                        UPDATE clients
+                        SET contact_name = %s, phone = %s, address = %s, notes = %s
+                        WHERE id = %s
+                    """, (
+                        row.get("contact_name", "").strip(),
+                        row.get("phone", "").strip(),
+                        row.get("address", "").strip(),
+                        row.get("notes", "").strip(),
                         existing_id
                     ))
                     updated += 1
                 continue
-            
+
             # Insert new client
             try:
-                cursor.execute('''
-                    INSERT INTO clients 
+                cursor.execute("""
+                    INSERT INTO clients
                     (company_name, contact_name, email, phone, address, tax_id, notes)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                ''', (
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, (
                     company,
-                    row.get('contact_name', '').strip(),
+                    row.get("contact_name", "").strip(),
                     email,
-                    row.get('phone', '').strip(),
-                    row.get('address', '').strip(),
-                    row.get('tax_id', '').strip(),
-                    row.get('notes', '').strip()
+                    row.get("phone", "").strip(),
+                    row.get("address", "").strip(),
+                    row.get("tax_id", "").strip(),
+                    row.get("notes", "").strip()
                 ))
                 inserted += 1
+
             except Exception as e:
-                errors.append(f'Row {idx} ({company}): {str(e)[:80]}')
+                errors.append(f"Row {idx} ({company}): {str(e)[:80]}")
                 skipped += 1
-        
+
         conn.commit()
-        
+
         return {
-            'success': True,
-            'summary': {
-                'filename': filename,
-                'total_rows': len(rows),
-                'processed': inserted + updated + skipped,
-                'inserted': inserted,
-                'updated': updated,
-                'skipped': skipped,
-                'errors_count': len(errors)
+            "success": True,
+            "summary": {
+                "filename": filename,
+                "total_rows": len(rows),
+                "processed": inserted + updated + skipped,
+                "inserted": inserted,
+                "updated": updated,
+                "skipped": skipped,
+                "errors_count": len(errors)
             },
-            'errors': errors,
-            'audit_log': {
-                'uploaded_by': current_user.get('sub', 'unknown'),
-                'timestamp': datetime.now().isoformat(),
-                'action': 'skip_duplicates' if skip_duplicates else 'overwrite_existing'
+            "errors": errors,
+            "audit_log": {
+                "uploaded_by": current_user.get("sub", "unknown"),
+                "timestamp": datetime.now().isoformat(),
+                "action": "skip_duplicates" if skip_duplicates else "overwrite_existing"
             }
         }
-    
+
     except HTTPException:
         raise
+
     except Exception as e:
         if conn:
             conn.rollback()
-        errors.append(f'System error: {str(e)[:100]}')
-        raise HTTPException(status_code=500, detail=f'Import failed: {str(e)[:100]}')
+        errors.append(f"System error: {str(e)[:100]}")
+        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)[:100]}")
+
     finally:
         if conn:
             conn.close()

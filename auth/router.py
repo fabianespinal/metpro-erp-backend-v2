@@ -7,7 +7,8 @@ from .service import (
     get_current_user_from_bearer,
     require_role
 )
-from config.database import get_db_connection
+from database import get_db_connection
+from psycopg2.extras import RealDictCursor
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -41,7 +42,6 @@ class ChangePasswordRequest(BaseModel):
 
 @router.options("/login")
 def login_options():
-    """Handle CORS preflight for /auth/login"""
     return {"message": "OK"}
 
 
@@ -51,21 +51,18 @@ def login_options():
 
 @router.post("/login", response_model=LoginResponse)
 def login(credentials: LoginRequest):
-    """Authenticate user and return JWT token"""
     conn = None
     try:
         conn = get_db_connection()
-        cursor = conn.cursor()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        cursor.execute("SELECT * FROM users WHERE username = ?", (credentials.username,))
+        cursor.execute("SELECT * FROM users WHERE username = %s", (credentials.username,))
         user = cursor.fetchone()
 
         if not user:
             raise HTTPException(status_code=401, detail="Invalid username or password")
 
-        user = dict(user)
-
-        if not user.get("is_active", 1):
+        if not user.get("is_active", True):
             raise HTTPException(status_code=401, detail="Account is disabled")
 
         if not verify_password(credentials.password, user["password_hash"]):
@@ -99,17 +96,16 @@ def login(credentials: LoginRequest):
 
 @router.post("/register")
 def register(user_data: RegisterRequest):
-    """Register a new user"""
     conn = None
     try:
         conn = get_db_connection()
-        cursor = conn.cursor()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        cursor.execute("SELECT id FROM users WHERE username = ?", (user_data.username,))
+        cursor.execute("SELECT id FROM users WHERE username = %s", (user_data.username,))
         if cursor.fetchone():
             raise HTTPException(status_code=400, detail="Username already exists")
 
-        cursor.execute("SELECT id FROM users WHERE email = ?", (user_data.email,))
+        cursor.execute("SELECT id FROM users WHERE email = %s", (user_data.email,))
         if cursor.fetchone():
             raise HTTPException(status_code=400, detail="Email already exists")
 
@@ -117,22 +113,23 @@ def register(user_data: RegisterRequest):
 
         cursor.execute("""
             INSERT INTO users (username, password_hash, email, full_name, role, is_active)
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id
         """, (
             user_data.username,
             password_hash,
             user_data.email,
             user_data.full_name,
             "user",
-            1
+            True
         ))
 
-        user_id = cursor.lastrowid
+        new_user = cursor.fetchone()
         conn.commit()
 
         return {
             "message": "User registered successfully",
-            "user_id": user_id,
+            "user_id": new_user["id"],
             "username": user_data.username
         }
 
@@ -155,7 +152,6 @@ def register(user_data: RegisterRequest):
 
 @router.get("/me")
 def get_current_user(user = Depends(get_current_user_from_bearer)):
-    """Return the authenticated user's identity"""
     return {
         "username": user.get("sub"),
         "user_id": user.get("user_id"),
@@ -172,19 +168,16 @@ def change_password(
     data: ChangePasswordRequest,
     user = Depends(get_current_user_from_bearer)
 ):
-    """Allow authenticated users to change their password"""
     username = user.get("sub")
 
     conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-    cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
+    cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
     db_user = cursor.fetchone()
 
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
-
-    db_user = dict(db_user)
 
     if not verify_password(data.old_password, db_user["password_hash"]):
         raise HTTPException(status_code=401, detail="Old password incorrect")
@@ -192,7 +185,7 @@ def change_password(
     new_hash = get_password_hash(data.new_password)
 
     cursor.execute(
-        "UPDATE users SET password_hash = ? WHERE username = ?",
+        "UPDATE users SET password_hash = %s WHERE username = %s",
         (new_hash, username)
     )
 

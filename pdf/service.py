@@ -4,7 +4,7 @@ import io
 from fpdf import FPDF
 from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
-from config.database import get_db_connection
+from database import get_db_connection
 from utils.text import sanitize_text
 from utils.pdf_utils import add_footer_with_signature
 

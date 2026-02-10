@@ -13,3 +13,8 @@ def get_quote_pdf(quote_id: str, current_user: dict = Depends(verify_token)):
 def get_invoice_pdf(invoice_id: int, current_user: dict = Depends(verify_token)):
     """Generate and download invoice PDF"""
     return service.generate_invoice_pdf(invoice_id)
+
+@router.get('/conduces/{invoice_id}')
+def get_conduce_pdf(invoice_id: int, current_user: dict = Depends(verify_token)):
+    """Generate conduce (delivery note) PDF - NO PRICES"""
+    return service.generate_conduce_pdf(invoice_id)

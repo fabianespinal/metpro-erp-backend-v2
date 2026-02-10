@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from typing import List, Optional
-from .models import QuoteCreate, StatusUpdate
+from .models import QuoteCreate, StatusUpdate, QuoteUpdate
 from . import service
 from auth.service import verify_token
 
@@ -35,6 +35,15 @@ def get_quote(quote_id: str, current_user: dict = Depends(verify_token)):
     """Get a single quote"""
     return service.get_quote_by_id(quote_id)
 
+@router.put('/{quote_id}')
+def update_quote(
+    quote_id: str,
+    quote_update: QuoteUpdate,
+    current_user: dict = Depends(verify_token)
+):
+    """Update an existing quote (Draft status only)"""
+    return service.update_quote(quote_id, quote_update)
+
 @router.patch('/{quote_id}/status')
 def update_quote_status(
     quote_id: str,
@@ -43,6 +52,16 @@ def update_quote_status(
 ):
     """Update quote status"""
     return service.update_quote_status(quote_id, status_update.status)
+
+@router.post('/{quote_id}/duplicate')
+def duplicate_quote(quote_id: str, current_user: dict = Depends(verify_token)):
+    """Duplicate an existing quote with new ID"""
+    return service.duplicate_quote(quote_id)
+
+@router.post('/{quote_id}/convert-to-invoice')
+def convert_to_invoice(quote_id: str, current_user: dict = Depends(verify_token)):
+    """Convert approved quote to invoice"""
+    return service.convert_quote_to_invoice(quote_id)
 
 @router.delete('/{quote_id}')
 def delete_quote(quote_id: str, current_user: dict = Depends(verify_token)):

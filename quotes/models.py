@@ -30,5 +30,12 @@ class QuoteBase(BaseModel):
 class QuoteCreate(QuoteBase):
     items: List[QuoteItemBase]
 
+class QuoteUpdate(BaseModel):
+    """Update schema - all fields optional, client_id cannot be changed"""
+    project_name: Optional[str] = None
+    notes: Optional[str] = None
+    items: Optional[List[QuoteItemBase]] = None
+    included_charges: Optional[IncludedCharges] = None
+
 class StatusUpdate(BaseModel):
     status: str

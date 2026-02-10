@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 from typing import List, Optional
 from .models import Invoice, InvoiceCreate, InvoiceStatusUpdate
 from . import service
+from pdf import service as pdf_service
 from auth.service import verify_token
 
 router = APIRouter(prefix='/invoices', tags=['invoices'])
@@ -43,6 +44,11 @@ def update_invoice_status(
     """Update invoice status"""
     result = service.update_invoice_status(invoice_id, status_update.status)
     return Invoice(**result)
+
+@router.get('/{invoice_id}/conduce/pdf')
+def get_conduce_pdf(invoice_id: int, current_user: dict = Depends(verify_token)):
+    """Generate conduce (delivery note) PDF for invoice"""
+    return pdf_service.generate_conduce_pdf(invoice_id)
 
 @router.delete('/{invoice_id}')
 def delete_invoice(invoice_id: int, current_user: dict = Depends(verify_token)):

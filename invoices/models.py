@@ -1,5 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional
+from uuid import UUID
+from datetime import datetime
 
 class InvoiceBase(BaseModel):
     quote_id: str
@@ -7,17 +9,17 @@ class InvoiceBase(BaseModel):
     notes: Optional[str] = None
 
 class Invoice(BaseModel):
-    id: int
+    id: UUID
     quote_id: str
     invoice_number: str
-    invoice_date: str
-    client_id: int
+    invoice_date: datetime
+    client_id: UUID
     total_amount: float
     status: str
     notes: Optional[str] = None
-    created_at: str
-    updated_at: str
-    
+    created_at: datetime
+    updated_at: datetime
+
     class Config:
         from_attributes = True
 

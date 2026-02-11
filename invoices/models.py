@@ -1,6 +1,5 @@
 from pydantic import BaseModel
 from typing import Optional
-from uuid import UUID
 from datetime import datetime
 
 class InvoiceBase(BaseModel):
@@ -9,11 +8,11 @@ class InvoiceBase(BaseModel):
     notes: Optional[str] = None
 
 class Invoice(BaseModel):
-    id: UUID
+    id: int
     quote_id: str
     invoice_number: str
     invoice_date: datetime
-    client_id: UUID
+    client_id: int
     total_amount: float
     status: str
     notes: Optional[str] = None

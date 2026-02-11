@@ -1,21 +1,22 @@
 from pydantic import BaseModel
 from typing import Optional
+from datetime import date, datetime
 
 class ProjectBase(BaseModel):
     client_id: int
     name: str
     description: Optional[str] = None
     status: str = 'planning'
-    start_date: str  # ISO date string
-    end_date: Optional[str] = None
+    start_date: date
+    end_date: Optional[date] = None
     estimated_budget: Optional[float] = None
     notes: Optional[str] = None
 
 class Project(ProjectBase):
     id: int
-    created_at: str
-    updated_at: str
-    
+    created_at: datetime
+    updated_at: datetime
+
     class Config:
         from_attributes = True
 

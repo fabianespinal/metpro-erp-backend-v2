@@ -6,17 +6,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from database import get_db_connection
-from auth.router import router as auth_router
-from users.router import router as users_router
-from clients.router import router as clients_router
-from products.router import router as products_router
-from quotes.router import router as quotes_router
-from invoices.router import router as invoices_router
-from projects.router import router as projects_router
-from reports.router as reports_router
-from pdf.router import router as pdf_router
-
 load_dotenv()
 
 # ============================================================
@@ -34,11 +23,8 @@ app = FastAPI(
 # ============================================================
 
 allowed_origins = [
-    # Local development
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-
-    # Railway frontend (exact URL)
     "https://metpro-erp-frontend-production.up.railway.app",
 ]
 
@@ -48,7 +34,6 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["*"],
 )
 
 # ============================================================
@@ -59,8 +44,19 @@ if os.path.exists("assets"):
     app.mount("/assets", StaticFiles(directory="assets"), name="assets")
 
 # ============================================================
-# ROUTERS
+# ROUTERS (MUST BE IMPORTED AFTER CORS)
 # ============================================================
+
+from database import get_db_connection
+from auth.router import router as auth_router
+from users.router import router as users_router
+from clients.router import router as clients_router
+from products.router import router as products_router
+from quotes.router import router as quotes_router
+from invoices.router import router as invoices_router
+from projects.router import router as projects_router
+from reports.router import router as reports_router
+from pdf.router import router as pdf_router
 
 app.include_router(auth_router)
 app.include_router(users_router)

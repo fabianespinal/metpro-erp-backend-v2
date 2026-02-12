@@ -473,30 +473,16 @@ def convert_quote_to_invoice(quote_id: str) -> dict:
 
         invoice_id = cursor.fetchone()["id"]
 
+        # Insert invoice items
         for item in items:
-            cursor.execute(
-                "SELECT id FROM products WHERE name = %s",
-                (item["product_name"],)
-            )
-            product_row = cursor.fetchone()
-
-            if not product_row:
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Product '{item['product_name']}' not found in products table"
-                )
-
-            uuid_product_id = product_row["id"]
-
             line_total = (item["quantity"] * item["unit_price"]) - item.get("discount_value", 0)
-
             cursor.execute("""
                 INSERT INTO invoice_items
                 (invoice_id, product_id, description, quantity, unit_price, discount, total)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
             """, (
                 invoice_id,
-                uuid_product_id,
+                item["product_id"],      # BIGINT directly
                 item["product_name"],
                 item["quantity"],
                 item["unit_price"],
@@ -525,4 +511,4 @@ def convert_quote_to_invoice(quote_id: str) -> dict:
 
     finally:
         if conn:
-            conn.close()# 
+            conn.close()

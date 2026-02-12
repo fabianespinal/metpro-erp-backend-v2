@@ -1,3 +1,6 @@
+# =============================================================================
+# SECTION 1: IMPORTS
+# =============================================================================
 from typing import List, Optional
 from fastapi import HTTPException
 import json
@@ -6,6 +9,9 @@ from database import get_db_connection
 from psycopg2.extras import RealDictCursor
 
 
+# =============================================================================
+# SECTION 2: HELPER FUNCTIONS
+# =============================================================================
 def calculate_quote_totals(items: List[dict], charges: dict) -> dict:
     items_total = sum(float(item['quantity'] or 0) * float(item['unit_price'] or 0) for item in items)
     total_discounts = 0
@@ -54,6 +60,9 @@ def generate_quote_id() -> str:
     return f"Q-{timestamp}"
 
 
+# =============================================================================
+# SECTION 3: QUOTE CRUD OPERATIONS
+# =============================================================================
 def create_quote(client_id: int, project_name: Optional[str], notes: Optional[str],
                  items: List[dict], included_charges: dict) -> dict:
     conn = None
@@ -116,6 +125,58 @@ def create_quote(client_id: int, project_name: Optional[str], notes: Optional[st
         if conn:
             conn.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to create quote: {str(e)}")
+
+    finally:
+        if conn:
+            conn.close()
+
+
+def get_quote_by_id(quote_id: str) -> dict:
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SELECT * FROM quotes WHERE quote_id = %s", (quote_id,))
+        quote = cursor.fetchone()
+
+        if not quote:
+            raise HTTPException(status_code=404, detail="Quote not found")
+
+        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s", (quote_id,))
+        quote["items"] = cursor.fetchall()
+
+        return quote
+
+    finally:
+        if conn:
+            conn.close()
+
+
+def get_all_quotes(client_id: Optional[int] = None, status: Optional[str] = None) -> List[dict]:
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        query = """
+            SELECT q.*, c.company_name AS client_name
+            FROM quotes q
+            JOIN clients c ON q.client_id = c.id
+            WHERE 1=1
+        """
+        params = []
+
+        if client_id:
+            query += " AND q.client_id = %s"
+            params.append(client_id)
+
+        if status:
+            query += " AND q.status = %s"
+            params.append(status)
+
+        query += " ORDER BY q.id DESC"
+
+        cursor.execute(query, params)
+        return cursor.fetchall()
 
     finally:
         if conn:
@@ -213,6 +274,37 @@ def update_quote(quote_id: str, quote_update) -> dict:
             conn.close()
 
 
+def delete_quote(quote_id: str) -> dict:
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("DELETE FROM quote_items WHERE quote_id = %s", (quote_id,))
+        cursor.execute("DELETE FROM quotes WHERE quote_id = %s", (quote_id,))
+
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Quote not found")
+
+        conn.commit()
+        return {"message": "Quote deleted successfully"}
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
+
+    finally:
+        if conn:
+            conn.close()
+
+
+# =============================================================================
+# SECTION 4: QUOTE BUSINESS LOGIC
+# =============================================================================
 def duplicate_quote(quote_id: str) -> dict:
     """Duplicate existing quote with new ID"""
     conn = None
@@ -279,6 +371,43 @@ def duplicate_quote(quote_id: str) -> dict:
         if conn:
             conn.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to duplicate quote: {str(e)}")
+
+    finally:
+        if conn:
+            conn.close()
+
+
+def update_quote_status(quote_id: str, status: str) -> dict:
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT quote_id FROM quotes WHERE quote_id = %s", (quote_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Quote not found")
+
+        valid_statuses = ["Draft", "Sent", "Approved", "Rejected", "Invoiced"]
+        if status not in valid_statuses:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid status. Must be one of: {valid_statuses}"
+            )
+
+        cursor.execute("UPDATE quotes SET status = %s WHERE quote_id = %s", (status, quote_id))
+        conn.commit()
+
+        return {"message": "Status updated successfully", "quote_id": quote_id, "status": status}
+
+    except HTTPException:
+        if conn:
+            conn.rollback()
+        raise
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update status: {str(e)}")
 
     finally:
         if conn:
@@ -393,123 +522,6 @@ def convert_quote_to_invoice(quote_id: str) -> dict:
         if conn:
             conn.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to convert quote to invoice: {str(e)}")
-
-    finally:
-        if conn:
-            conn.close()
-
-
-def get_all_quotes(client_id: Optional[int] = None, status: Optional[str] = None) -> List[dict]:
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-        query = """
-            SELECT q.*, c.company_name AS client_name
-            FROM quotes q
-            JOIN clients c ON q.client_id = c.id
-            WHERE 1=1
-        """
-        params = []
-
-        if client_id:
-            query += " AND q.client_id = %s"
-            params.append(client_id)
-
-        if status:
-            query += " AND q.status = %s"
-            params.append(status)
-
-        query += " ORDER BY q.id DESC"
-
-        cursor.execute(query, params)
-        return cursor.fetchall()
-
-    finally:
-        if conn:
-            conn.close()
-
-
-def get_quote_by_id(quote_id: str) -> dict:
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-        cursor.execute("SELECT * FROM quotes WHERE quote_id = %s", (quote_id,))
-        quote = cursor.fetchone()
-
-        if not quote:
-            raise HTTPException(status_code=404, detail="Quote not found")
-
-        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s", (quote_id,))
-        quote["items"] = cursor.fetchall()
-
-        return quote
-
-    finally:
-        if conn:
-            conn.close()
-
-
-def update_quote_status(quote_id: str, status: str) -> dict:
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        cursor.execute("SELECT quote_id FROM quotes WHERE quote_id = %s", (quote_id,))
-        if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Quote not found")
-
-        valid_statuses = ["Draft", "Sent", "Approved", "Rejected", "Invoiced"]
-        if status not in valid_statuses:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid status. Must be one of: {valid_statuses}"
-            )
-
-        cursor.execute("UPDATE quotes SET status = %s WHERE quote_id = %s", (status, quote_id))
-        conn.commit()
-
-        return {"message": "Status updated successfully", "quote_id": quote_id, "status": status}
-
-    except HTTPException:
-        if conn:
-            conn.rollback()
-        raise
-
-    except Exception as e:
-        if conn:
-            conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to update status: {str(e)}")
-
-    finally:
-        if conn:
-            conn.close()
-
-
-def delete_quote(quote_id: str) -> dict:
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        cursor.execute("DELETE FROM quote_items WHERE quote_id = %s", (quote_id,))
-        cursor.execute("DELETE FROM quotes WHERE quote_id = %s", (quote_id,))
-
-        if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Quote not found")
-
-        conn.commit()
-        return {"message": "Quote deleted successfully"}
-
-    except HTTPException:
-        raise
-
-    except Exception as e:
-        if conn:
-            conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
 
     finally:
         if conn:

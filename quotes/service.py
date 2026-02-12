@@ -406,9 +406,25 @@ def convert_quote_to_invoice(quote_id: str) -> dict:
         # Insert invoice items (MATCHES YOUR TABLE)
         # Insert invoice items (MATCHES YOUR TABLE)
         for item in items:
-            # Calculate line total
+            # 1. Convert BIGINT product_id → UUID product_id
+            cursor.execute(
+                "SELECT id FROM products WHERE name = %s",
+                (item["product_name"],)
+            )
+            product_row = cursor.fetchone()
+
+            if not product_row:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Product '{item['product_name']}' not found in products table"
+                )
+
+            uuid_product_id = product_row["id"]
+
+            # 2. Calculate line total
             line_total = (item["quantity"] * item["unit_price"]) - item.get("discount_value", 0)
 
+            # 3. Insert into invoice_items using your REAL schema
             cursor.execute(
                 """
                 INSERT INTO invoice_items
@@ -417,41 +433,14 @@ def convert_quote_to_invoice(quote_id: str) -> dict:
                 """,
                 (
                     invoice_id,
-                    item["product_id"],           # MUST be UUID
-                    item["product_name"],         # becomes description
+                    uuid_product_id,            # UUID, not integer
+                    item["product_name"],       # description
                     item["quantity"],
                     item["unit_price"],
                     item.get("discount_value", 0),
                     line_total
                 ),
             )
-
-        # Update quote status
-        cursor.execute(
-            "UPDATE quotes SET status = 'Invoiced' WHERE quote_id = %s",
-            (quote_id,),
-        )
-
-        conn.commit()
-
-        return {
-            "invoice_id": invoice_number,
-            "quote_id": quote_id,
-            "status": "Invoiced",
-            "message": "Quote successfully converted to invoice"
-        }
-
-    except HTTPException:
-        if conn:
-            conn.rollback()
-        raise
-    except Exception as e:
-        if conn:
-            conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to convert quote: {str(e)}")
-    finally:
-        if conn:
-            conn.close()
 
 # ============================================================
 # GET ALL QUOTES

@@ -403,21 +403,25 @@ def convert_quote_to_invoice(quote_id: str) -> dict:
 
         invoice_id = cursor.fetchone()["id"]
 
-        # Insert invoice items (FIXED)
+        # Insert invoice items (MATCHES YOUR TABLE)
         for item in items:
+            # Calculate line total
+            line_total = (item["quantity"] * item["unit_price"]) - item.get("discount_value", 0)
+
             cursor.execute(
                 """
                 INSERT INTO invoice_items
-                (invoice_id, product_name, quantity, unit_price, discount_type, discount_value)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                (invoice_id, product_id, description, quantity, unit_price, discount, total)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     invoice_id,
-                    item["product_name"],
+                    item["product_id"],           # MUST be UUID
+                    item["product_name"],         # becomes description
                     item["quantity"],
                     item["unit_price"],
-                    item.get("discount_type", "none"),
-                    item.get("discount_value", 0.0),
+                    item.get("discount_value", 0),
+                    line_total
                 ),
             )
 

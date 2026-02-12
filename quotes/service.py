@@ -81,19 +81,17 @@ def create_quote(client_id: int, project_name: Optional[str], notes: Optional[st
             raise HTTPException(status_code=404, detail="Client not found")
 
         quote_id = generate_quote_id()
-        current_date = datetime.now().strftime("%Y-%m-%d")
 
         totals = calculate_quote_totals(items, included_charges)
 
-        # Insert quote
+        # Insert quote (FIXED: removed date column)
         cursor.execute("""
             INSERT INTO quotes
-            (quote_id, client_id, date, project_name, notes, status, included_charges, total_amount)
-            VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s)
+            (quote_id, client_id, project_name, notes, status, included_charges, total_amount)
+            VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s)
         """, (
             quote_id,
             client_id,
-            current_date,
             project_name,
             notes,
             "Draft",
@@ -101,7 +99,7 @@ def create_quote(client_id: int, project_name: Optional[str], notes: Optional[st
             totals["grand_total"]
         ))
 
-        # Insert items
+        # Insert items (still valid)
         for item in items:
             cursor.execute("""
                 INSERT INTO quote_items

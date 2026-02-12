@@ -450,7 +450,6 @@ def convert_quote_to_invoice(quote_id: str) -> dict:
         if conn:
             conn.close()
 
-
 # ============================================================
 # GET ALL QUOTES
 # ============================================================
@@ -477,7 +476,8 @@ def get_all_quotes(client_id: Optional[int] = None, status: Optional[str] = None
             query += " AND q.status = %s"
             params.append(status)
 
-        query += " ORDER BY q.date DESC"
+        # FIXED: removed q.date (column no longer exists)
+        query += " ORDER BY q.id DESC"
 
         cursor.execute(query, params)
         return cursor.fetchall()

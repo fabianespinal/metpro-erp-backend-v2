@@ -363,32 +363,18 @@ def convert_quote_to_invoice(quote_id: str) -> dict:
                 detail="Invoice already exists for this quote",
             )
 
-        # Get quote items for calculation
+        # Get quote items
         cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s", (quote_id,))
         items = [dict(row) for row in cursor.fetchall()]
 
         # Parse charges
         raw_charges = quote.get("included_charges")
-        try:
-            if isinstance(raw_charges, str):
-                charges = json.loads(raw_charges)
-            else:
-                charges = raw_charges or {}
-        except Exception:
-            charges = {
-                "supervision": True,
-                "supervision_percentage": 10.0,
-                "admin": True,
-                "admin_percentage": 4.0,
-                "insurance": True,
-                "insurance_percentage": 1.0,
-                "transport": True,
-                "transport_percentage": 3.0,
-                "contingency": True,
-                "contingency_percentage": 3.0,
-            }
+        if isinstance(raw_charges, str):
+            charges = json.loads(raw_charges)
+        else:
+            charges = raw_charges or {}
 
-        # Calculate totals using METPRO engine
+        # Calculate totals
         totals = calculate_quote_totals(items, charges)
 
         # Generate invoice number
@@ -417,17 +403,31 @@ def convert_quote_to_invoice(quote_id: str) -> dict:
 
         invoice_id = cursor.fetchone()["id"]
 
-        # Update quote status to Invoiced
+        # Insert invoice items (FIXED)
+        for item in items:
+            cursor.execute(
+                """
+                INSERT INTO invoice_items
+                (invoice_id, product_name, quantity, unit_price, discount_type, discount_value)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    invoice_id,
+                    item["product_name"],
+                    item["quantity"],
+                    item["unit_price"],
+                    item.get("discount_type", "none"),
+                    item.get("discount_value", 0.0),
+                ),
+            )
+
+        # Update quote status
         cursor.execute(
             "UPDATE quotes SET status = 'Invoiced' WHERE quote_id = %s",
             (quote_id,),
         )
 
         conn.commit()
-
-        # Fetch full invoice
-        cursor.execute("SELECT * FROM invoices WHERE id = %s", (invoice_id,))
-        invoice = dict(cursor.fetchone())
 
         return {
             "invoice_id": invoice_number,

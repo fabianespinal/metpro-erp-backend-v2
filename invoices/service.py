@@ -5,12 +5,10 @@ import json
 from database import get_db_connection
 from psycopg2.extras import RealDictCursor
 
-
 def generate_invoice_number() -> str:
     """Generate unique invoice number"""
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
     return f"INV-{timestamp}"
-
 
 def calculate_invoice_totals(items: List[dict], charges: dict) -> dict:
     """
@@ -19,7 +17,6 @@ def calculate_invoice_totals(items: List[dict], charges: dict) -> dict:
     Same logic as quotes module
     """
     items_total = sum(float(item["quantity"] or 0) * float(item["unit_price"] or 0) for item in items)
-
     total_discounts = 0
     for item in items:
         subtotal = float(item["quantity"] or 0) * float(item["unit_price"] or 0)
@@ -59,7 +56,6 @@ def calculate_invoice_totals(items: List[dict], charges: dict) -> dict:
         "itbis": itbis,
         "grand_total": grand_total,
     }
-
 
 def create_invoice_from_quote(quote_id: str, notes: Optional[str] = None) -> dict:
     """Create invoice from approved quote with full calculation engine"""
@@ -128,8 +124,8 @@ def create_invoice_from_quote(quote_id: str, notes: Optional[str] = None) -> dic
             INSERT INTO invoices
             (quote_id, invoice_number, invoice_date, client_id, total_amount, status, notes)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
-            RETURNING id
-        """,
+            RETURNING id, invoice_number, quote_id, client_id, total_amount, status, invoice_date, notes, created_at, updated_at
+            """,
             (
                 quote_id,
                 invoice_number,
@@ -141,7 +137,7 @@ def create_invoice_from_quote(quote_id: str, notes: Optional[str] = None) -> dic
             ),
         )
 
-        invoice_id = cursor.fetchone()["id"]
+        invoice = dict(cursor.fetchone())
 
         # Update quote status to Invoiced
         cursor.execute(
@@ -151,10 +147,7 @@ def create_invoice_from_quote(quote_id: str, notes: Optional[str] = None) -> dic
 
         conn.commit()
 
-        # Fetch full invoice
-        cursor.execute("SELECT * FROM invoices WHERE id = %s", (invoice_id,))
-        invoice = dict(cursor.fetchone())
-
+        # Add calculated data for frontend
         invoice["items"] = items
         invoice["totals"] = totals
 
@@ -172,7 +165,6 @@ def create_invoice_from_quote(quote_id: str, notes: Optional[str] = None) -> dic
         if conn:
             conn.close()
 
-
 def get_all_invoices(client_id: Optional[int] = None, status: Optional[str] = None) -> List[dict]:
     """Get all invoices with optional filters"""
     conn = None
@@ -181,7 +173,18 @@ def get_all_invoices(client_id: Optional[int] = None, status: Optional[str] = No
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
         query = """
-            SELECT i.*, c.company_name AS client_name
+            SELECT 
+                i.id,
+                i.quote_id,
+                i.invoice_number,
+                i.invoice_date,
+                i.client_id,
+                c.company_name AS client_name,
+                i.total_amount,
+                i.status,
+                i.notes,
+                i.created_at,
+                i.updated_at
             FROM invoices i
             JOIN clients c ON i.client_id = c.id
             WHERE 1=1
@@ -198,11 +201,10 @@ def get_all_invoices(client_id: Optional[int] = None, status: Optional[str] = No
         query += " ORDER BY i.invoice_date DESC"
         cursor.execute(query, params)
 
-        return cursor.fetchall()
+        return [dict(row) for row in cursor.fetchall()]
     finally:
         if conn:
             conn.close()
-
 
 def get_invoice_by_id(invoice_id: int) -> dict:
     """Get invoice by ID with items and calculations"""
@@ -246,7 +248,6 @@ def get_invoice_by_id(invoice_id: int) -> dict:
         if conn:
             conn.close()
 
-
 def get_invoice_by_number(invoice_number: str) -> dict:
     """Get invoice by invoice number"""
     conn = None
@@ -264,7 +265,6 @@ def get_invoice_by_number(invoice_number: str) -> dict:
     finally:
         if conn:
             conn.close()
-
 
 def update_invoice_status(invoice_id: int, status: str) -> dict:
     """Update invoice status"""
@@ -285,7 +285,8 @@ def update_invoice_status(invoice_id: int, status: str) -> dict:
             UPDATE invoices
             SET status = %s, updated_at = CURRENT_TIMESTAMP
             WHERE id = %s
-        """,
+            RETURNING *
+            """,
             (status, invoice_id),
         )
 
@@ -294,7 +295,6 @@ def update_invoice_status(invoice_id: int, status: str) -> dict:
 
         conn.commit()
 
-        cursor.execute("SELECT * FROM invoices WHERE id = %s", (invoice_id,))
         return dict(cursor.fetchone())
 
     except HTTPException:
@@ -308,7 +308,6 @@ def update_invoice_status(invoice_id: int, status: str) -> dict:
     finally:
         if conn:
             conn.close()
-
 
 def delete_invoice(invoice_id: int) -> dict:
     """Delete invoice (also revert quote status)"""

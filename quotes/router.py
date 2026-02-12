@@ -11,7 +11,6 @@ def create_quote(quote: QuoteCreate, current_user: dict = Depends(verify_token))
     """Create a new quote"""
     items = [item.dict() for item in quote.items]
     charges = quote.included_charges.dict()
-    
     result = service.create_quote(
         quote.client_id,
         quote.project_name,
@@ -60,8 +59,19 @@ def duplicate_quote(quote_id: str, current_user: dict = Depends(verify_token)):
 
 @router.post('/{quote_id}/convert-to-invoice')
 def convert_to_invoice(quote_id: str, current_user: dict = Depends(verify_token)):
-    """Convert approved quote to invoice"""
-    return service.convert_quote_to_invoice(quote_id)
+    """Convert approved quote to invoice - returns invoice data with proper fields"""
+    invoice = service.convert_quote_to_invoice(quote_id)
+    # Return invoice data with invoice_id and invoice_number for frontend
+    return {
+        "invoice_id": invoice["id"],
+        "invoice_number": invoice["invoice_number"],
+        "quote_id": invoice["quote_id"],
+        "client_id": invoice["client_id"],
+        "total_amount": invoice["total_amount"],
+        "status": invoice["status"],
+        "invoice_date": invoice["invoice_date"],
+        "message": f"Quote {quote_id} converted to invoice {invoice['invoice_number']}"
+    }
 
 @router.delete('/{quote_id}')
 def delete_quote(quote_id: str, current_user: dict = Depends(verify_token)):

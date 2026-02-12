@@ -442,6 +442,31 @@ def convert_quote_to_invoice(quote_id: str) -> dict:
                 ),
             )
 
+        # Commit transaction
+        conn.commit()
+
+        # Fetch created invoice and its items
+        cursor.execute("SELECT * FROM invoices WHERE id = %s", (invoice_id,))
+        new_invoice = cursor.fetchone()
+        cursor.execute("SELECT * FROM invoice_items WHERE invoice_id = %s", (invoice_id,))
+        new_invoice["items"] = cursor.fetchall()
+
+        return new_invoice
+
+    except HTTPException:
+        if conn:
+            conn.rollback()
+        raise
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to convert quote to invoice: {str(e)}")
+
+    finally:
+        if conn:
+            conn.close()
+
 # ============================================================
 # GET ALL QUOTES
 # ============================================================

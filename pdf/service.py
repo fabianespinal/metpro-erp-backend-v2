@@ -38,26 +38,37 @@ def generate_quote_pdf(quote_id: str) -> StreamingResponse:
         items = [dict(row) for row in cursor.fetchall()]
 
         # Parse charges with backwards-compatible defaults
-        try:
-            charges = json.loads(quote['included_charges']) if isinstance(quote['included_charges'], str) else quote['included_charges']
-            defaults = {
-                'supervision_percentage': 10.0,
-                'admin_percentage': 4.0,
-                'insurance_percentage': 1.0,
-                'transport_percentage': 3.0,
-                'contingency_percentage': 3.0
-            }
-            for key, default in defaults.items():
-                if key not in charges:
-                    charges[key] = default
-        except:
-            charges = {
-                'supervision': True, 'supervision_percentage': 10.0,
-                'admin': True, 'admin_percentage': 4.0,
-                'insurance': True, 'insurance_percentage': 1.0,
-                'transport': True, 'transport_percentage': 3.0,
-                'contingency': True, 'contingency_percentage': 3.0
-            }
+        raw_charges = quote.get('included_charges')
+
+        # 1. Safely load JSON or fallback to empty dict
+        if not raw_charges:
+            charges = {}
+        elif isinstance(raw_charges, str):
+            try:
+                charges = json.loads(raw_charges)
+            except:
+                charges = {}
+        else:
+            charges = raw_charges
+
+        # 2. Ensure boolean flags ALWAYS exist
+        charges.setdefault('supervision', True)
+        charges.setdefault('admin', True)
+        charges.setdefault('insurance', True)
+        charges.setdefault('transport', True)
+        charges.setdefault('contingency', True)
+
+        # 3. Ensure percentage values ALWAYS exist
+        defaults = {
+            'supervision_percentage': 10.0,
+            'admin_percentage': 4.0,
+            'insurance_percentage': 1.0,
+            'transport_percentage': 3.0,
+            'contingency_percentage': 3.0
+        }
+
+        for key, default in defaults.items():
+            charges.setdefault(key, default)
 
         # Calculate totals (EXACT METPRO CALCULATION ENGINE)
         items_total = sum(float(item['quantity'] or 0) * float(item['unit_price'] or 0) for item in items)

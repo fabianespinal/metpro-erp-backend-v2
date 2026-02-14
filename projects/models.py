@@ -2,8 +2,15 @@ from pydantic import BaseModel, field_validator
 from typing import Optional
 from datetime import date, datetime
 
-# Status must match Supabase constraint values
-ALLOWED_STATUSES = {'planning', 'active', 'completed', 'on_hold', 'cancelled'}
+# Allowed statuses (expand or reduce based on your DB constraint)
+ALLOWED_STATUSES = {
+    'planning',
+    'active',
+    'completed',
+    'on_hold',
+    'cancelled',
+    'in_progress'
+}
 
 class ProjectBase(BaseModel):
     client_id: int
@@ -15,19 +22,32 @@ class ProjectBase(BaseModel):
     estimated_budget: Optional[float] = None
     notes: Optional[str] = None
 
-    @field_validator('status')
-    @classmethod
-    def validate_status(cls, v):
-        if v.lower() not in ALLOWED_STATUSES:
-            raise ValueError(f"Status must be one of: {', '.join(ALLOWED_STATUSES)}")
-        return v.lower()
-
+    # Normalize empty strings → None
     @field_validator('description', 'notes', mode='before')
     @classmethod
     def empty_str_to_none(cls, v):
         if v == "":
             return None
         return v
+
+    # Normalize and validate status
+    @field_validator('status', mode='before')
+    @classmethod
+    def validate_status(cls, v):
+        if v is None:
+            return None
+
+        v = v.strip().lower()
+
+        # Normalize "in progress" → "in_progress"
+        if v == "in progress":
+            v = "in_progress"
+
+        if v not in ALLOWED_STATUSES:
+            raise ValueError(f"Status must be one of: {', '.join(ALLOWED_STATUSES)}")
+
+        return v
+
 
 class Project(ProjectBase):
     id: int
@@ -37,8 +57,10 @@ class Project(ProjectBase):
     class Config:
         from_attributes = True
 
+
 class ProjectCreate(ProjectBase):
     pass
+
 
 class ProjectUpdate(BaseModel):
     client_id: Optional[int] = None
@@ -50,15 +72,7 @@ class ProjectUpdate(BaseModel):
     estimated_budget: Optional[float] = None
     notes: Optional[str] = None
 
-    @field_validator('status', mode='before')
-    @classmethod
-    def validate_status(cls, v):
-        if v is None:
-            return v
-        if v.lower() not in ALLOWED_STATUSES:
-            raise ValueError(f"Status must be one of: {', '.join(ALLOWED_STATUSES)}")
-        return v.lower()
-
+    # Normalize empty strings → None
     @field_validator('description', 'notes', mode='before')
     @classmethod
     def empty_str_to_none(cls, v):
@@ -66,9 +80,28 @@ class ProjectUpdate(BaseModel):
             return None
         return v
 
+    # Prevent empty name
     @field_validator('name', mode='before')
     @classmethod
     def empty_name_check(cls, v):
         if v == "":
             raise ValueError("Name cannot be empty")
+        return v
+
+    # Normalize and validate status
+    @field_validator('status', mode='before')
+    @classmethod
+    def validate_status(cls, v):
+        if v is None:
+            return None
+
+        v = v.strip().lower()
+
+        # Normalize "in progress" → "in_progress"
+        if v == "in progress":
+            v = "in_progress"
+
+        if v not in ALLOWED_STATUSES:
+            raise ValueError(f"Status must be one of: {', '.join(ALLOWED_STATUSES)}")
+
         return v

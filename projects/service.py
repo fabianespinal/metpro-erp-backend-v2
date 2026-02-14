@@ -4,22 +4,19 @@ from fastapi import HTTPException
 from database import get_db_connection
 from psycopg2.extras import RealDictCursor
 
-
 # ============================================================
 # CREATE PROJECT
 # ============================================================
-
 def create_project(
     client_id: int,
     name: str,
     description: Optional[str],
     status: str,
-    start_date: Optional[date],
+    start_date: date,  # NOT NULL per Supabase
     end_date: Optional[date],
     estimated_budget: Optional[float],
     notes: Optional[str]
 ) -> dict:
-
     conn = None
     try:
         conn = get_db_connection()
@@ -65,11 +62,9 @@ def create_project(
         if conn:
             conn.close()
 
-
 # ============================================================
 # GET ALL PROJECTS (WITH FILTERS)
 # ============================================================
-
 def get_all_projects(client_id: Optional[int] = None, status: Optional[str] = None) -> List[dict]:
     conn = None
     try:
@@ -101,11 +96,9 @@ def get_all_projects(client_id: Optional[int] = None, status: Optional[str] = No
         if conn:
             conn.close()
 
-
 # ============================================================
 # GET PROJECT BY ID
 # ============================================================
-
 def get_project_by_id(project_id: int) -> dict:
     conn = None
     try:
@@ -124,11 +117,9 @@ def get_project_by_id(project_id: int) -> dict:
         if conn:
             conn.close()
 
-
 # ============================================================
-# UPDATE PROJECT (FULLY FIXED)
+# UPDATE PROJECT
 # ============================================================
-
 def update_project(
     project_id: int,
     client_id: Optional[int] = None,
@@ -140,7 +131,6 @@ def update_project(
     estimated_budget: Optional[float] = None,
     notes: Optional[str] = None
 ) -> dict:
-
     conn = None
     try:
         conn = get_db_connection()
@@ -156,17 +146,27 @@ def update_project(
         # Normalization helpers
         # -----------------------------
         def norm_str(v):
-            return v if v not in ("", None) else None
+            """Convert empty string or whitespace to None"""
+            if v is None:
+                return None
+            if isinstance(v, str) and v.strip() == "":
+                return None
+            return v
 
         def norm_float(v, current):
-            if v in ("", None):
+            """Handle empty string, None, or invalid float"""
+            if v is None or v == "":
                 return current
-            return float(v)
+            try:
+                return float(v)
+            except (ValueError, TypeError):
+                return current
 
         def norm_date(v, current):
-            if v in ("", None):
+            """Handle None or invalid date"""
+            if v is None:
                 return current
-            return v  # already a date from Pydantic
+            return v
 
         # -----------------------------
         # Final values (safe merging)
@@ -190,6 +190,10 @@ def update_project(
         if final_start_date and final_end_date and final_end_date < final_start_date:
             raise HTTPException(status_code=400, detail="End date must be after start date")
 
+        # Validate name is not empty
+        if final_name is None or final_name.strip() == "":
+            raise HTTPException(status_code=400, detail="Name cannot be empty")
+
         # -----------------------------
         # Perform update
         # -----------------------------
@@ -200,7 +204,7 @@ def update_project(
                 description = %s,
                 status = %s,
                 start_date = %s,
-                end_date = %s,
+                end_date = %s,  -- FIXED: removed space typo
                 estimated_budget = %s,
                 notes = %s,
                 updated_at = CURRENT_TIMESTAMP
@@ -236,11 +240,9 @@ def update_project(
         if conn:
             conn.close()
 
-
 # ============================================================
 # DELETE PROJECT
 # ============================================================
-
 def delete_project(project_id: int) -> dict:
     conn = None
     try:

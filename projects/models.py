@@ -1,17 +1,33 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional
 from datetime import date, datetime
+
+# Status must match Supabase constraint values
+ALLOWED_STATUSES = {'planning', 'active', 'completed', 'on_hold', 'cancelled'}
 
 class ProjectBase(BaseModel):
     client_id: int
     name: str
     description: Optional[str] = None
     status: str = 'planning'
-    start_date: Optional[date] = None
+    start_date: date  # NOT NULL in Supabase
     end_date: Optional[date] = None
     estimated_budget: Optional[float] = None
     notes: Optional[str] = None
 
+    @field_validator('status')
+    @classmethod
+    def validate_status(cls, v):
+        if v.lower() not in ALLOWED_STATUSES:
+            raise ValueError(f"Status must be one of: {', '.join(ALLOWED_STATUSES)}")
+        return v.lower()
+
+    @field_validator('description', 'notes', mode='before')
+    @classmethod
+    def empty_str_to_none(cls, v):
+        if v == "":
+            return None
+        return v
 
 class Project(ProjectBase):
     id: int
@@ -21,17 +37,8 @@ class Project(ProjectBase):
     class Config:
         from_attributes = True
 
-
-class ProjectCreate(BaseModel):
-    client_id: int
-    name: str
-    description: Optional[str] = None
-    status: str = 'planning'
-    start_date: Optional[date] = None
-    end_date: Optional[date] = None
-    estimated_budget: Optional[float] = None
-    notes: Optional[str] = None
-
+class ProjectCreate(ProjectBase):
+    pass
 
 class ProjectUpdate(BaseModel):
     client_id: Optional[int] = None
@@ -42,3 +49,26 @@ class ProjectUpdate(BaseModel):
     end_date: Optional[date] = None
     estimated_budget: Optional[float] = None
     notes: Optional[str] = None
+
+    @field_validator('status', mode='before')
+    @classmethod
+    def validate_status(cls, v):
+        if v is None:
+            return v
+        if v.lower() not in ALLOWED_STATUSES:
+            raise ValueError(f"Status must be one of: {', '.join(ALLOWED_STATUSES)}")
+        return v.lower()
+
+    @field_validator('description', 'notes', mode='before')
+    @classmethod
+    def empty_str_to_none(cls, v):
+        if v == "":
+            return None
+        return v
+
+    @field_validator('name', mode='before')
+    @classmethod
+    def empty_name_check(cls, v):
+        if v == "":
+            raise ValueError("Name cannot be empty")
+        return v

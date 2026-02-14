@@ -16,39 +16,42 @@ def get_quotes_summary(start_date: Optional[str], end_date: Optional[str],
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        # Build query
+        # Base query
         query = """
             SELECT 
-                status,
+                q.status,
                 COUNT(*) AS count
-            FROM quotes
+            FROM quotes q
             WHERE 1=1
         """
         params = []
 
+        # Date filter
         if start_date and end_date:
-            query += " AND date BETWEEN %s AND %s"
+            query += " AND q.created_at BETWEEN %s AND %s"
             params.extend([start_date, end_date])
 
+        # Client filter
         if client_id:
-            query += " AND client_id = %s"
+            query += " AND q.client_id = %s"
             params.append(client_id)
 
-        query += " GROUP BY status ORDER BY status"
+        # Grouping
+        query += " GROUP BY q.status ORDER BY q.status"
 
         cursor.execute(query, params)
         status_breakdown = cursor.fetchall()
 
         # Grand total
-        total_query = "SELECT COUNT(*) AS total FROM quotes WHERE 1=1"
+        total_query = "SELECT COUNT(*) AS total FROM quotes q WHERE 1=1"
         total_params = []
 
         if start_date and end_date:
-            total_query += " AND date BETWEEN %s AND %s"
+            total_query += " AND q.created_at BETWEEN %s AND %s"
             total_params.extend([start_date, end_date])
 
         if client_id:
-            total_query += " AND client_id = %s"
+            total_query += " AND q.client_id = %s"
             total_params.append(client_id)
 
         cursor.execute(total_query, total_params)

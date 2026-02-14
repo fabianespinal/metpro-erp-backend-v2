@@ -1,4 +1,5 @@
 from typing import List, Optional
+from datetime import date
 from fastapi import HTTPException
 from database import get_db_connection
 from psycopg2.extras import RealDictCursor
@@ -13,8 +14,8 @@ def create_project(
     name: str,
     description: Optional[str],
     status: str,
-    start_date: str,
-    end_date: Optional[str],
+    start_date: Optional[date],
+    end_date: Optional[date],
     estimated_budget: Optional[float],
     notes: Optional[str]
 ) -> dict:
@@ -28,6 +29,10 @@ def create_project(
         cursor.execute("SELECT 1 FROM clients WHERE id = %s", (client_id,))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Client not found")
+
+        # Validate date range if both dates provided
+        if start_date and end_date and end_date < start_date:
+            raise HTTPException(status_code=400, detail="End date must be after start date")
 
         # Insert project
         cursor.execute("""
@@ -126,14 +131,14 @@ def get_project_by_id(project_id: int) -> dict:
 
 def update_project(
     project_id: int,
-    client_id: int,
-    name: str,
-    description: Optional[str],
-    status: str,
-    start_date: str,
-    end_date: Optional[str],
-    estimated_budget: Optional[float],
-    notes: Optional[str]
+    client_id: Optional[int] = None,
+    name: Optional[str] = None,
+    description: Optional[str] = None,
+    status: Optional[str] = None,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    estimated_budget: Optional[float] = None,
+    notes: Optional[str] = None
 ) -> dict:
 
     conn = None
@@ -141,15 +146,31 @@ def update_project(
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        # Verify project exists
-        cursor.execute("SELECT 1 FROM projects WHERE id = %s", (project_id,))
-        if not cursor.fetchone():
+        # Verify project exists and get current values
+        cursor.execute("SELECT * FROM projects WHERE id = %s", (project_id,))
+        current_project = cursor.fetchone()
+        if not current_project:
             raise HTTPException(status_code=404, detail="Project not found")
 
-        # Validate client exists
-        cursor.execute("SELECT 1 FROM clients WHERE id = %s", (client_id,))
-        if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Client not found")
+        # Use current values if not provided
+        final_client_id = client_id if client_id is not None else current_project['client_id']
+        final_name = name if name is not None else current_project['name']
+        final_description = description if description is not None else current_project['description']
+        final_status = status if status is not None else current_project['status']
+        final_start_date = start_date if start_date is not None else current_project['start_date']
+        final_end_date = end_date if end_date is not None else current_project['end_date']
+        final_estimated_budget = estimated_budget if estimated_budget is not None else current_project['estimated_budget']
+        final_notes = notes if notes is not None else current_project['notes']
+
+        # Validate client exists if changing
+        if client_id is not None:
+            cursor.execute("SELECT 1 FROM clients WHERE id = %s", (final_client_id,))
+            if not cursor.fetchone():
+                raise HTTPException(status_code=404, detail="Client not found")
+
+        # Validate date range if both dates provided
+        if final_start_date and final_end_date and final_end_date < final_start_date:
+            raise HTTPException(status_code=400, detail="End date must be after start date")
 
         cursor.execute("""
             UPDATE projects SET
@@ -164,8 +185,8 @@ def update_project(
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = %s
         """, (
-            client_id, name, description, status,
-            start_date, end_date, estimated_budget, notes,
+            final_client_id, final_name, final_description, final_status,
+            final_start_date, final_end_date, final_estimated_budget, final_notes,
             project_id
         ))
 

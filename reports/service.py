@@ -96,23 +96,25 @@ def get_revenue_report(start_date: Optional[str], end_date: Optional[str],
 
         query = """
             SELECT 
-                status,
-                COALESCE(SUM(total_amount), 0) AS total_revenue,
+                q.status,
+                COALESCE(SUM(q.total_amount), 0) AS total_revenue,
                 COUNT(*) AS quote_count
-            FROM quotes
-            WHERE status IN ('Approved', 'Invoiced')
+            FROM quotes q
+            WHERE q.status IN ('Approved', 'Invoiced')
         """
         params = []
 
+        # Date filter
         if start_date and end_date:
-            query += " AND date BETWEEN %s AND %s"
+            query += " AND q.created_at BETWEEN %s AND %s"
             params.extend([start_date, end_date])
 
+        # Client filter
         if client_id:
-            query += " AND client_id = %s"
+            query += " AND q.client_id = %s"
             params.append(client_id)
 
-        query += " GROUP BY status ORDER BY status"
+        query += " GROUP BY q.status ORDER BY q.status"
 
         cursor.execute(query, params)
         results = cursor.fetchall()
@@ -171,15 +173,16 @@ def get_client_activity(start_date: Optional[str], end_date: Optional[str]) -> d
                 c.company_name,
                 COUNT(q.quote_id) AS quote_count,
                 COALESCE(SUM(q.total_amount), 0) AS total_quoted,
-                MAX(q.date) AS last_quote_date
+                MAX(q.created_at) AS last_quote_date
             FROM clients c
             INNER JOIN quotes q ON c.id = q.client_id
             WHERE 1=1
         """
         params = []
 
+        # Date filter
         if start_date and end_date:
-            query += " AND q.date IS NOT NULL AND q.date BETWEEN %s AND %s"
+            query += " AND q.created_at BETWEEN %s AND %s"
             params.extend([start_date, end_date])
 
         query += " GROUP BY c.id, c.company_name ORDER BY total_quoted DESC"

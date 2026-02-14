@@ -125,8 +125,11 @@ def get_revenue_report(start_date: Optional[str], end_date: Optional[str],
         invoiced = next((r for r in results if r["status"] == "Invoiced"),
                         {"total_revenue": 0, "quote_count": 0})
 
+        total_revenue = float(approved["total_revenue"] + invoiced["total_revenue"])
+
         return {
             "summary": {
+                "total_revenue": total_revenue,   # ⭐ ADDED FIELD
                 "filters": {
                     "start_date": start_date,
                     "end_date": end_date,
@@ -145,7 +148,7 @@ def get_revenue_report(start_date: Optional[str], end_date: Optional[str],
                     "quote_count": invoiced["quote_count"]
                 }
             ],
-            "grand_total": float(approved["total_revenue"] + invoiced["total_revenue"])
+            "grand_total": total_revenue
         }
 
     except Exception as e:

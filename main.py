@@ -19,13 +19,18 @@ app = FastAPI(
 )
 
 # ============================================================
-# CORS CONFIGURATION — LOCAL + RAILWAY FRONTEND
+# CORS CONFIGURATION — LOCAL + RAILWAY FRONTEND + BACKEND
 # ============================================================
 
 allowed_origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+
+    # Frontend (Railway)
     "https://metpro-erp-frontend-production.up.railway.app",
+
+    # Backend (Railway) — required for internal redirects & preflight
+    "https://metpro-erp-backend-v2-production.up.railway.app",
 ]
 
 app.add_middleware(
@@ -35,7 +40,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 # ============================================================
 # STATIC FILES
 # ============================================================

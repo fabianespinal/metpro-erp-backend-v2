@@ -126,7 +126,7 @@ def get_project_by_id(project_id: int) -> dict:
 
 
 # ============================================================
-# UPDATE PROJECT
+# UPDATE PROJECT (FULLY FIXED)
 # ============================================================
 
 def update_project(
@@ -146,32 +146,53 @@ def update_project(
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        # Verify project exists and get current values
+        # Fetch current project
         cursor.execute("SELECT * FROM projects WHERE id = %s", (project_id,))
         current_project = cursor.fetchone()
         if not current_project:
             raise HTTPException(status_code=404, detail="Project not found")
 
-        # Use current values if not provided
-        final_client_id = client_id if client_id is not None else current_project['client_id']
-        final_name = name if name is not None else current_project['name']
-        final_description = description if description is not None else current_project['description']
-        final_status = status if status is not None else current_project['status']
-        final_start_date = start_date if start_date is not None else current_project['start_date']
-        final_end_date = end_date if end_date is not None else current_project['end_date']
-        final_estimated_budget = estimated_budget if estimated_budget is not None else current_project['estimated_budget']
-        final_notes = notes if notes is not None else current_project['notes']
+        # -----------------------------
+        # Normalization helpers
+        # -----------------------------
+        def norm_str(v):
+            return v if v not in ("", None) else None
 
-        # Validate client exists if changing
+        def norm_float(v, current):
+            if v in ("", None):
+                return current
+            return float(v)
+
+        def norm_date(v, current):
+            if v in ("", None):
+                return current
+            return v  # already a date from Pydantic
+
+        # -----------------------------
+        # Final values (safe merging)
+        # -----------------------------
+        final_client_id = client_id if client_id is not None else current_project["client_id"]
+        final_name = name if name is not None else current_project["name"]
+        final_description = norm_str(description) if description is not None else current_project["description"]
+        final_status = status if status is not None else current_project["status"]
+        final_start_date = norm_date(start_date, current_project["start_date"])
+        final_end_date = norm_date(end_date, current_project["end_date"])
+        final_estimated_budget = norm_float(estimated_budget, current_project["estimated_budget"])
+        final_notes = norm_str(notes) if notes is not None else current_project["notes"]
+
+        # Validate client if changed
         if client_id is not None:
             cursor.execute("SELECT 1 FROM clients WHERE id = %s", (final_client_id,))
             if not cursor.fetchone():
                 raise HTTPException(status_code=404, detail="Client not found")
 
-        # Validate date range if both dates provided
+        # Validate date range
         if final_start_date and final_end_date and final_end_date < final_start_date:
             raise HTTPException(status_code=400, detail="End date must be after start date")
 
+        # -----------------------------
+        # Perform update
+        # -----------------------------
         cursor.execute("""
             UPDATE projects SET
                 client_id = %s,
@@ -185,8 +206,14 @@ def update_project(
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = %s
         """, (
-            final_client_id, final_name, final_description, final_status,
-            final_start_date, final_end_date, final_estimated_budget, final_notes,
+            final_client_id,
+            final_name,
+            final_description,
+            final_status,
+            final_start_date,
+            final_end_date,
+            final_estimated_budget,
+            final_notes,
             project_id
         ))
 

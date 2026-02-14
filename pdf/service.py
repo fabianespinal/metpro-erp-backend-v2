@@ -142,6 +142,19 @@ def generate_quote_pdf(quote_id: str) -> StreamingResponse:
             }
         )
 
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        print(f"PDF GENERATION ERROR for quote {quote_id}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Quote PDF generation failed: {str(e)}")
+
+    finally:
+        if conn:
+            conn.close()
+
 # ============================================================
 # INVOICE PDF GENERATION
 # ============================================================

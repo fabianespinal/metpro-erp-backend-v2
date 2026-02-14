@@ -104,7 +104,11 @@ def generate_quote_pdf(quote_id: str) -> StreamingResponse:
         pdf = _create_quote_invoice_pdf(
             doc_type='COTIZACION',
             doc_id=quote["quote_id"],
-            doc_date=quote["date"],
+
+            # FIXED: old "date" field removed from schema
+            # Use created_at → updated_at → empty string fallback
+            doc_date=quote.get("created_at") or quote.get("updated_at") or "",
+
             client=client,
             project_name=quote.get('project_name'),
             notes=quote.get('notes'),
@@ -129,22 +133,14 @@ def generate_quote_pdf(quote_id: str) -> StreamingResponse:
         )
 
         pdf_bytes = pdf.output()
+
         return StreamingResponse(
             io.BytesIO(pdf_bytes),
             media_type='application/pdf',
-            headers={'Content-Disposition': f'attachment; filename={quote_id}_cotizacion.pdf'}
+            headers={
+                'Content-Disposition': f'attachment; filename={quote_id}_cotizacion.pdf'
+            }
         )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"PDF GENERATION ERROR for quote {quote_id}: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f'Quote PDF generation failed: {str(e)}')
-    finally:
-        if conn:
-            conn.close()
 
 # ============================================================
 # INVOICE PDF GENERATION

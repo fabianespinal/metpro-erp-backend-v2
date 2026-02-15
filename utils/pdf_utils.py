@@ -8,7 +8,7 @@ def add_footer_with_signature(pdf):
     # SAFE FONT LOADING (GreatVibes)
     # ============================
 
-    # Your backend structure shows: backend/fonts/GreatVibes-Regular.ttf
+    # Correct path based on your backend structure
     FONT_PATH = os.path.join(os.path.dirname(__file__), "..", "fonts", "GreatVibes-Regular.ttf")
     FONT_PATH = os.path.abspath(FONT_PATH)
 
@@ -25,6 +25,7 @@ def add_footer_with_signature(pdf):
 
     # Cursive signature text
     pdf.set_xy(15, sig_y + 2)
+
     if font_loaded:
         pdf.set_font("GreatVibes", "", 22)
     else:

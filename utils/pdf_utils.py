@@ -24,20 +24,20 @@ def add_footer_with_signature(pdf):
     # ============================
 
     # Cursive signature text
-    pdf.set_xy(15, sig_y + 2)
+    pdf.set_xy(15, sig_y + 5)
 
     if font_loaded:
-        pdf.set_font("GreatVibes", "", 12)
+        pdf.set_font("GreatVibes", "", 18)
     else:
         pdf.set_font("Arial", "", 12)
 
     pdf.set_text_color(60, 60, 60)
-    pdf.cell(75, 10, "Karmary Mata", 0, 1, "C")
+    pdf.cell(75, 6, "Karmary Mata", 0, 1, "C")
 
-    # Signature line
-    pdf.set_xy(15, sig_y + 15)
+    # Signature line (closer)
+    pdf.set_xy(15, sig_y + 12)
     pdf.set_draw_color(180, 180, 180)
-    pdf.line(15, sig_y + 15, 90, sig_y + 15)
+    pdf.line(15, sig_y + 12, 90, sig_y + 12)
 
     # Label
     pdf.set_xy(15, sig_y + 17)

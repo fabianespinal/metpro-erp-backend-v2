@@ -27,7 +27,7 @@ def add_footer_with_signature(pdf):
     pdf.set_xy(15, sig_y + 2)
 
     if font_loaded:
-        pdf.set_font("GreatVibes", "", 22)
+        pdf.set_font("GreatVibes", "", 12)
     else:
         pdf.set_font("Arial", "", 12)
 

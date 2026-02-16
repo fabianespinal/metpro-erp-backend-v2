@@ -2,14 +2,11 @@ from pydantic import BaseModel, field_validator
 from typing import Optional
 from datetime import date, datetime
 
-# Allowed statuses (expand or reduce based on your DB constraint)
+# Allowed statuses (MUST match Supabase constraint)
 ALLOWED_STATUSES = {
     'planning',
-    'active',
-    'completed',
-    'on_hold',
-    'cancelled',
-    'in_progress'
+    'in_progress',
+    'completed'
 }
 
 class ProjectBase(BaseModel):

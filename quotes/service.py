@@ -312,32 +312,47 @@ def duplicate_quote(quote_id: str) -> dict:
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
+        # 1. Fetch original quote
         cursor.execute("SELECT * FROM quotes WHERE quote_id = %s", (quote_id,))
-        original_quote = cursor.fetchone()
-        if not original_quote:
+        original = cursor.fetchone()
+        if not original:
             raise HTTPException(status_code=404, detail="Quote not found")
 
+        # 2. Fetch original items
         cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s", (quote_id,))
-        original_items = [dict(row) for row in cursor.fetchall()]
+        original_items = cursor.fetchall()
 
+        # 3. Generate new quote ID
         new_quote_id = generate_quote_id()
         current_date = datetime.now().strftime("%Y-%m-%d")
 
+        # 4. Normalize included_charges (avoid JSONB double encoding)
+        included_charges = original.get("included_charges")
+        if isinstance(included_charges, str):
+            try:
+                included_charges = json.loads(included_charges)
+            except:
+                included_charges = {}
+        if included_charges is None:
+            included_charges = {}
+
+        # 5. Insert duplicated quote
         cursor.execute("""
             INSERT INTO quotes
             (quote_id, client_id, date, project_name, notes, status, included_charges, total_amount)
             VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s)
         """, (
             new_quote_id,
-            original_quote["client_id"],
+            original["client_id"],
             current_date,
-            original_quote.get("project_name"),
-            f"[DUPLICATE] {original_quote.get('notes', '')}" if original_quote.get('notes') else None,
+            original.get("project_name"),
+            f"[DUPLICATE] {original.get('notes', '')}" if original.get("notes") else None,
             "Draft",
-            json.dumps(original_quote["included_charges"]),
-            original_quote["total_amount"]
+            json.dumps(included_charges),
+            original["total_amount"]
         ))
 
+        # 6. Duplicate quote items safely
         for item in original_items:
             cursor.execute("""
                 INSERT INTO quote_items
@@ -348,12 +363,13 @@ def duplicate_quote(quote_id: str) -> dict:
                 item["product_name"],
                 item["quantity"],
                 item["unit_price"],
-                item.get("discount_type", "none"),
-                item.get("discount_value", 0.0)
+                item.get("discount_type") or "none",
+                item.get("discount_value") or 0.0
             ))
 
         conn.commit()
 
+        # 7. Return the new quote with items
         cursor.execute("SELECT * FROM quotes WHERE quote_id = %s", (new_quote_id,))
         new_quote = cursor.fetchone()
 

@@ -1,6 +1,6 @@
 import io
-from fastapi.responses import StreamingResponse
-from pdf.utils.layout_utils import build_quote_invoice_pdf, build_conduce_pdf
+from pdf.utils.layout_utils import build_quote_invoice_pdf
+from pdf.builder_conduce import create_conduce_pdf
 
 def create_invoice_pdf(
     doc_type, doc_id, doc_date, client, project_name, notes, items,
@@ -40,16 +40,5 @@ def create_invoice_pdf(
     pdf_bytes = pdf.output()
     return io.BytesIO(pdf_bytes)
 
-def create_conduce_pdf(doc_id, doc_date, client, project_name, notes, items):
-    """Generate PDF bytes for a conduce (delivery note)."""
-    pdf = build_conduce_pdf(
-        doc_id=doc_id,
-        doc_date=doc_date,
-        client=client,
-        project_name=project_name,
-        notes=notes,
-        items=items
-    )
-    
-    pdf_bytes = pdf.output()
-    return io.BytesIO(pdf_bytes)
+# Re-export for convenience
+__all__ = ['create_invoice_pdf', 'create_conduce_pdf']

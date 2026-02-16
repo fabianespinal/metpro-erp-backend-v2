@@ -7,7 +7,8 @@ from psycopg2.extras import RealDictCursor
 from datetime import datetime
 from pdf.utils.date_utils import format_date
 from pdf.builder_quote import create_quote_pdf
-from pdf.builder_invoice import create_invoice_pdf, create_conduce_pdf
+from pdf.builder_invoice import create_invoice_pdf
+from pdf.builder_conduce import create_conduce_pdf
 
 # ============================================================
 # QUOTE PDF GENERATION

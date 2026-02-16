@@ -324,35 +324,30 @@ def duplicate_quote(quote_id: str) -> dict:
 
         # 3. Generate new quote ID
         new_quote_id = generate_quote_id()
-        current_date = datetime.now().strftime("%Y-%m-%d")
 
-        # 4. Normalize included_charges (avoid JSONB double encoding)
-        included_charges = original.get("included_charges")
-        if isinstance(included_charges, str):
-            try:
-                included_charges = json.loads(included_charges)
-            except:
-                included_charges = {}
-        if included_charges is None:
-            included_charges = {}
+        # 4. included_charges is TEXT in your schema — normalize safely
+        included_charges = original.get("included_charges") or ""
+        if isinstance(included_charges, dict):
+            included_charges = json.dumps(included_charges)
+        elif not isinstance(included_charges, str):
+            included_charges = ""
 
-        # 5. Insert duplicated quote
+        # 5. Insert duplicated quote (NO date column!)
         cursor.execute("""
             INSERT INTO quotes
-            (quote_id, client_id, date, project_name, notes, status, included_charges, total_amount)
-            VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s)
+            (quote_id, client_id, project_name, notes, status, included_charges, total_amount)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
         """, (
             new_quote_id,
             original["client_id"],
-            current_date,
             original.get("project_name"),
             f"[DUPLICATE] {original.get('notes', '')}" if original.get("notes") else None,
             "Draft",
-            json.dumps(included_charges),
+            included_charges,
             original["total_amount"]
         ))
 
-        # 6. Duplicate quote items safely
+        # 6. Duplicate quote items
         for item in original_items:
             cursor.execute("""
                 INSERT INTO quote_items
@@ -369,7 +364,7 @@ def duplicate_quote(quote_id: str) -> dict:
 
         conn.commit()
 
-        # 7. Return the new quote with items
+        # 7. Return new quote with items
         cursor.execute("SELECT * FROM quotes WHERE quote_id = %s", (new_quote_id,))
         new_quote = cursor.fetchone()
 

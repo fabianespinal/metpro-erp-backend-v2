@@ -9,23 +9,30 @@ except ImportError:
     def add_footer_with_signature(pdf):
         pass  # Placeholder if external util is missing
 
+
+# ==================== ABSOLUTE LOGO PATH (FIXED) ====================
+# layout_utils.py lives in: backend/pdf/utils/layout_utils.py
+# We must go 3 levels up to reach backend/
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+LOGO_PATH = os.path.join(BASE_DIR, "assets", "logo.png")
+
+
 def build_quote_invoice_pdf(doc_type, doc_id, doc_date, client, project_name, notes, items,
-                              charges, items_total, total_discounts, items_after_discount,
-                              supervision, supervision_pct, admin, admin_pct, insurance, insurance_pct,
-                              transport, transport_pct, contingency, contingency_pct,
-                              subtotal_general, itbis, grand_total):
+                            charges, items_total, total_discounts, items_after_discount,
+                            supervision, supervision_pct, admin, admin_pct, insurance, insurance_pct,
+                            transport, transport_pct, contingency, contingency_pct,
+                            subtotal_general, itbis, grand_total):
     """Shared PDF creation logic for quotes and invoices"""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
 
     # ==================== HEADER: METPRO BRANDING ====================
-    # Logo logic preserved exactly as original
     try:
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        logo_path = os.path.join(base_dir, "..", "assets", "logo.png")
-        if os.path.exists(logo_path):
-            pdf.image(logo_path, x=10, y=10, w=15)
+        if os.path.exists(LOGO_PATH):
+            pdf.image(LOGO_PATH, x=10, y=10, w=15)
+        else:
+            print(f"Logo not found at: {LOGO_PATH}")
     except Exception as e:
         print(f"Logo loading failed: {str(e)}")
 

@@ -35,6 +35,6 @@ def create_quote_pdf(
         itbis=itbis,
         grand_total=grand_total
     )
-    
+
     pdf_bytes = pdf.output()
     return io.BytesIO(pdf_bytes)

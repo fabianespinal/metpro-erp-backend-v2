@@ -2,6 +2,7 @@ import io
 from pdf.utils.layout_utils import build_quote_invoice_pdf
 from pdf.builder_conduce import create_conduce_pdf
 
+
 def create_invoice_pdf(
     doc_type, doc_id, doc_date, client, project_name, notes, items,
     charges, items_total, total_discounts, items_after_discount,
@@ -36,9 +37,9 @@ def create_invoice_pdf(
         itbis=itbis,
         grand_total=grand_total
     )
-    
+
     pdf_bytes = pdf.output()
     return io.BytesIO(pdf_bytes)
 
-# Re-export for convenience
+
 __all__ = ['create_invoice_pdf', 'create_conduce_pdf']

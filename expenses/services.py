@@ -1,4 +1,4 @@
-from .schemas import ExpenseCreate, ExpenseUpdate
+from .models import ExpenseCreate, ExpenseUpdate
 
 def create_expense(conn, expense: ExpenseCreate):
     with conn.cursor() as cur:

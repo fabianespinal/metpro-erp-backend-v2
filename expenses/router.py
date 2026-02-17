@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from database import get_db
-from .schemas import ExpenseCreate, ExpenseUpdate
+from .models import ExpenseCreate, ExpenseUpdate
 from .services import (
     create_expense, get_expenses, get_expense,
     update_expense, delete_expense

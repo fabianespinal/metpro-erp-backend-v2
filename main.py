@@ -48,7 +48,7 @@ if os.path.exists("assets"):
 # ROUTERS (MUST BE IMPORTED AFTER CORS)
 # ============================================================
 
-from database import get_db_connection
+from database import get_db
 from auth.router import router as auth_router
 from users.router import router as users_router
 from clients.router import router as clients_router
@@ -150,7 +150,7 @@ if os.path.exists("assets"):
 # ROUTERS (MUST BE IMPORTED AFTER CORS)
 # ============================================================
 
-from database import get_db_connection
+from database import get_db
 from auth.router import router as auth_router
 from users.router import router as users_router
 from clients.router import router as clients_router

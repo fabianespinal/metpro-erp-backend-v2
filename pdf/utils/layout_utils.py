@@ -42,13 +42,6 @@ def build_quote_invoice_pdf(
     except Exception as e:
         print(f"Logo loading failed: {str(e)}")
 
-    # ==================== NOTES SECTION ====================
-    if notes:
-        safe_notes = sanitize_text(notes.strip())
-        pdf.set_xy(10, 50)
-        pdf.set_font("Helvetica", size=10)
-        pdf.multi_cell(0, 4, safe_notes, border=0, align='L', fill=False)
-
     # Footer address block
     pdf.set_font('Arial', '', 6)
     pdf.set_text_color(120, 120, 120)
@@ -323,17 +316,19 @@ def build_quote_invoice_pdf(
     pdf.cell(45, 7, 'TOTAL GENERAL:', 0, 0, 'L')
     pdf.cell(25, 7, f'${grand_total:,.2f}', 0, 1, 'R')
 
-    pdf.ln(12)
+    pdf.ln(6)
 
-    # ==================== NOTES ====================
-    if notes and notes.strip():
-        pdf.set_font('Arial', 'B', 8)
+    # ==================== NOTES (CORRECT LOCATION) ====================
+    if notes:
+        pdf.ln(6)
+        pdf.set_font("Arial", "B", 9)
         pdf.set_text_color(30, 30, 30)
-        pdf.cell(0, 5, 'NOTAS / NOTES', 0, 1, 'L')
-        pdf.set_font('Arial', '', 7)
+        pdf.cell(0, 5, "NOTAS / NOTES", 0, 1, "L")
+        pdf.set_font("Arial", "", 8)
         pdf.set_text_color(60, 60, 60)
-        pdf.multi_cell(0, 4, notes.strip(), border=0, align='L', fill=False)
-        pdf.ln(3)
+        safe_notes = sanitize_text(notes.strip())
+        pdf.multi_cell(0, 4, safe_notes, 0, "L")
+
     pdf.ln(12)
 
     # ==================== SIGNATURES ====================

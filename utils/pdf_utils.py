@@ -2,13 +2,15 @@ import os
 
 def add_footer_with_signature(pdf):
     """Add signature section with two columns to PDF"""
+
+    # Ensure we start BELOW the last printed content
     sig_y = pdf.get_y()
+    if sig_y < 230:  # Prevent overlap with totals or notes
+        sig_y = 230
 
     # ============================
     # SAFE FONT LOADING (GreatVibes)
     # ============================
-
-    # Correct path based on your backend structure
     FONT_PATH = os.path.join(os.path.dirname(__file__), "..", "fonts", "GreatVibes-Regular.ttf")
     FONT_PATH = os.path.abspath(FONT_PATH)
 
@@ -22,8 +24,7 @@ def add_footer_with_signature(pdf):
     # ============================
     # LEFT SIDE — METPRO SIGNATURE
     # ============================
-
-    # Cursive signature text
+    # Signature name
     pdf.set_xy(15, sig_y + 5)
 
     if font_loaded:
@@ -34,7 +35,7 @@ def add_footer_with_signature(pdf):
     pdf.set_text_color(60, 60, 60)
     pdf.cell(75, 6, "Karmary Mata", 0, 1, "C")
 
-    # Signature line (closer)
+    # Signature line
     pdf.set_xy(15, sig_y + 12)
     pdf.set_draw_color(180, 180, 180)
     pdf.line(15, sig_y + 12, 90, sig_y + 12)
@@ -48,10 +49,9 @@ def add_footer_with_signature(pdf):
     # ============================
     # RIGHT SIDE — CLIENT SIGNATURE
     # ============================
-
-    pdf.set_xy(115, sig_y + 15)
+    pdf.set_xy(115, sig_y + 12)
     pdf.set_draw_color(180, 180, 180)
-    pdf.line(115, sig_y + 15, 190, sig_y + 15)
+    pdf.line(115, sig_y + 12, 190, sig_y + 12)
 
     pdf.set_xy(115, sig_y + 17)
     pdf.set_font("Arial", "B", 7)

@@ -160,6 +160,7 @@ from invoices.router import router as invoices_router
 from projects.router import router as projects_router
 from reports.router import router as reports_router
 from pdf.router import router as pdf_router
+from expenses.router import router as expenses_router
 
 app.include_router(auth_router)
 app.include_router(users_router)
@@ -170,6 +171,7 @@ app.include_router(invoices_router)
 app.include_router(projects_router)
 app.include_router(reports_router)
 app.include_router(pdf_router)
+app.include_router(expenses_router)
 
 # ============================================================
 # ROOT & HEALTH ENDPOINTS

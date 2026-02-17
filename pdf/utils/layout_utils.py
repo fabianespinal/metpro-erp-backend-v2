@@ -178,6 +178,10 @@ def build_quote_invoice_pdf(
 
     pdf.ln(8)
 
+    # After finishing both columns, move Y to the lower of the two columns
+    final_y = max(pdf.get_y(), start_y + 20)
+    pdf.set_y(final_y + 4)
+
     # ==================== ITEMS TABLE ====================
     pdf.set_font('Arial', 'B', 9)
     pdf.set_text_color(30, 30, 30)

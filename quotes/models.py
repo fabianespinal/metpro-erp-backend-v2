@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, date
 
 
 # -----------------------------
@@ -41,6 +41,11 @@ class QuoteBase(BaseModel):
     client_id: int
     project_name: Optional[str] = None
     notes: Optional[str] = None
+
+    # NEW FIELDS
+    payment_terms: Optional[str] = None
+    valid_until: Optional[date] = None
+
     items: List[QuoteItemBase]
     included_charges: IncludedCharges = IncludedCharges()
 
@@ -58,6 +63,11 @@ class QuoteCreate(QuoteBase):
 class QuoteUpdate(BaseModel):
     project_name: Optional[str] = None
     notes: Optional[str] = None
+
+    # NEW FIELDS
+    payment_terms: Optional[str] = None
+    valid_until: Optional[date] = None
+
     items: Optional[List[QuoteItemBase]] = None
     included_charges: Optional[IncludedCharges] = None
 
@@ -80,13 +90,17 @@ class QuoteResponse(BaseModel):
     project_name: Optional[str]
     notes: Optional[str]
 
+    # NEW FIELDS
+    payment_terms: Optional[str]
+    valid_until: Optional[date]
+
     items: List[QuoteItemBase]
     included_charges: IncludedCharges
 
     status: Optional[str] = None
 
     created_at: datetime
-    updated_at: Optional[datetime] = None   # <-- REQUIRED FOR PDF
+    updated_at: Optional[datetime] = None
 
     class Config:
         orm_mode = True

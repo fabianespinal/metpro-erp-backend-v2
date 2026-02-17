@@ -17,11 +17,17 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 LOGO_PATH = os.path.join(BASE_DIR, "assets", "logo.png")
 
 
-def build_quote_invoice_pdf(doc_type, doc_id, doc_date, client, project_name, notes, items,
-                            charges, items_total, total_discounts, items_after_discount,
-                            supervision, supervision_pct, admin, admin_pct, insurance, insurance_pct,
-                            transport, transport_pct, contingency, contingency_pct,
-                            subtotal_general, itbis, grand_total):
+def build_quote_invoice_pdf(
+    doc_type, doc_id, doc_date, client, project_name, notes, items,
+    charges, items_total, total_discounts, items_after_discount,
+    supervision, supervision_pct, admin, admin_pct, insurance, insurance_pct,
+    transport, transport_pct, contingency, contingency_pct,
+    subtotal_general, itbis, grand_total,
+
+    # NEW FIELDS
+    payment_terms=None,
+    valid_until=None
+):
     """Shared PDF creation logic for quotes and invoices"""
     pdf = FPDF()
     pdf.add_page()
@@ -36,6 +42,14 @@ def build_quote_invoice_pdf(doc_type, doc_id, doc_date, client, project_name, no
     except Exception as e:
         print(f"Logo loading failed: {str(e)}")
 
+    # ==================== NOTES SECTION ====================
+    if notes:
+        safe_notes = sanitize_text(notes.strip())
+        pdf.set_xy(10, 50)
+        pdf.set_font("Helvetica", size=10)
+        pdf.multi_cell(0, 4, safe_notes, border=0, align='L', fill=False)
+
+    # Footer address block
     pdf.set_font('Arial', '', 6)
     pdf.set_text_color(120, 120, 120)
     pdf.cell(0, 3, 'Parque Industrial Disdo', 0, 1, 'R')
@@ -59,7 +73,7 @@ def build_quote_invoice_pdf(doc_type, doc_id, doc_date, client, project_name, no
     right_x = 110
     start_y = pdf.get_y()
 
-    # Left column: Document info
+    # ---------------- LEFT COLUMN ----------------
     pdf.set_xy(left_x, start_y)
     pdf.set_font('Arial', 'B', 7)
     pdf.set_text_color(80, 80, 80)
@@ -69,6 +83,7 @@ def build_quote_invoice_pdf(doc_type, doc_id, doc_date, client, project_name, no
     pdf.set_text_color(30, 30, 30)
     pdf.cell(0, 4, sanitize_text(doc_id), 0, 1)
 
+    # DATE
     pdf.set_x(left_x)
     pdf.set_font('Arial', 'B', 7)
     pdf.set_text_color(80, 80, 80)
@@ -77,6 +92,27 @@ def build_quote_invoice_pdf(doc_type, doc_id, doc_date, client, project_name, no
     pdf.set_text_color(30, 30, 30)
     pdf.cell(0, 4, sanitize_text(doc_date), 0, 1)
 
+    # ==================== NEW FIELD: PAYMENT TERMS ====================
+    if payment_terms:
+        pdf.set_x(left_x)
+        pdf.set_font('Arial', 'B', 7)
+        pdf.set_text_color(80, 80, 80)
+        pdf.cell(35, 4, 'Términos de Pago:', 0, 0)
+        pdf.set_font('Arial', '', 7)
+        pdf.set_text_color(30, 30, 30)
+        pdf.cell(0, 4, sanitize_text(payment_terms)[:60], 0, 1)
+
+    # ==================== NEW FIELD: VALID UNTIL ====================
+    if valid_until:
+        pdf.set_x(left_x)
+        pdf.set_font('Arial', 'B', 7)
+        pdf.set_text_color(80, 80, 80)
+        pdf.cell(35, 4, 'Válida Hasta:', 0, 0)
+        pdf.set_font('Arial', '', 7)
+        pdf.set_text_color(30, 30, 30)
+        pdf.cell(0, 4, sanitize_text(valid_until), 0, 1)
+
+    # PROJECT NAME
     if project_name:
         pdf.set_x(left_x)
         pdf.set_font('Arial', 'B', 7)
@@ -86,7 +122,7 @@ def build_quote_invoice_pdf(doc_type, doc_id, doc_date, client, project_name, no
         pdf.set_text_color(30, 30, 30)
         pdf.cell(0, 4, sanitize_text(project_name)[:60], 0, 1)
 
-    # Right column: Client info
+    # ---------------- RIGHT COLUMN (CLIENT INFO) ----------------
     pdf.set_xy(right_x, start_y)
     pdf.set_font('Arial', 'B', 7)
     pdf.set_text_color(80, 80, 80)

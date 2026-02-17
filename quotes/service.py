@@ -4,7 +4,7 @@
 from typing import List, Optional
 from fastapi import HTTPException
 import json
-from datetime import datetime
+from datetime import datetime, date
 from database import get_db_connection
 from psycopg2.extras import RealDictCursor
 
@@ -60,11 +60,27 @@ def generate_quote_id() -> str:
     return f"Q-{timestamp}"
 
 
+def _serialize_date(d) -> Optional[str]:
+    """Convert a date object to ISO string for psycopg2, or pass None through."""
+    if d is None:
+        return None
+    if isinstance(d, date):
+        return d.isoformat()
+    return d  # already a string — let Postgres handle it
+
+
 # =============================================================================
 # SECTION 3: QUOTE CRUD OPERATIONS
 # =============================================================================
-def create_quote(client_id: int, project_name: Optional[str], notes: Optional[str],
-                 items: List[dict], included_charges: dict) -> dict:
+def create_quote(
+    client_id: int,
+    project_name: Optional[str],
+    notes: Optional[str],
+    items: List[dict],
+    included_charges: dict,
+    payment_terms: Optional[str] = None,
+    valid_until: Optional[date] = None,
+) -> dict:
     conn = None
     try:
         conn = get_db_connection()
@@ -75,13 +91,14 @@ def create_quote(client_id: int, project_name: Optional[str], notes: Optional[st
             raise HTTPException(status_code=404, detail="Client not found")
 
         quote_id = generate_quote_id()
-
         totals = calculate_quote_totals(items, included_charges)
 
         cursor.execute("""
             INSERT INTO quotes
-            (quote_id, client_id, project_name, notes, status, included_charges, total_amount)
-            VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s)
+                (quote_id, client_id, project_name, notes, status,
+                 included_charges, total_amount, payment_terms, valid_until)
+            VALUES
+                (%s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s)
         """, (
             quote_id,
             client_id,
@@ -89,13 +106,15 @@ def create_quote(client_id: int, project_name: Optional[str], notes: Optional[st
             notes,
             "Draft",
             json.dumps(included_charges),
-            totals["grand_total"]
+            totals["grand_total"],
+            payment_terms,
+            _serialize_date(valid_until),
         ))
 
         for item in items:
             cursor.execute("""
                 INSERT INTO quote_items
-                (quote_id, product_name, quantity, unit_price, discount_type, discount_value)
+                    (quote_id, product_name, quantity, unit_price, discount_type, discount_value)
                 VALUES (%s, %s, %s, %s, %s, %s)
             """, (
                 quote_id,
@@ -103,13 +122,19 @@ def create_quote(client_id: int, project_name: Optional[str], notes: Optional[st
                 item["quantity"],
                 item["unit_price"],
                 item.get("discount_type", "none"),
-                item.get("discount_value", 0.0)
+                item.get("discount_value", 0.0),
             ))
 
         conn.commit()
 
-        cursor.execute("SELECT * FROM quotes WHERE quote_id = %s", (quote_id,))
-        quote = cursor.fetchone()
+        cursor.execute("""
+            SELECT quote_id, client_id, project_name, notes, status,
+                   included_charges, total_amount, payment_terms, valid_until,
+                   created_at, updated_at
+            FROM quotes
+            WHERE quote_id = %s
+        """, (quote_id,))
+        quote = dict(cursor.fetchone())
 
         cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s", (quote_id,))
         quote["items"] = cursor.fetchall()
@@ -136,11 +161,20 @@ def get_quote_by_id(quote_id: str) -> dict:
     try:
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
-        cursor.execute("SELECT * FROM quotes WHERE quote_id = %s", (quote_id,))
+
+        cursor.execute("""
+            SELECT quote_id, client_id, project_name, notes, status,
+                   included_charges, total_amount, payment_terms, valid_until,
+                   created_at, updated_at
+            FROM quotes
+            WHERE quote_id = %s
+        """, (quote_id,))
         quote = cursor.fetchone()
 
         if not quote:
             raise HTTPException(status_code=404, detail="Quote not found")
+
+        quote = dict(quote)
 
         cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s", (quote_id,))
         quote["items"] = cursor.fetchall()
@@ -152,13 +186,20 @@ def get_quote_by_id(quote_id: str) -> dict:
             conn.close()
 
 
-def get_all_quotes(client_id: Optional[int] = None, status: Optional[str] = None) -> List[dict]:
+def get_all_quotes(
+    client_id: Optional[int] = None,
+    status: Optional[str] = None,
+) -> List[dict]:
     conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
+
         query = """
-            SELECT q.*, c.company_name AS client_name
+            SELECT q.quote_id, q.client_id, q.project_name, q.notes, q.status,
+                   q.included_charges, q.total_amount, q.payment_terms, q.valid_until,
+                   q.created_at, q.updated_at,
+                   c.company_name AS client_name
             FROM quotes q
             JOIN clients c ON q.client_id = c.id
             WHERE 1=1
@@ -184,7 +225,7 @@ def get_all_quotes(client_id: Optional[int] = None, status: Optional[str] = None
 
 
 def update_quote(quote_id: str, quote_update) -> dict:
-    """Update existing quote - only allowed for Draft status"""
+    """Update an existing quote. Only Draft quotes can be edited."""
     conn = None
     try:
         conn = get_db_connection()
@@ -194,30 +235,42 @@ def update_quote(quote_id: str, quote_update) -> dict:
         quote = cursor.fetchone()
         if not quote:
             raise HTTPException(status_code=404, detail="Quote not found")
-        
+
         if quote['status'] != 'Draft':
             raise HTTPException(
-                status_code=400, 
+                status_code=400,
                 detail="Only Draft quotes can be edited"
             )
 
         update_dict = quote_update.dict(exclude_unset=True)
-        
+
+        # Pull these out — they're handled separately below.
         items = update_dict.pop('items', None)
         included_charges = update_dict.pop('included_charges', None)
 
+        # valid_until comes in as a date object from Pydantic. Serialize it
+        # so psycopg2 doesn't choke when building the dynamic SET clause.
+        if 'valid_until' in update_dict and update_dict['valid_until'] is not None:
+            update_dict['valid_until'] = _serialize_date(update_dict['valid_until'])
+
+        # Scalar fields update (project_name, notes, payment_terms, valid_until)
         if update_dict:
             set_clause = ", ".join([f"{key} = %s" for key in update_dict.keys()])
-            query = f"UPDATE quotes SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE quote_id = %s"
+            query = f"""
+                UPDATE quotes
+                SET {set_clause}, updated_at = CURRENT_TIMESTAMP
+                WHERE quote_id = %s
+            """
             cursor.execute(query, list(update_dict.values()) + [quote_id])
 
+        # Re-insert items if provided
         if items is not None:
             cursor.execute("DELETE FROM quote_items WHERE quote_id = %s", (quote_id,))
-            
+
             for item in items:
                 cursor.execute("""
                     INSERT INTO quote_items
-                    (quote_id, product_name, quantity, unit_price, discount_type, discount_value)
+                        (quote_id, product_name, quantity, unit_price, discount_type, discount_value)
                     VALUES (%s, %s, %s, %s, %s, %s)
                 """, (
                     quote_id,
@@ -225,25 +278,28 @@ def update_quote(quote_id: str, quote_update) -> dict:
                     item["quantity"],
                     item["unit_price"],
                     item.get("discount_type", "none"),
-                    item.get("discount_value", 0.0)
+                    item.get("discount_value", 0.0),
                 ))
 
+        # Recalculate totals if items or charges changed
         if included_charges is not None or items is not None:
             cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s", (quote_id,))
             current_items = [dict(row) for row in cursor.fetchall()]
-            
+
             if included_charges is not None:
                 charges = included_charges.dict() if hasattr(included_charges, 'dict') else included_charges
             else:
-                cursor.execute("SELECT included_charges FROM quotes WHERE quote_id = %s", (quote_id,))
+                cursor.execute(
+                    "SELECT included_charges FROM quotes WHERE quote_id = %s", (quote_id,)
+                )
                 row = cursor.fetchone()
                 charges = row['included_charges'] if row else {}
-            
+
             totals = calculate_quote_totals(current_items, charges)
-            
+
             cursor.execute("""
-                UPDATE quotes 
-                SET included_charges = %s::jsonb, 
+                UPDATE quotes
+                SET included_charges = %s::jsonb,
                     total_amount = %s,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE quote_id = %s
@@ -251,9 +307,15 @@ def update_quote(quote_id: str, quote_update) -> dict:
 
         conn.commit()
 
-        cursor.execute("SELECT * FROM quotes WHERE quote_id = %s", (quote_id,))
-        updated_quote = cursor.fetchone()
-        
+        cursor.execute("""
+            SELECT quote_id, client_id, project_name, notes, status,
+                   included_charges, total_amount, payment_terms, valid_until,
+                   created_at, updated_at
+            FROM quotes
+            WHERE quote_id = %s
+        """, (quote_id,))
+        updated_quote = dict(cursor.fetchone())
+
         cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s", (quote_id,))
         updated_quote["items"] = cursor.fetchall()
 
@@ -306,17 +368,24 @@ def delete_quote(quote_id: str) -> dict:
 # SECTION 4: QUOTE BUSINESS LOGIC
 # =============================================================================
 def duplicate_quote(quote_id: str) -> dict:
-    """Duplicate existing quote with new ID"""
+    """Duplicate an existing quote with a new ID. Copies payment_terms and valid_until."""
     conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
         # 1. Fetch original quote
-        cursor.execute("SELECT * FROM quotes WHERE quote_id = %s", (quote_id,))
+        cursor.execute("""
+            SELECT quote_id, client_id, project_name, notes, status,
+                   included_charges, total_amount, payment_terms, valid_until
+            FROM quotes
+            WHERE quote_id = %s
+        """, (quote_id,))
         original = cursor.fetchone()
         if not original:
             raise HTTPException(status_code=404, detail="Quote not found")
+
+        original = dict(original)
 
         # 2. Fetch original items
         cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s", (quote_id,))
@@ -325,18 +394,22 @@ def duplicate_quote(quote_id: str) -> dict:
         # 3. Generate new quote ID
         new_quote_id = generate_quote_id()
 
-        # 4. included_charges is TEXT in your schema — normalize safely
+        # 4. Normalize included_charges — it may arrive as dict or string
         included_charges = original.get("included_charges") or ""
         if isinstance(included_charges, dict):
             included_charges = json.dumps(included_charges)
         elif not isinstance(included_charges, str):
             included_charges = ""
 
-        # 5. Insert duplicated quote (NO date column!)
+        # 5. valid_until — serialize date to string if needed
+        valid_until = _serialize_date(original.get("valid_until"))
+
+        # 6. Insert duplicated quote
         cursor.execute("""
             INSERT INTO quotes
-            (quote_id, client_id, project_name, notes, status, included_charges, total_amount)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+                (quote_id, client_id, project_name, notes, status,
+                 included_charges, total_amount, payment_terms, valid_until)
+            VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s)
         """, (
             new_quote_id,
             original["client_id"],
@@ -344,14 +417,16 @@ def duplicate_quote(quote_id: str) -> dict:
             f"[DUPLICATE] {original.get('notes', '')}" if original.get("notes") else None,
             "Draft",
             included_charges,
-            original["total_amount"]
+            original["total_amount"],
+            original.get("payment_terms"),
+            valid_until,
         ))
 
-        # 6. Duplicate quote items
+        # 7. Duplicate quote items
         for item in original_items:
             cursor.execute("""
                 INSERT INTO quote_items
-                (quote_id, product_name, quantity, unit_price, discount_type, discount_value)
+                    (quote_id, product_name, quantity, unit_price, discount_type, discount_value)
                 VALUES (%s, %s, %s, %s, %s, %s)
             """, (
                 new_quote_id,
@@ -359,14 +434,20 @@ def duplicate_quote(quote_id: str) -> dict:
                 item["quantity"],
                 item["unit_price"],
                 item.get("discount_type") or "none",
-                item.get("discount_value") or 0.0
+                item.get("discount_value") or 0.0,
             ))
 
         conn.commit()
 
-        # 7. Return new quote with items
-        cursor.execute("SELECT * FROM quotes WHERE quote_id = %s", (new_quote_id,))
-        new_quote = cursor.fetchone()
+        # 8. Return new quote with items
+        cursor.execute("""
+            SELECT quote_id, client_id, project_name, notes, status,
+                   included_charges, total_amount, payment_terms, valid_until,
+                   created_at, updated_at
+            FROM quotes
+            WHERE quote_id = %s
+        """, (new_quote_id,))
+        new_quote = dict(cursor.fetchone())
 
         cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s", (new_quote_id,))
         new_quote["items"] = cursor.fetchall()
@@ -405,7 +486,9 @@ def update_quote_status(quote_id: str, status: str) -> dict:
                 detail=f"Invalid status. Must be one of: {valid_statuses}"
             )
 
-        cursor.execute("UPDATE quotes SET status = %s WHERE quote_id = %s", (status, quote_id))
+        cursor.execute(
+            "UPDATE quotes SET status = %s WHERE quote_id = %s", (status, quote_id)
+        )
         conn.commit()
 
         return {"message": "Status updated successfully", "quote_id": quote_id, "status": status}
@@ -426,13 +509,18 @@ def update_quote_status(quote_id: str, status: str) -> dict:
 
 
 def convert_quote_to_invoice(quote_id: str) -> dict:
-    """Convert approved quote to invoice"""
+    """Convert an approved quote to an invoice."""
     conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        cursor.execute("SELECT * FROM quotes WHERE quote_id = %s", (quote_id,))
+        cursor.execute("""
+            SELECT quote_id, client_id, project_name, notes, status,
+                   included_charges, total_amount, payment_terms, valid_until
+            FROM quotes
+            WHERE quote_id = %s
+        """, (quote_id,))
         quote = cursor.fetchone()
         if not quote:
             raise HTTPException(status_code=404, detail="Quote not found")
@@ -467,10 +555,13 @@ def convert_quote_to_invoice(quote_id: str) -> dict:
         invoice_number = f"INV-{timestamp}"
         invoice_date = datetime.now().strftime("%Y-%m-%d")
 
+        # payment_terms and valid_until are passed through to the invoice
+        # so the PDF context has everything it needs.
         cursor.execute("""
             INSERT INTO invoices
-            (quote_id, invoice_number, invoice_date, client_id, total_amount, status, notes)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+                (quote_id, invoice_number, invoice_date, client_id,
+                 total_amount, status, notes, payment_terms, valid_until)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
             quote_id,
@@ -480,6 +571,8 @@ def convert_quote_to_invoice(quote_id: str) -> dict:
             totals["grand_total"],
             "Pending",
             quote.get("notes"),
+            quote.get("payment_terms"),
+            _serialize_date(quote.get("valid_until")),
         ))
 
         invoice_id = cursor.fetchone()["id"]
@@ -489,22 +582,30 @@ def convert_quote_to_invoice(quote_id: str) -> dict:
             line_total = (item["quantity"] * item["unit_price"]) - item.get("discount_value", 0)
             cursor.execute("""
                 INSERT INTO invoice_items
-                (invoice_id, product_id, description, quantity, unit_price, discount, total)
+                    (invoice_id, product_id, description, quantity, unit_price, discount, total)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
             """, (
                 invoice_id,
-                item["product_id"],      # BIGINT directly
+                item["product_id"],
                 item["product_name"],
                 item["quantity"],
                 item["unit_price"],
                 item.get("discount_value", 0),
-                line_total
+                line_total,
             ))
 
         conn.commit()
 
-        cursor.execute("SELECT * FROM invoices WHERE id = %s", (invoice_id,))
-        new_invoice = cursor.fetchone()
+        cursor.execute("""
+            SELECT i.*,
+                   q.payment_terms,
+                   q.valid_until
+            FROM invoices i
+            JOIN quotes q ON i.quote_id = q.quote_id
+            WHERE i.id = %s
+        """, (invoice_id,))
+        new_invoice = dict(cursor.fetchone())
+
         cursor.execute("SELECT * FROM invoice_items WHERE invoice_id = %s", (invoice_id,))
         new_invoice["items"] = cursor.fetchall()
 

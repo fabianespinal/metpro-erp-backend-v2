@@ -20,28 +20,35 @@ def generate_quote_pdf(quote_id: str) -> StreamingResponse:
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        # Get quote
+        # ------------------------------------------------------------
+        # FETCH QUOTE
+        # ------------------------------------------------------------
         cursor.execute('SELECT * FROM quotes WHERE quote_id = %s', (quote_id,))
         quote = cursor.fetchone()
         if not quote:
             raise HTTPException(status_code=404, detail='Quote not found')
         quote = dict(quote)
 
-        # Get client
+        # ------------------------------------------------------------
+        # FETCH CLIENT
+        # ------------------------------------------------------------
         cursor.execute('SELECT * FROM clients WHERE id = %s', (quote['client_id'],))
         client = cursor.fetchone()
         if not client:
             raise HTTPException(status_code=404, detail='Client not found')
         client = dict(client)
 
-        # Get items
+        # ------------------------------------------------------------
+        # FETCH ITEMS
+        # ------------------------------------------------------------
         cursor.execute('SELECT * FROM quote_items WHERE quote_id = %s', (quote_id,))
         items = [dict(row) for row in cursor.fetchall()]
 
-        # Parse charges with backwards-compatible defaults
+        # ------------------------------------------------------------
+        # INCLUDED CHARGES (safe JSON handling)
+        # ------------------------------------------------------------
         raw_charges = quote.get('included_charges')
 
-        # 1. Safely load JSON or fallback to empty dict
         if not raw_charges:
             charges = {}
         elif isinstance(raw_charges, str):
@@ -52,14 +59,14 @@ def generate_quote_pdf(quote_id: str) -> StreamingResponse:
         else:
             charges = raw_charges
 
-        # 2. Ensure boolean flags ALWAYS exist
+        # Ensure boolean flags exist
         charges.setdefault('supervision', True)
         charges.setdefault('admin', True)
         charges.setdefault('insurance', True)
         charges.setdefault('transport', True)
         charges.setdefault('contingency', True)
 
-        # 3. Ensure percentage values ALWAYS exist
+        # Ensure percentage values exist
         defaults = {
             'supervision_percentage': 10.0,
             'admin_percentage': 4.0,
@@ -67,11 +74,12 @@ def generate_quote_pdf(quote_id: str) -> StreamingResponse:
             'transport_percentage': 3.0,
             'contingency_percentage': 3.0
         }
-
         for key, default in defaults.items():
             charges.setdefault(key, default)
 
-        # Calculate totals (EXACT METPRO CALCULATION ENGINE)
+        # ------------------------------------------------------------
+        # CALCULATIONS (EXACT METPRO ENGINE)
+        # ------------------------------------------------------------
         items_total = sum(float(item['quantity'] or 0) * float(item['unit_price'] or 0) for item in items)
 
         total_discounts = 0
@@ -84,7 +92,7 @@ def generate_quote_pdf(quote_id: str) -> StreamingResponse:
 
         items_after_discount = items_total - total_discounts
 
-        # Get percentages safely
+        # Percentages
         supervision_pct = float(charges.get('supervision_percentage', 10.0))
         admin_pct = float(charges.get('admin_percentage', 4.0))
         insurance_pct = float(charges.get('insurance_percentage', 1.0))
@@ -101,11 +109,21 @@ def generate_quote_pdf(quote_id: str) -> StreamingResponse:
         itbis = subtotal_general * 0.18
         grand_total = subtotal_general + itbis
 
-        # Fix date logic: convert datetime → string using utility
+        # ------------------------------------------------------------
+        # DATE HANDLING
+        # ------------------------------------------------------------
         raw_date = quote.get("created_at") or quote.get("updated_at") or ""
         doc_date = format_date(raw_date)
 
-        # Call builder
+        # ------------------------------------------------------------
+        # NEW FIELDS (payment_terms + valid_until)
+        # ------------------------------------------------------------
+        payment_terms = quote.get("payment_terms") or ""
+        valid_until = quote.get("valid_until") or ""
+
+        # ------------------------------------------------------------
+        # CALL PDF BUILDER
+        # ------------------------------------------------------------
         pdf_stream = create_quote_pdf(
             doc_type='COTIZACION',
             doc_id=quote["quote_id"],
@@ -113,6 +131,11 @@ def generate_quote_pdf(quote_id: str) -> StreamingResponse:
             client=client,
             project_name=quote.get('project_name'),
             notes=quote.get('notes'),
+
+            # NEW FIELDS
+            payment_terms=payment_terms,
+            valid_until=valid_until,
+
             items=items,
             charges=charges,
             items_total=items_total,
@@ -164,31 +187,59 @@ def generate_invoice_pdf(invoice_id: int) -> StreamingResponse:
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        # Get invoice
+        # ------------------------------------------------------------
+        # FETCH INVOICE
+        # ------------------------------------------------------------
         cursor.execute('SELECT * FROM invoices WHERE id = %s', (invoice_id,))
         invoice = cursor.fetchone()
         if not invoice:
             raise HTTPException(status_code=404, detail='Invoice not found')
         invoice = dict(invoice)
 
-        # Get client
+        # ------------------------------------------------------------
+        # FETCH CLIENT
+        # ------------------------------------------------------------
         cursor.execute('SELECT * FROM clients WHERE id = %s', (invoice['client_id'],))
         client = cursor.fetchone()
         if not client:
             raise HTTPException(status_code=404, detail='Client not found')
         client = dict(client)
 
-        # Get items from original quote
+        # ------------------------------------------------------------
+        # FETCH ITEMS FROM ORIGINAL QUOTE
+        # ------------------------------------------------------------
         cursor.execute('SELECT * FROM quote_items WHERE quote_id = %s', (invoice['quote_id'],))
         items = [dict(row) for row in cursor.fetchall()]
 
-        # Get charges from original quote
-        cursor.execute('SELECT included_charges, project_name FROM quotes WHERE quote_id = %s', (invoice['quote_id'],))
+        # ------------------------------------------------------------
+        # FETCH CHARGES + PROJECT NAME + NEW FIELDS FROM QUOTE
+        # ------------------------------------------------------------
+        cursor.execute(
+            'SELECT included_charges, project_name, payment_terms, valid_until '
+            'FROM quotes WHERE quote_id = %s',
+            (invoice['quote_id'],)
+        )
         quote_data = cursor.fetchone()
+
         if quote_data:
-            charges = json.loads(quote_data['included_charges']) if isinstance(quote_data['included_charges'], str) else quote_data['included_charges']
+            # Charges
+            raw_charges = quote_data['included_charges']
+            if isinstance(raw_charges, str):
+                try:
+                    charges = json.loads(raw_charges)
+                except:
+                    charges = {}
+            else:
+                charges = raw_charges or {}
+
             project_name = quote_data.get('project_name')
+
+            # NEW FIELDS
+            payment_terms = quote_data.get("payment_terms") or ""
+            valid_until = quote_data.get("valid_until") or ""
+
         else:
+            # Fallback defaults
             charges = {
                 'supervision': True, 'supervision_percentage': 10.0,
                 'admin': True, 'admin_percentage': 4.0,
@@ -197,8 +248,12 @@ def generate_invoice_pdf(invoice_id: int) -> StreamingResponse:
                 'contingency': True, 'contingency_percentage': 3.0
             }
             project_name = None
+            payment_terms = ""
+            valid_until = ""
 
-        # Calculate totals
+        # ------------------------------------------------------------
+        # CALCULATIONS
+        # ------------------------------------------------------------
         items_total = sum(float(item['quantity'] or 0) * float(item['unit_price'] or 0) for item in items)
 
         total_discounts = 0
@@ -227,10 +282,14 @@ def generate_invoice_pdf(invoice_id: int) -> StreamingResponse:
         itbis = subtotal_general * 0.18
         grand_total = subtotal_general + itbis
 
-        # Fix date logic
+        # ------------------------------------------------------------
+        # DATE HANDLING
+        # ------------------------------------------------------------
         doc_date = format_date(invoice["invoice_date"])
 
-        # Call builder
+        # ------------------------------------------------------------
+        # CALL PDF BUILDER
+        # ------------------------------------------------------------
         pdf_stream = create_invoice_pdf(
             doc_type='FACTURA',
             doc_id=invoice["invoice_number"],
@@ -238,6 +297,11 @@ def generate_invoice_pdf(invoice_id: int) -> StreamingResponse:
             client=client,
             project_name=project_name,
             notes=invoice.get('notes'),
+
+            # NEW FIELDS
+            payment_terms=payment_terms,
+            valid_until=valid_until,
+
             items=items,
             charges=charges,
             items_total=items_total,
@@ -266,11 +330,13 @@ def generate_invoice_pdf(invoice_id: int) -> StreamingResponse:
 
     except HTTPException:
         raise
+
     except Exception as e:
         print(f"PDF GENERATION ERROR for invoice {invoice_id}: {str(e)}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f'Invoice PDF generation failed: {str(e)}')
+
     finally:
         if conn:
             conn.close()

@@ -9,12 +9,8 @@ def create_invoice_pdf(
     supervision, supervision_pct, admin, admin_pct, insurance, insurance_pct,
     transport, transport_pct, contingency, contingency_pct,
     subtotal_general, itbis, grand_total,
-
-    # EXISTING FIELDS
     payment_terms=None,
     valid_until=None,
-
-    # NEW PAYMENT FIELDS
     payments=None,
     amount_paid=0,
     amount_due=0
@@ -51,8 +47,9 @@ def create_invoice_pdf(
         amount_due=amount_due
     )
 
+    # SAFETY CHECK
+    if pdf is None:
+        raise ValueError("build_quote_invoice_pdf returned None — check layout_utils.py")
+
     pdf_bytes = pdf.output()
     return io.BytesIO(pdf_bytes)
-
-
-__all__ = ['create_invoice_pdf', 'create_conduce_pdf']

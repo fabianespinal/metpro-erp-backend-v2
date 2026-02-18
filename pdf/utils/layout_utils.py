@@ -10,9 +10,7 @@ except ImportError:
         pass  # Placeholder if external util is missing
 
 
-# ==================== ABSOLUTE LOGO PATH (FIXED) ====================
-# layout_utils.py lives in: backend/pdf/utils/layout_utils.py
-# We must go 3 levels up to reach backend/
+# ==================== ABSOLUTE LOGO PATH ====================
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 LOGO_PATH = os.path.join(BASE_DIR, "assets", "logo.png")
 
@@ -24,25 +22,27 @@ def build_quote_invoice_pdf(
     transport, transport_pct, contingency, contingency_pct,
     subtotal_general, itbis, grand_total,
 
-    # NEW FIELDS
+    # EXISTING FIELDS
     payment_terms=None,
-    valid_until=None
+    valid_until=None,
+
+    # NEW PAYMENT FIELDS
+    payments=None,
+    amount_paid=0,
+    amount_due=0
 ):
     """Shared PDF creation logic for quotes and invoices"""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
 
-    # ==================== HEADER: METPRO BRANDING ====================
+    # ==================== HEADER ====================
     try:
         if os.path.exists(LOGO_PATH):
             pdf.image(LOGO_PATH, x=10, y=10, w=15)
-        else:
-            print(f"Logo not found at: {LOGO_PATH}")
     except Exception as e:
         print(f"Logo loading failed: {str(e)}")
 
-    # Footer address block
     pdf.set_font('Arial', '', 6)
     pdf.set_text_color(120, 120, 120)
     pdf.cell(0, 3, 'Parque Industrial Disdo', 0, 1, 'R')
@@ -58,7 +58,7 @@ def build_quote_invoice_pdf(
     pdf.line(10, pdf.get_y(), 200, pdf.get_y())
     pdf.ln(6)
 
-    # ==================== DOCUMENT INFO & CLIENT (TWO COLUMNS) ====================
+    # ==================== DOCUMENT INFO ====================
     pdf.set_font('Arial', '', 7)
     pdf.set_text_color(100, 100, 100)
 
@@ -66,7 +66,7 @@ def build_quote_invoice_pdf(
     right_x = 110
     start_y = pdf.get_y()
 
-    # ---------------- LEFT COLUMN ----------------
+    # LEFT COLUMN
     pdf.set_xy(left_x, start_y)
     pdf.set_font('Arial', 'B', 7)
     pdf.set_text_color(80, 80, 80)
@@ -85,7 +85,7 @@ def build_quote_invoice_pdf(
     pdf.set_text_color(30, 30, 30)
     pdf.cell(0, 4, sanitize_text(doc_date), 0, 1)
 
-    # ==================== NEW FIELD: PAYMENT TERMS ====================
+    # PAYMENT TERMS
     if payment_terms:
         pdf.set_x(left_x)
         pdf.set_font('Arial', 'B', 7)
@@ -95,7 +95,7 @@ def build_quote_invoice_pdf(
         pdf.set_text_color(30, 30, 30)
         pdf.cell(0, 4, sanitize_text(payment_terms)[:60], 0, 1)
 
-    # ==================== NEW FIELD: VALID UNTIL ====================
+    # VALID UNTIL
     if valid_until:
         pdf.set_x(left_x)
         pdf.set_font('Arial', 'B', 7)
@@ -115,7 +115,7 @@ def build_quote_invoice_pdf(
         pdf.set_text_color(30, 30, 30)
         pdf.cell(0, 4, sanitize_text(project_name)[:60], 0, 1)
 
-    # ---------------- RIGHT COLUMN (CLIENT INFO) ----------------
+    # RIGHT COLUMN (CLIENT)
     pdf.set_xy(right_x, start_y)
     pdf.set_font('Arial', 'B', 7)
     pdf.set_text_color(80, 80, 80)
@@ -170,8 +170,6 @@ def build_quote_invoice_pdf(
         pdf.cell(0, 4, sanitize_text(client["tax_id"])[:30], 0, 1)
 
     pdf.ln(8)
-
-    # After finishing both columns, move Y to the lower of the two columns
     final_y = max(pdf.get_y(), start_y + 20)
     pdf.set_y(final_y + 4)
 
@@ -181,7 +179,6 @@ def build_quote_invoice_pdf(
     pdf.cell(0, 5, 'Detalle de Items', 0, 1, 'L')
     pdf.ln(2)
 
-    # Table headers
     pdf.set_fill_color(245, 245, 245)
     pdf.set_draw_color(220, 220, 220)
     pdf.set_font('Arial', 'B', 7)
@@ -191,7 +188,6 @@ def build_quote_invoice_pdf(
     pdf.cell(35, 6, 'PRECIO UNIT.', 1, 0, 'R', True)
     pdf.cell(45, 6, 'TOTAL', 1, 1, 'R', True)
 
-    # Table rows
     pdf.set_font('Arial', '', 7)
     pdf.set_text_color(30, 30, 30)
     row_color = True
@@ -202,10 +198,7 @@ def build_quote_invoice_pdf(
         subtotal = qty * price
         product_name = sanitize_text(item.get('product_name', 'Item'))[:50]
 
-        if row_color:
-            pdf.set_fill_color(252, 252, 252)
-        else:
-            pdf.set_fill_color(255, 255, 255)
+        pdf.set_fill_color(252, 252, 252) if row_color else pdf.set_fill_color(255, 255, 255)
 
         pdf.cell(85, 5, product_name, 1, 0, 'L', True)
         pdf.cell(25, 5, f'{qty:.2f}', 1, 0, 'C', True)
@@ -226,13 +219,11 @@ def build_quote_invoice_pdf(
     pdf.set_text_color(60, 60, 60)
     summary_x = 120
 
-    # Subtotal de Items
     pdf.set_x(summary_x)
     pdf.cell(45, 4, 'Subtotal de Items:', 0, 0, 'L')
     pdf.set_text_color(30, 30, 30)
     pdf.cell(25, 4, f'${items_total:,.2f}', 0, 1, 'R')
 
-    # Discounts if applicable
     if total_discounts > 0:
         pdf.set_x(summary_x)
         pdf.set_text_color(60, 60, 60)
@@ -247,32 +238,34 @@ def build_quote_invoice_pdf(
         pdf.cell(25, 4, f'${items_after_discount:,.2f}', 0, 1, 'R')
         pdf.ln(1)
 
-    # Surcharges
-    pdf.set_font('Arial', '', 7)
     if charges.get('supervision'):
         pdf.set_x(summary_x)
         pdf.set_text_color(100, 100, 100)
         pdf.cell(45, 4, f'Supervision ({supervision_pct:.1f}%):', 0, 0, 'L')
         pdf.set_text_color(60, 60, 60)
         pdf.cell(25, 4, f'${supervision:,.2f}', 0, 1, 'R')
+
     if charges.get('admin'):
         pdf.set_x(summary_x)
         pdf.set_text_color(100, 100, 100)
         pdf.cell(45, 4, f'Administracion ({admin_pct:.1f}%):', 0, 0, 'L')
         pdf.set_text_color(60, 60, 60)
         pdf.cell(25, 4, f'${admin:,.2f}', 0, 1, 'R')
+
     if charges.get('insurance'):
         pdf.set_x(summary_x)
         pdf.set_text_color(100, 100, 100)
         pdf.cell(45, 4, f'Seguro ({insurance_pct:.1f}%):', 0, 0, 'L')
         pdf.set_text_color(60, 60, 60)
         pdf.cell(25, 4, f'${insurance:,.2f}', 0, 1, 'R')
+
     if charges.get('transport'):
         pdf.set_x(summary_x)
         pdf.set_text_color(100, 100, 100)
         pdf.cell(45, 4, f'Transporte ({transport_pct:.1f}%):', 0, 0, 'L')
         pdf.set_text_color(60, 60, 60)
         pdf.cell(25, 4, f'${transport:,.2f}', 0, 1, 'R')
+
     if charges.get('contingency'):
         pdf.set_x(summary_x)
         pdf.set_text_color(100, 100, 100)
@@ -281,20 +274,16 @@ def build_quote_invoice_pdf(
         pdf.cell(25, 4, f'${contingency:,.2f}', 0, 1, 'R')
 
     pdf.ln(2)
-
-    # Subtotal line
     pdf.set_draw_color(220, 220, 220)
     pdf.line(summary_x, pdf.get_y(), 200, pdf.get_y())
     pdf.ln(2)
 
-    # SUBTOTAL GENERAL
     pdf.set_x(summary_x)
     pdf.set_font('Arial', 'B', 8)
     pdf.set_text_color(30, 30, 30)
     pdf.cell(45, 5, 'Subtotal General:', 0, 0, 'L')
     pdf.cell(25, 5, f'${subtotal_general:,.2f}', 0, 1, 'R')
 
-    # ITBIS
     pdf.set_x(summary_x)
     pdf.set_font('Arial', '', 7)
     pdf.set_text_color(60, 60, 60)
@@ -303,41 +292,45 @@ def build_quote_invoice_pdf(
     pdf.cell(25, 4, f'${itbis:,.2f}', 0, 1, 'R')
 
     pdf.ln(1)
-
-    # Total line
     pdf.set_draw_color(200, 200, 200)
     pdf.line(summary_x, pdf.get_y(), 200, pdf.get_y())
     pdf.ln(2)
 
-    # TOTAL GENERAL
     pdf.set_x(summary_x)
     pdf.set_font('Arial', 'B', 11)
     pdf.set_text_color(30, 30, 30)
     pdf.cell(45, 7, 'TOTAL GENERAL:', 0, 0, 'L')
     pdf.cell(25, 7, f'${grand_total:,.2f}', 0, 1, 'R')
 
-    pdf.ln(6)
+    pdf.ln(8)
 
-    # ==================== NOTES (CORRECT LOCATION) ====================
-    if notes:
-        pdf.ln(6)
-        pdf.set_font("Arial", "B", 9)
-        pdf.set_text_color(30, 30, 30)
-        pdf.cell(0, 5, "NOTAS / NOTES", 0, 1, "L")
-        pdf.set_font("Arial", "", 8)
-        pdf.set_text_color(60, 60, 60)
-        safe_notes = sanitize_text(notes.strip())
-        pdf.multi_cell(0, 4, safe_notes, 0, "L")
+    # ==================== PAYMENT SUMMARY (NEW) ====================
+    pdf.set_font("Arial", "B", 10)
+    pdf.set_text_color(30, 30, 30)
+    pdf.cell(0, 6, "Resumen de Pagos", 0, 1, "L")
+    pdf.ln(2)
 
-    pdf.ln(12)
+    pdf.set_font("Arial", "", 8)
+    pdf.set_text_color(60, 60, 60)
 
-    # ==================== SIGNATURES ====================
-    add_footer_with_signature(pdf)
+    pdf.cell(40, 5, "Total Facturado:", 0, 0, "L")
+    pdf.set_text_color(30, 30, 30)
+    pdf.cell(0, 5, f"${grand_total:,.2f}", 0, 1, "L")
 
-    # ==================== FOOTER ====================
-    pdf.set_y(-15)
-    pdf.set_font('Arial', 'I', 8)
-    pdf.set_text_color(180, 180, 180)
-    pdf.cell(0, 10, 'Pagina 1 de 1', 0, 0, 'C')
+    pdf.set_text_color(60, 60, 60)
+    pdf.cell(40, 5, "Total Pagado:", 0, 0, "L")
+    pdf.set_text_color(0, 140, 0)
+    pdf.cell(0, 5, f"${amount_paid:,.2f}", 0, 1, "L")
 
-    return pdf
+    pdf.set_text_color(60, 60, 60)
+    pdf.cell(40, 5, "Pendiente:", 0, 0, "L")
+    pdf.set_text_color(200, 0, 0)
+    pdf.cell(0, 5, f"${amount_due:,.2f}", 0, 1, "L")
+
+    pdf.ln(8)
+
+    # ==================== PAYMENT HISTORY TABLE (NEW) ====================
+    pdf.set_font("Arial", "B", 10)
+    pdf.set_text_color(30, 30, 30)
+    pdf.cell(0, 6, "Historial de Pagos", 0, 1, "L")
+    

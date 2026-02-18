@@ -27,7 +27,6 @@ def create_quote_pdf(
     itbis,
     grand_total,
 
-    # NEW FIELDS
     payment_terms=None,
     valid_until=None
 ):
@@ -41,7 +40,6 @@ def create_quote_pdf(
         project_name=project_name,
         notes=notes,
 
-        # NEW FIELDS
         payment_terms=payment_terms,
         valid_until=valid_until,
 
@@ -64,6 +62,10 @@ def create_quote_pdf(
         itbis=itbis,
         grand_total=grand_total
     )
+
+    # SAFETY CHECK
+    if pdf is None:
+        raise ValueError("build_quote_invoice_pdf returned None — check layout_utils.py")
 
     pdf_bytes = pdf.output()
     return io.BytesIO(pdf_bytes)

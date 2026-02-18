@@ -334,3 +334,8 @@ def build_quote_invoice_pdf(
     pdf.set_text_color(30, 30, 30)
     pdf.cell(0, 6, "Historial de Pagos", 0, 1, "L")
     
+    # ==================== FOOTER ====================
+    add_footer_with_signature(pdf)
+
+    # FINAL RETURN
+    return pdf

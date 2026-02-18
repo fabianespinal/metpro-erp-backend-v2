@@ -318,4 +318,67 @@ def build_quote_invoice_pdf(
 
     add_footer_with_signature(pdf)
 
+    # ==================== PAYMENT SUMMARY ====================
+    pdf.set_font("Arial", "B", 10)
+    pdf.set_text_color(30, 30, 30)
+    pdf.cell(0, 6, "Resumen de Pagos", 0, 1, "L")
+    pdf.ln(2)
+
+    pdf.set_font("Arial", "", 8)
+    pdf.set_text_color(60, 60, 60)
+
+    pdf.cell(40, 5, "Total Facturado:", 0, 0, "L")
+    pdf.set_text_color(30, 30, 30)
+    pdf.cell(0, 5, f"${grand_total:,.2f}", 0, 1, "L")
+
+    pdf.set_text_color(60, 60, 60)
+    pdf.cell(40, 5, "Total Pagado:", 0, 0, "L")
+    pdf.set_text_color(0, 140, 0)
+    pdf.cell(0, 5, f"${amount_paid or 0:,.2f}", 0, 1, "L")
+
+    pdf.set_text_color(60, 60, 60)
+    pdf.cell(40, 5, "Pendiente:", 0, 0, "L")
+    pdf.set_text_color(200, 0, 0)
+    pdf.cell(0, 5, f"${amount_due or 0:,.2f}", 0, 1, "L")
+
+    pdf.ln(8)
+
+    # ==================== PAYMENT HISTORY ====================
+    pdf.set_font("Arial", "B", 10)
+    pdf.set_text_color(30, 30, 30)
+    pdf.cell(0, 6, "Historial de Pagos", 0, 1, "L")
+    pdf.ln(2)
+
+    # Safe default
+    payments = payments or []
+
+    if len(payments) == 0:
+        pdf.set_font("Arial", "", 8)
+        pdf.set_text_color(120, 120, 120)
+        pdf.cell(0, 5, "No hay pagos registrados.", 0, 1, "L")
+    else:
+        # Table header
+        pdf.set_font("Arial", "B", 8)
+        pdf.set_fill_color(245, 245, 245)
+        pdf.set_draw_color(220, 220, 220)
+        pdf.set_text_color(60, 60, 60)
+
+        pdf.cell(40, 6, "Fecha", 1, 0, "L", True)
+        pdf.cell(40, 6, "Método", 1, 0, "L", True)
+        pdf.cell(40, 6, "Monto", 1, 0, "R", True)
+        pdf.cell(70, 6, "Notas", 1, 1, "L", True)
+
+        pdf.set_font("Arial", "", 8)
+        pdf.set_text_color(30, 30, 30)
+
+        for p in payments:
+            pdf.cell(40, 5, str(p.get("date", "")), 1, 0, "L")
+            pdf.cell(40, 5, str(p.get("method", "")), 1, 0, "L")
+            pdf.cell(40, 5, f"${float(p.get('amount', 0)):,.2f}", 1, 0, "R")
+            pdf.cell(70, 5, str(p.get("notes", ""))[:60], 1, 1, "L")
+
+    pdf.ln(8)
+
+    # FOOTER + RETURN
+    add_footer_with_signature(pdf)
     return pdf

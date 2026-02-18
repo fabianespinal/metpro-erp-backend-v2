@@ -3,7 +3,7 @@ from fpdf import FPDF
 from pdf.utils.text_utils import sanitize_text
 
 try:
-    from utils.pdf_utils import add_footer_with_signature
+    from pdf.utils.pdf_utils import add_footer_with_signature
 except ImportError:
     def add_footer_with_signature(pdf):
         pass
@@ -24,6 +24,11 @@ def build_quote_invoice_pdf(
     amount_paid=0,
     amount_due=0
 ):
+    # Safe defaults
+    payments = payments or []
+    amount_paid = amount_paid or 0
+    amount_due = amount_due or 0
+
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
@@ -76,7 +81,7 @@ def build_quote_invoice_pdf(
         pdf.set_x(left_x)
         pdf.set_font('Arial', 'B', 7)
         pdf.set_text_color(80, 80, 80)
-        pdf.cell(35, 4, 'Términos de Pago:', 0, 0)
+        pdf.cell(35, 4, 'Terminos de Pago:', 0, 0)
         pdf.set_font('Arial', '', 7)
         pdf.set_text_color(30, 30, 30)
         pdf.cell(0, 4, sanitize_text(payment_terms)[:60], 0, 1)
@@ -85,10 +90,10 @@ def build_quote_invoice_pdf(
         pdf.set_x(left_x)
         pdf.set_font('Arial', 'B', 7)
         pdf.set_text_color(80, 80, 80)
-        pdf.cell(35, 4, 'Válida Hasta:', 0, 0)
+        pdf.cell(35, 4, 'Valida Hasta:', 0, 0)
         pdf.set_font('Arial', '', 7)
         pdf.set_text_color(30, 30, 30)
-        pdf.cell(0, 4, sanitize_text(valid_until), 0, 1)
+        pdf.cell(0, 4, sanitize_text(str(valid_until)), 0, 1)
 
     if project_name:
         pdf.set_x(left_x)
@@ -105,7 +110,7 @@ def build_quote_invoice_pdf(
     pdf.cell(25, 4, 'Cliente:', 0, 0)
     pdf.set_font('Arial', '', 7)
     pdf.set_text_color(30, 30, 30)
-    pdf.cell(0, 4, sanitize_text(client["company_name"])[:40], 0, 1)
+    pdf.cell(0, 4, sanitize_text(client.get("company_name", ""))[:40], 0, 1)
 
     if client.get('contact_name'):
         pdf.set_x(right_x)
@@ -175,8 +180,8 @@ def build_quote_invoice_pdf(
     row_color = True
 
     for item in items:
-        qty = float(item['quantity'] or 0)
-        price = float(item['unit_price'] or 0)
+        qty = float(item.get('quantity') or 0)
+        price = float(item.get('unit_price') or 0)
         subtotal = qty * price
         product_name = sanitize_text(item.get('product_name', 'Item'))[:50]
 
@@ -288,97 +293,67 @@ def build_quote_invoice_pdf(
 
     pdf.ln(8)
 
-    pdf.set_font("Arial", "B", 10)
-    pdf.set_text_color(30, 30, 30)
-    pdf.cell(0, 6, "Resumen de Pagos", 0, 1, "L")
-    pdf.ln(2)
+    # ==================== PAYMENT SECTION (INVOICES ONLY) ====================
+    if doc_type != 'COTIZACION':
+        pdf.set_font("Arial", "B", 10)
+        pdf.set_text_color(30, 30, 30)
+        pdf.cell(0, 6, "Resumen de Pagos", 0, 1, "L")
+        pdf.ln(2)
 
-    pdf.set_font("Arial", "", 8)
-    pdf.set_text_color(60, 60, 60)
-
-    pdf.cell(40, 5, "Total Facturado:", 0, 0, "L")
-    pdf.set_text_color(30, 30, 30)
-    pdf.cell(0, 5, f"${grand_total:,.2f}", 0, 1, "L")
-
-    pdf.set_text_color(60, 60, 60)
-    pdf.cell(40, 5, "Total Pagado:", 0, 0, "L")
-    pdf.set_text_color(0, 140, 0)
-    pdf.cell(0, 5, f"${amount_paid:,.2f}", 0, 1, "L")
-
-    pdf.set_text_color(60, 60, 60)
-    pdf.cell(40, 5, "Pendiente:", 0, 0, "L")
-    pdf.set_text_color(200, 0, 0)
-    pdf.cell(0, 5, f"${amount_due:,.2f}", 0, 1, "L")
-
-    pdf.ln(8)
-
-    pdf.set_font("Arial", "B", 10)
-    pdf.set_text_color(30, 30, 30)
-    pdf.cell(0, 6, "Historial de Pagos", 0, 1, "L")
-
-    add_footer_with_signature(pdf)
-
-    # ==================== PAYMENT SUMMARY ====================
-    pdf.set_font("Arial", "B", 10)
-    pdf.set_text_color(30, 30, 30)
-    pdf.cell(0, 6, "Resumen de Pagos", 0, 1, "L")
-    pdf.ln(2)
-
-    pdf.set_font("Arial", "", 8)
-    pdf.set_text_color(60, 60, 60)
-
-    pdf.cell(40, 5, "Total Facturado:", 0, 0, "L")
-    pdf.set_text_color(30, 30, 30)
-    pdf.cell(0, 5, f"${grand_total:,.2f}", 0, 1, "L")
-
-    pdf.set_text_color(60, 60, 60)
-    pdf.cell(40, 5, "Total Pagado:", 0, 0, "L")
-    pdf.set_text_color(0, 140, 0)
-    pdf.cell(0, 5, f"${amount_paid or 0:,.2f}", 0, 1, "L")
-
-    pdf.set_text_color(60, 60, 60)
-    pdf.cell(40, 5, "Pendiente:", 0, 0, "L")
-    pdf.set_text_color(200, 0, 0)
-    pdf.cell(0, 5, f"${amount_due or 0:,.2f}", 0, 1, "L")
-
-    pdf.ln(8)
-
-    # ==================== PAYMENT HISTORY ====================
-    pdf.set_font("Arial", "B", 10)
-    pdf.set_text_color(30, 30, 30)
-    pdf.cell(0, 6, "Historial de Pagos", 0, 1, "L")
-    pdf.ln(2)
-
-    # Safe default
-    payments = payments or []
-
-    if len(payments) == 0:
         pdf.set_font("Arial", "", 8)
-        pdf.set_text_color(120, 120, 120)
-        pdf.cell(0, 5, "No hay pagos registrados.", 0, 1, "L")
-    else:
-        # Table header
-        pdf.set_font("Arial", "B", 8)
-        pdf.set_fill_color(245, 245, 245)
-        pdf.set_draw_color(220, 220, 220)
         pdf.set_text_color(60, 60, 60)
 
-        pdf.cell(40, 6, "Fecha", 1, 0, "L", True)
-        pdf.cell(40, 6, "Método", 1, 0, "L", True)
-        pdf.cell(40, 6, "Monto", 1, 0, "R", True)
-        pdf.cell(70, 6, "Notas", 1, 1, "L", True)
-
-        pdf.set_font("Arial", "", 8)
+        pdf.cell(40, 5, "Total Facturado:", 0, 0, "L")
         pdf.set_text_color(30, 30, 30)
+        pdf.cell(0, 5, f"${grand_total:,.2f}", 0, 1, "L")
 
-        for p in payments:
-            pdf.cell(40, 5, str(p.get("date", "")), 1, 0, "L")
-            pdf.cell(40, 5, str(p.get("method", "")), 1, 0, "L")
-            pdf.cell(40, 5, f"${float(p.get('amount', 0)):,.2f}", 1, 0, "R")
-            pdf.cell(70, 5, str(p.get("notes", ""))[:60], 1, 1, "L")
+        pdf.set_text_color(60, 60, 60)
+        pdf.cell(40, 5, "Total Pagado:", 0, 0, "L")
+        pdf.set_text_color(0, 140, 0)
+        pdf.cell(0, 5, f"${amount_paid:,.2f}", 0, 1, "L")
 
-    pdf.ln(8)
+        pdf.set_text_color(60, 60, 60)
+        pdf.cell(40, 5, "Pendiente:", 0, 0, "L")
+        pdf.set_text_color(200, 0, 0)
+        pdf.cell(0, 5, f"${amount_due:,.2f}", 0, 1, "L")
 
-    # FOOTER + RETURN
+        pdf.ln(8)
+
+        pdf.set_font("Arial", "B", 10)
+        pdf.set_text_color(30, 30, 30)
+        pdf.cell(0, 6, "Historial de Pagos", 0, 1, "L")
+        pdf.ln(2)
+
+        if len(payments) == 0:
+            pdf.set_font("Arial", "", 8)
+            pdf.set_text_color(120, 120, 120)
+            pdf.cell(0, 5, "No hay pagos registrados.", 0, 1, "L")
+        else:
+            pdf.set_font("Arial", "B", 8)
+            pdf.set_fill_color(245, 245, 245)
+            pdf.set_draw_color(220, 220, 220)
+            pdf.set_text_color(60, 60, 60)
+
+            pdf.cell(40, 6, "Fecha", 1, 0, "L", True)
+            pdf.cell(40, 6, "Metodo", 1, 0, "L", True)
+            pdf.cell(40, 6, "Monto", 1, 0, "R", True)
+            pdf.cell(70, 6, "Notas", 1, 1, "L", True)
+
+            pdf.set_font("Arial", "", 8)
+            pdf.set_text_color(30, 30, 30)
+
+            for p in payments:
+                pay_date = str(p.get("payment_date") or p.get("date") or "")
+                pay_method = sanitize_text(str(p.get("method") or ""))
+                pay_amount = float(p.get("amount") or 0)
+                pay_notes = sanitize_text(str(p.get("notes") or ""))[:60]
+
+                pdf.cell(40, 5, pay_date[:20], 1, 0, "L")
+                pdf.cell(40, 5, pay_method[:20], 1, 0, "L")
+                pdf.cell(40, 5, f"${pay_amount:,.2f}", 1, 0, "R")
+                pdf.cell(70, 5, pay_notes, 1, 1, "L")
+
+        pdf.ln(8)
+
     add_footer_with_signature(pdf)
     return pdf

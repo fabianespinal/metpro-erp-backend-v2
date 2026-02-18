@@ -1,4 +1,3 @@
-```python
 import os
 from fpdf import FPDF
 from pdf.utils.text_utils import sanitize_text

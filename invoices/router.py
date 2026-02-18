@@ -48,3 +48,8 @@ def update_invoice_status(
 def delete_invoice(invoice_id: int, current_user: dict = Depends(verify_token)):
     """Delete invoice and revert quote status"""
     return service.delete_invoice(invoice_id)
+
+@router.post("/{invoice_id}/payments")
+def add_payment(invoice_id: int, data: PaymentCreate, conn=Depends(get_db)):
+    payment_id = create_payment(conn, invoice_id, data)
+    return {"payment_id": payment_id}

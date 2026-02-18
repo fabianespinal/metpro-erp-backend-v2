@@ -10,12 +10,15 @@ def create_invoice_pdf(
     transport, transport_pct, contingency, contingency_pct,
     subtotal_general, itbis, grand_total,
 
-    # NEW FIELDS
+    # EXISTING FIELDS
     payment_terms=None,
-    valid_until=None
-):
-    """Generate PDF bytes for an invoice."""
+    valid_until=None,
 
+    # NEW PAYMENT FIELDS
+    payments=None,
+    amount_paid=0,
+    amount_due=0
+):
     pdf = build_quote_invoice_pdf(
         doc_type=doc_type,
         doc_id=doc_id,
@@ -23,11 +26,8 @@ def create_invoice_pdf(
         client=client,
         project_name=project_name,
         notes=notes,
-
-        # NEW FIELDS
         payment_terms=payment_terms,
         valid_until=valid_until,
-
         items=items,
         charges=charges,
         items_total=items_total,
@@ -45,7 +45,10 @@ def create_invoice_pdf(
         contingency_pct=contingency_pct,
         subtotal_general=subtotal_general,
         itbis=itbis,
-        grand_total=grand_total
+        grand_total=grand_total,
+        payments=payments,
+        amount_paid=amount_paid,
+        amount_due=amount_due
     )
 
     pdf_bytes = pdf.output()

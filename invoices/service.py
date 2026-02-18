@@ -1,21 +1,15 @@
 from typing import List, Optional
 from fastapi import HTTPException
-from datetime import datetime
+from datetime_t import datetime
 import json
 from database import get_db_connection
 from psycopg2.extras import RealDictCursor
 
 def generate_invoice_number() -> str:
-    """Generate unique invoice number"""
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
     return f"INV-{timestamp}"
 
 def calculate_invoice_totals(items: List[dict], charges: dict) -> dict:
-    """
-    METPRO CALCULATION ENGINE - PRESERVED EXACTLY
-    Calculate all totals with discounts, charges, and ITBIS
-    Same logic as quotes module
-    """
     items_total = sum(float(item["quantity"] or 0) * float(item["unit_price"] or 0) for item in items)
     total_discounts = 0
     for item in items:
@@ -58,13 +52,11 @@ def calculate_invoice_totals(items: List[dict], charges: dict) -> dict:
     }
 
 def create_invoice_from_quote(quote_id: str, notes: Optional[str] = None) -> dict:
-    """Create invoice from approved quote with full calculation engine"""
     conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        # Get quote
         cursor.execute("SELECT * FROM quotes WHERE quote_id = %s", (quote_id,))
         quote = cursor.fetchone()
         if not quote:
@@ -78,7 +70,6 @@ def create_invoice_from_quote(quote_id: str, notes: Optional[str] = None) -> dic
                 detail="Only approved quotes can be converted to invoices",
             )
 
-        # Check if invoice already exists
         cursor.execute("SELECT id FROM invoices WHERE quote_id = %s", (quote_id,))
         if cursor.fetchone():
             raise HTTPException(
@@ -86,11 +77,9 @@ def create_invoice_from_quote(quote_id: str, notes: Optional[str] = None) -> dic
                 detail="Invoice already exists for this quote",
             )
 
-        # Get quote items for calculation
         cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s", (quote_id,))
         items = [dict(row) for row in cursor.fetchall()]
 
-        # Parse charges
         raw_charges = quote.get("included_charges")
         try:
             if isinstance(raw_charges, str):
@@ -111,14 +100,11 @@ def create_invoice_from_quote(quote_id: str, notes: Optional[str] = None) -> dic
                 "contingency_percentage": 3.0,
             }
 
-        # Calculate totals using METPRO engine
         totals = calculate_invoice_totals(items, charges)
 
-        # Generate invoice number
         invoice_number = generate_invoice_number()
         invoice_date = datetime.now().strftime("%Y-%m-%d")
 
-        # Create invoice
         cursor.execute(
             """
             INSERT INTO invoices
@@ -139,7 +125,6 @@ def create_invoice_from_quote(quote_id: str, notes: Optional[str] = None) -> dic
 
         invoice = dict(cursor.fetchone())
 
-        # Update quote status to Invoiced
         cursor.execute(
             "UPDATE quotes SET status = 'Invoiced' WHERE quote_id = %s",
             (quote_id,),
@@ -147,7 +132,6 @@ def create_invoice_from_quote(quote_id: str, notes: Optional[str] = None) -> dic
 
         conn.commit()
 
-        # Add calculated data for frontend
         invoice["items"] = items
         invoice["totals"] = totals
 
@@ -166,7 +150,6 @@ def create_invoice_from_quote(quote_id: str, notes: Optional[str] = None) -> dic
             conn.close()
 
 def get_all_invoices(client_id: Optional[int] = None, status: Optional[str] = None) -> List[dict]:
-    """Get all invoices with optional filters"""
     conn = None
     try:
         conn = get_db_connection()
@@ -207,13 +190,11 @@ def get_all_invoices(client_id: Optional[int] = None, status: Optional[str] = No
             conn.close()
 
 def get_invoice_by_id(invoice_id: int) -> dict:
-    """Get invoice by ID with items and calculations"""
     conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        # Get invoice
         cursor.execute("SELECT * FROM invoices WHERE id = %s", (invoice_id,))
         invoice = cursor.fetchone()
         if not invoice:
@@ -221,12 +202,10 @@ def get_invoice_by_id(invoice_id: int) -> dict:
 
         invoice = dict(invoice)
 
-        # Get quote items
         cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s", (invoice["quote_id"],))
         items = [dict(row) for row in cursor.fetchall()]
         invoice["items"] = items
 
-        # Get charges from original quote
         cursor.execute("SELECT included_charges FROM quotes WHERE quote_id = %s", (invoice["quote_id"],))
         quote_row = cursor.fetchone()
         if quote_row:
@@ -249,7 +228,6 @@ def get_invoice_by_id(invoice_id: int) -> dict:
             conn.close()
 
 def get_invoice_by_number(invoice_number: str) -> dict:
-    """Get invoice by invoice number"""
     conn = None
     try:
         conn = get_db_connection()
@@ -267,7 +245,6 @@ def get_invoice_by_number(invoice_number: str) -> dict:
             conn.close()
 
 def update_invoice_status(invoice_id: int, status: str) -> dict:
-    """Update invoice status"""
     conn = None
     try:
         conn = get_db_connection()
@@ -310,13 +287,11 @@ def update_invoice_status(invoice_id: int, status: str) -> dict:
             conn.close()
 
 def delete_invoice(invoice_id: int) -> dict:
-    """Delete invoice (also revert quote status)"""
     conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        # Get invoice to find quote_id
         cursor.execute("SELECT quote_id FROM invoices WHERE id = %s", (invoice_id,))
         invoice = cursor.fetchone()
         if not invoice:
@@ -324,10 +299,8 @@ def delete_invoice(invoice_id: int) -> dict:
 
         quote_id = invoice["quote_id"]
 
-        # Delete invoice
         cursor.execute("DELETE FROM invoices WHERE id = %s", (invoice_id,))
 
-        # Revert quote status back to Approved
         cursor.execute(
             "UPDATE quotes SET status = 'Approved' WHERE quote_id = %s",
             (quote_id,),
@@ -347,3 +320,30 @@ def delete_invoice(invoice_id: int) -> dict:
     finally:
         if conn:
             conn.close()
+
+def get_invoice_with_payments(conn, invoice_id):
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("SELECT * FROM invoices WHERE id=%s", (invoice_id,))
+        invoice = cur.fetchone()
+
+        cur.execute("SELECT * FROM invoice_payments WHERE invoice_id=%s", (invoice_id,))
+        payments = cur.fetchall()
+
+        amount_paid = sum(p["amount"] for p in payments)
+        amount_due = invoice["total_amount"] - amount_paid
+
+        invoice["payments"] = payments
+        invoice["amount_paid"] = amount_paid
+        invoice["amount_due"] = amount_due
+
+        return invoice
+
+def create_payment(conn, invoice_id, data):
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("""
+            INSERT INTO invoice_payments (invoice_id, amount, method, notes)
+            VALUES (%s, %s, %s, %s)
+            RETURNING id
+        """, (invoice_id, data.amount, data.method, data.notes))
+        conn.commit()
+        return cur.fetchone()["id"]

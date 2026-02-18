@@ -14,41 +14,27 @@ from pdf.builder_conduce import create_conduce_pdf
 # QUOTE PDF GENERATION
 # ============================================================
 def generate_quote_pdf(quote_id: str) -> StreamingResponse:
-    """Orchestrate quote PDF generation: fetch DB, prepare params, call builder."""
     conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        # ------------------------------------------------------------
-        # FETCH QUOTE
-        # ------------------------------------------------------------
         cursor.execute('SELECT * FROM quotes WHERE quote_id = %s', (quote_id,))
         quote = cursor.fetchone()
         if not quote:
             raise HTTPException(status_code=404, detail='Quote not found')
         quote = dict(quote)
 
-        # ------------------------------------------------------------
-        # FETCH CLIENT
-        # ------------------------------------------------------------
         cursor.execute('SELECT * FROM clients WHERE id = %s', (quote['client_id'],))
         client = cursor.fetchone()
         if not client:
             raise HTTPException(status_code=404, detail='Client not found')
         client = dict(client)
 
-        # ------------------------------------------------------------
-        # FETCH ITEMS
-        # ------------------------------------------------------------
         cursor.execute('SELECT * FROM quote_items WHERE quote_id = %s', (quote_id,))
         items = [dict(row) for row in cursor.fetchall()]
 
-        # ------------------------------------------------------------
-        # INCLUDED CHARGES (safe JSON handling)
-        # ------------------------------------------------------------
         raw_charges = quote.get('included_charges')
-
         if not raw_charges:
             charges = {}
         elif isinstance(raw_charges, str):
@@ -59,14 +45,12 @@ def generate_quote_pdf(quote_id: str) -> StreamingResponse:
         else:
             charges = raw_charges
 
-        # Ensure boolean flags exist
         charges.setdefault('supervision', True)
         charges.setdefault('admin', True)
         charges.setdefault('insurance', True)
         charges.setdefault('transport', True)
         charges.setdefault('contingency', True)
 
-        # Ensure percentage values exist
         defaults = {
             'supervision_percentage': 10.0,
             'admin_percentage': 4.0,
@@ -77,9 +61,6 @@ def generate_quote_pdf(quote_id: str) -> StreamingResponse:
         for key, default in defaults.items():
             charges.setdefault(key, default)
 
-        # ------------------------------------------------------------
-        # CALCULATIONS (EXACT METPRO ENGINE)
-        # ------------------------------------------------------------
         items_total = sum(float(item['quantity'] or 0) * float(item['unit_price'] or 0) for item in items)
 
         total_discounts = 0
@@ -92,7 +73,6 @@ def generate_quote_pdf(quote_id: str) -> StreamingResponse:
 
         items_after_discount = items_total - total_discounts
 
-        # Percentages
         supervision_pct = float(charges.get('supervision_percentage', 10.0))
         admin_pct = float(charges.get('admin_percentage', 4.0))
         insurance_pct = float(charges.get('insurance_percentage', 1.0))
@@ -109,21 +89,12 @@ def generate_quote_pdf(quote_id: str) -> StreamingResponse:
         itbis = subtotal_general * 0.18
         grand_total = subtotal_general + itbis
 
-        # ------------------------------------------------------------
-        # DATE HANDLING
-        # ------------------------------------------------------------
         raw_date = quote.get("created_at") or quote.get("updated_at") or ""
         doc_date = format_date(raw_date)
 
-        # ------------------------------------------------------------
-        # NEW FIELDS (payment_terms + valid_until)
-        # ------------------------------------------------------------
         payment_terms = quote.get("payment_terms") or ""
         valid_until = quote.get("valid_until") or ""
 
-        # ------------------------------------------------------------
-        # CALL PDF BUILDER
-        # ------------------------------------------------------------
         pdf_stream = create_quote_pdf(
             doc_type='COTIZACION',
             doc_id=quote["quote_id"],
@@ -131,11 +102,8 @@ def generate_quote_pdf(quote_id: str) -> StreamingResponse:
             client=client,
             project_name=quote.get('project_name'),
             notes=quote.get('notes'),
-
-            # NEW FIELDS
             payment_terms=payment_terms,
             valid_until=valid_until,
-
             items=items,
             charges=charges,
             items_total=items_total,
@@ -181,7 +149,6 @@ def generate_quote_pdf(quote_id: str) -> StreamingResponse:
 # INVOICE PDF GENERATION
 # ============================================================
 def generate_invoice_pdf(invoice_id: int) -> StreamingResponse:
-    """Orchestrate invoice PDF generation: fetch DB, prepare params, call builder."""
     conn = None
     try:
         conn = get_db_connection()
@@ -212,7 +179,7 @@ def generate_invoice_pdf(invoice_id: int) -> StreamingResponse:
         items = [dict(row) for row in cursor.fetchall()]
 
         # ------------------------------------------------------------
-        # FETCH CHARGES + PROJECT NAME + NEW FIELDS FROM QUOTE
+        # FETCH CHARGES + PROJECT NAME + FIELDS FROM QUOTE
         # ------------------------------------------------------------
         cursor.execute(
             'SELECT included_charges, project_name, payment_terms, valid_until '
@@ -222,7 +189,6 @@ def generate_invoice_pdf(invoice_id: int) -> StreamingResponse:
         quote_data = cursor.fetchone()
 
         if quote_data:
-            # Charges
             raw_charges = quote_data['included_charges']
             if isinstance(raw_charges, str):
                 try:
@@ -233,13 +199,9 @@ def generate_invoice_pdf(invoice_id: int) -> StreamingResponse:
                 charges = raw_charges or {}
 
             project_name = quote_data.get('project_name')
-
-            # NEW FIELDS
             payment_terms = quote_data.get("payment_terms") or ""
             valid_until = quote_data.get("valid_until") or ""
-
         else:
-            # Fallback defaults
             charges = {
                 'supervision': True, 'supervision_percentage': 10.0,
                 'admin': True, 'admin_percentage': 4.0,
@@ -250,6 +212,18 @@ def generate_invoice_pdf(invoice_id: int) -> StreamingResponse:
             project_name = None
             payment_terms = ""
             valid_until = ""
+
+        # ------------------------------------------------------------
+        # FETCH PAYMENTS
+        # ------------------------------------------------------------
+        cursor.execute(
+            'SELECT * FROM payments WHERE invoice_id = %s ORDER BY payment_date ASC',
+            (invoice_id,)
+        )
+        payments = [dict(row) for row in cursor.fetchall()]
+
+        amount_paid = float(invoice.get('amount_paid') or 0)
+        amount_due = float(invoice.get('amount_due') or 0)
 
         # ------------------------------------------------------------
         # CALCULATIONS
@@ -297,11 +271,8 @@ def generate_invoice_pdf(invoice_id: int) -> StreamingResponse:
             client=client,
             project_name=project_name,
             notes=invoice.get('notes'),
-
-            # NEW FIELDS
             payment_terms=payment_terms,
             valid_until=valid_until,
-
             items=items,
             charges=charges,
             items_total=items_total,
@@ -319,7 +290,10 @@ def generate_invoice_pdf(invoice_id: int) -> StreamingResponse:
             contingency_pct=contingency_pct,
             subtotal_general=subtotal_general,
             itbis=itbis,
-            grand_total=grand_total
+            grand_total=grand_total,
+            payments=payments,
+            amount_paid=amount_paid,
+            amount_due=amount_due
         )
 
         return StreamingResponse(
@@ -345,39 +319,32 @@ def generate_invoice_pdf(invoice_id: int) -> StreamingResponse:
 # CONDUCE PDF GENERATION (NO PRICES)
 # ============================================================
 def generate_conduce_pdf(invoice_id: int) -> StreamingResponse:
-    """Orchestrate conduce PDF generation: fetch DB, prepare params, call builder."""
     conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        # Get invoice
         cursor.execute('SELECT * FROM invoices WHERE id = %s', (invoice_id,))
         invoice = cursor.fetchone()
         if not invoice:
             raise HTTPException(status_code=404, detail='Invoice not found')
         invoice = dict(invoice)
 
-        # Get client
         cursor.execute('SELECT * FROM clients WHERE id = %s', (invoice['client_id'],))
         client = cursor.fetchone()
         if not client:
             raise HTTPException(status_code=404, detail='Client not found')
         client = dict(client)
 
-        # Get items
         cursor.execute('SELECT * FROM quote_items WHERE quote_id = %s', (invoice['quote_id'],))
         items = [dict(row) for row in cursor.fetchall()]
 
-        # Get project name
         cursor.execute('SELECT project_name FROM quotes WHERE quote_id = %s', (invoice['quote_id'],))
         quote_data = cursor.fetchone()
         project_name = quote_data.get('project_name') if quote_data else None
 
-        # Fix date logic
         doc_date = format_date(invoice["invoice_date"])
 
-        # Call builder
         pdf_stream = create_conduce_pdf(
             doc_id=invoice["invoice_number"].replace('INV-', 'CD-'),
             doc_date=doc_date,

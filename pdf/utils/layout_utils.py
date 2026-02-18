@@ -1,16 +1,14 @@
+```python
 import os
 from fpdf import FPDF
 from pdf.utils.text_utils import sanitize_text
 
-# Import external footer helper
 try:
     from utils.pdf_utils import add_footer_with_signature
 except ImportError:
     def add_footer_with_signature(pdf):
-        pass  # Placeholder if external util is missing
+        pass
 
-
-# ==================== ABSOLUTE LOGO PATH ====================
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 LOGO_PATH = os.path.join(BASE_DIR, "assets", "logo.png")
 
@@ -21,22 +19,16 @@ def build_quote_invoice_pdf(
     supervision, supervision_pct, admin, admin_pct, insurance, insurance_pct,
     transport, transport_pct, contingency, contingency_pct,
     subtotal_general, itbis, grand_total,
-
-    # EXISTING FIELDS
     payment_terms=None,
     valid_until=None,
-
-    # NEW PAYMENT FIELDS
     payments=None,
     amount_paid=0,
     amount_due=0
 ):
-    """Shared PDF creation logic for quotes and invoices"""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
 
-    # ==================== HEADER ====================
     try:
         if os.path.exists(LOGO_PATH):
             pdf.image(LOGO_PATH, x=10, y=10, w=15)
@@ -50,7 +42,6 @@ def build_quote_invoice_pdf(
     pdf.cell(0, 3, 'Tel: (829) 439-8476 | RNC: 131-71683-2', 0, 1, 'R')
     pdf.ln(8)
 
-    # ==================== TITLE ====================
     pdf.set_font('Arial', 'B', 14)
     pdf.set_text_color(30, 30, 30)
     pdf.cell(0, 7, doc_type, 0, 1, 'R')
@@ -58,7 +49,6 @@ def build_quote_invoice_pdf(
     pdf.line(10, pdf.get_y(), 200, pdf.get_y())
     pdf.ln(6)
 
-    # ==================== DOCUMENT INFO ====================
     pdf.set_font('Arial', '', 7)
     pdf.set_text_color(100, 100, 100)
 
@@ -66,7 +56,6 @@ def build_quote_invoice_pdf(
     right_x = 110
     start_y = pdf.get_y()
 
-    # LEFT COLUMN
     pdf.set_xy(left_x, start_y)
     pdf.set_font('Arial', 'B', 7)
     pdf.set_text_color(80, 80, 80)
@@ -76,7 +65,6 @@ def build_quote_invoice_pdf(
     pdf.set_text_color(30, 30, 30)
     pdf.cell(0, 4, sanitize_text(doc_id), 0, 1)
 
-    # DATE
     pdf.set_x(left_x)
     pdf.set_font('Arial', 'B', 7)
     pdf.set_text_color(80, 80, 80)
@@ -85,7 +73,6 @@ def build_quote_invoice_pdf(
     pdf.set_text_color(30, 30, 30)
     pdf.cell(0, 4, sanitize_text(doc_date), 0, 1)
 
-    # PAYMENT TERMS
     if payment_terms:
         pdf.set_x(left_x)
         pdf.set_font('Arial', 'B', 7)
@@ -95,7 +82,6 @@ def build_quote_invoice_pdf(
         pdf.set_text_color(30, 30, 30)
         pdf.cell(0, 4, sanitize_text(payment_terms)[:60], 0, 1)
 
-    # VALID UNTIL
     if valid_until:
         pdf.set_x(left_x)
         pdf.set_font('Arial', 'B', 7)
@@ -105,7 +91,6 @@ def build_quote_invoice_pdf(
         pdf.set_text_color(30, 30, 30)
         pdf.cell(0, 4, sanitize_text(valid_until), 0, 1)
 
-    # PROJECT NAME
     if project_name:
         pdf.set_x(left_x)
         pdf.set_font('Arial', 'B', 7)
@@ -115,7 +100,6 @@ def build_quote_invoice_pdf(
         pdf.set_text_color(30, 30, 30)
         pdf.cell(0, 4, sanitize_text(project_name)[:60], 0, 1)
 
-    # RIGHT COLUMN (CLIENT)
     pdf.set_xy(right_x, start_y)
     pdf.set_font('Arial', 'B', 7)
     pdf.set_text_color(80, 80, 80)
@@ -173,7 +157,6 @@ def build_quote_invoice_pdf(
     final_y = max(pdf.get_y(), start_y + 20)
     pdf.set_y(final_y + 4)
 
-    # ==================== ITEMS TABLE ====================
     pdf.set_font('Arial', 'B', 9)
     pdf.set_text_color(30, 30, 30)
     pdf.cell(0, 5, 'Detalle de Items', 0, 1, 'L')
@@ -198,7 +181,10 @@ def build_quote_invoice_pdf(
         subtotal = qty * price
         product_name = sanitize_text(item.get('product_name', 'Item'))[:50]
 
-        pdf.set_fill_color(252, 252, 252) if row_color else pdf.set_fill_color(255, 255, 255)
+        if row_color:
+            pdf.set_fill_color(252, 252, 252)
+        else:
+            pdf.set_fill_color(255, 255, 255)
 
         pdf.cell(85, 5, product_name, 1, 0, 'L', True)
         pdf.cell(25, 5, f'{qty:.2f}', 1, 0, 'C', True)
@@ -209,7 +195,6 @@ def build_quote_invoice_pdf(
 
     pdf.ln(6)
 
-    # ==================== FINANCIAL SUMMARY ====================
     pdf.set_font('Arial', 'B', 9)
     pdf.set_text_color(30, 30, 30)
     pdf.cell(0, 5, 'Resumen Financiero', 0, 1, 'L')
@@ -304,7 +289,6 @@ def build_quote_invoice_pdf(
 
     pdf.ln(8)
 
-    # ==================== PAYMENT SUMMARY (NEW) ====================
     pdf.set_font("Arial", "B", 10)
     pdf.set_text_color(30, 30, 30)
     pdf.cell(0, 6, "Resumen de Pagos", 0, 1, "L")
@@ -329,13 +313,10 @@ def build_quote_invoice_pdf(
 
     pdf.ln(8)
 
-    # ==================== PAYMENT HISTORY TABLE (NEW) ====================
     pdf.set_font("Arial", "B", 10)
     pdf.set_text_color(30, 30, 30)
     pdf.cell(0, 6, "Historial de Pagos", 0, 1, "L")
-    
-    # ==================== FOOTER ====================
+
     add_footer_with_signature(pdf)
 
-    # FINAL RETURN
     return pdf

@@ -2,7 +2,6 @@ import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
-from contextlib import contextmanager
 
 load_dotenv()
 
@@ -27,9 +26,8 @@ def get_db_connection():
 
 # ============================================================
 # NEW FUNCTION (FastAPI dependency)
-# Used by new modules like Expenses.
+# MUST return a real connection, NOT a context manager.
 # ============================================================
-@contextmanager
 def get_db():
     """
     FastAPI-compatible database dependency.

@@ -2,8 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from database import get_db
 from .models import ExpenseCreate, ExpenseUpdate
 from .services import (
-    create_expense, get_expenses, get_expense,
-    update_expense, delete_expense
+    create_expense,
+    get_expenses,
+    get_expense,
+    update_expense,
+    delete_expense
 )
 
 router = APIRouter(prefix="/expenses", tags=["Expenses"])

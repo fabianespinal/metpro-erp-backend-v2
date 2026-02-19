@@ -5,12 +5,10 @@ from .models import Invoice, InvoiceCreate, InvoiceStatusUpdate
 from . import service
 from auth.service import verify_token
 
-# CORRECT IMPORTS FOR PAYMENTS (flat structure)
 from invoices.payments.models import PaymentCreate
 from invoices.payments.service import create_payment
 
-# DB dependency
-from database import get_db
+from database import get_db_connection
 
 router = APIRouter(prefix='/invoices', tags=['invoices'])
 
@@ -59,6 +57,10 @@ def delete_invoice(invoice_id: int, current_user: dict = Depends(verify_token)):
 
 
 @router.post("/{invoice_id}/payments")
-def add_payment(invoice_id: int, data: PaymentCreate, conn=Depends(get_db)):
-    payment_id = create_payment(conn, invoice_id, data)
-    return {"payment_id": payment_id}
+def add_payment(invoice_id: int, data: PaymentCreate):
+    conn = get_db_connection()
+    try:
+        payment_id = create_payment(conn, invoice_id, data)
+        return {"payment_id": payment_id}
+    finally:
+        conn.close()

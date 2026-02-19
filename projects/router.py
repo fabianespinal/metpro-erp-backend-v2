@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Optional
 from .models import Project, ProjectBase, ProjectUpdate
 from . import service
-from auth.service import verify_token
+from backend.auth.service import verify_token
 
 router = APIRouter(prefix='/projects', tags=['projects'])
 

@@ -1,9 +1,9 @@
 import os
 from fpdf import FPDF
-from pdf.utils.text_utils import sanitize_text
+from backend.pdf.utils.text_utils import sanitize_text
 
 try:
-    from pdf.utils.pdf_utils import add_footer_with_signature
+    from backend.pdf.utils.pdf_utils import add_footer_with_signature
 except ImportError:
     def add_footer_with_signature(pdf):
         pass

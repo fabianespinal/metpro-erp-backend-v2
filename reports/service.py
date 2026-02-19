@@ -1,6 +1,6 @@
 from typing import Optional
 from fastapi import HTTPException
-from database import get_db_connection
+from backend.database import get_db_connection
 from psycopg2.extras import RealDictCursor
 
 

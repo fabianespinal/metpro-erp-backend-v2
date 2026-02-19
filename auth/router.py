@@ -7,7 +7,7 @@ from .service import (
     get_current_user_from_bearer,
     require_role
 )
-from database import get_db_connection
+from backend.database import get_db_connection
 from psycopg2.extras import RealDictCursor
 
 router = APIRouter(prefix="/auth", tags=["authentication"])

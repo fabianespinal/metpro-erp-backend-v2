@@ -1,7 +1,7 @@
 import io
 import os
 from fpdf import FPDF
-from pdf.utils.text_utils import sanitize_text
+from backend.pdf.utils.text_utils import sanitize_text
 
 # Import external footer helper
 try:
@@ -145,17 +145,6 @@ def create_conduce_pdf(doc_id, doc_date, client, project_name, notes, items):
         row_color = not row_color
 
     pdf.ln(12)
-
-    # ==================== NOTES ====================
-    if notes and notes.strip():
-        pdf.set_font('Arial', 'B', 8)
-        pdf.set_text_color(30, 30, 30)
-        pdf.cell(0, 5, 'NOTAS / NOTES', 0, 1, 'L')
-        pdf.set_font('Arial', '', 7)
-        pdf.set_text_color(60, 60, 60)
-        pdf.multi_cell(0, 4, notes.strip(), border=0, align='L', fill=False)
-
-    pdf.ln(15)
 
     # ==================== SIGNATURES ====================
     add_footer_with_signature(pdf)

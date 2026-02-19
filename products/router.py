@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, File, UploadFile
 from typing import List
 from .models import Product, ProductBase
 from . import service
-from auth.service import verify_token
+from backend.auth.service import verify_token
 
 router = APIRouter(prefix='/products', tags=['products'])
 

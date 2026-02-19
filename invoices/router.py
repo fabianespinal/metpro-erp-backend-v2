@@ -3,14 +3,14 @@ from typing import List, Optional
 
 from .models import Invoice, InvoiceCreate, InvoiceStatusUpdate
 from . import service
-from auth.service import verify_token
+from backend.auth.service import verify_token
 
 # CORRECT IMPORTS FOR PAYMENTS (matches your folder structure)
-from invoices.payments.models import PaymentCreate
-from invoices.payments.service import create_payment
+from backend.invoices.payments.models import PaymentCreate
+from backend.invoices.payments.service import create_payment
 
 # DB dependency
-from database import get_db
+from backend.database import get_db
 
 router = APIRouter(prefix='/invoices', tags=['invoices'])
 

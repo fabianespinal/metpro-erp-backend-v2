@@ -3,15 +3,33 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
 
-load_dotenv()
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, declarative_base
+
+# Always load .env from the backend folder
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
 
 DATABASE_URL = os.getenv("DATABASE_URL")
+print("DEBUG DATABASE_URL =", DATABASE_URL)
+# ============================================================
+# SQLALCHEMY SETUP (Required for all models, including Contact)
+# ============================================================
+
+# SQLAlchemy engine
+engine = create_engine(DATABASE_URL)
+
+# SQLAlchemy session factory
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Base class for all SQLAlchemy models
+Base = declarative_base()
 
 
 # ============================================================
-# OLD FUNCTION (kept for backward compatibility)
+# LEGACY FUNCTION (kept for backward compatibility)
 # Many routers still depend on this.
 # ============================================================
+
 def get_db_connection():
     """
     Legacy connection function used by older modules.
@@ -26,18 +44,16 @@ def get_db_connection():
 
 # ============================================================
 # NEW FUNCTION (FastAPI dependency)
-# MUST return a real connection, NOT a context manager.
+# Returns a SQLAlchemy session for new modules
 # ============================================================
+
 def get_db():
     """
     FastAPI-compatible database dependency.
-    Opens a PostgreSQL connection and closes it automatically.
+    Opens a SQLAlchemy session and closes it automatically.
     """
-    conn = psycopg2.connect(
-        DATABASE_URL,
-        cursor_factory=RealDictCursor
-    )
+    db = SessionLocal()
     try:
-        yield conn
+        yield db
     finally:
-        conn.close()
+        db.close()

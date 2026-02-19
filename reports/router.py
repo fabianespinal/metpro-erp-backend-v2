@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from typing import Optional
 from . import service
-from auth.service import verify_token
+from backend.auth.service import verify_token
 
 router = APIRouter(prefix='/reports', tags=['reports'])
 

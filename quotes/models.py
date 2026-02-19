@@ -55,6 +55,7 @@ class QuoteBase(BaseModel):
 # -----------------------------
 class QuoteCreate(QuoteBase):
     items: List[QuoteItemBase]
+    contact_id: Optional[int] = None
 
 
 # -----------------------------
@@ -86,6 +87,7 @@ class QuoteResponse(BaseModel):
     id: int
     quote_number: str
     client_id: int
+    contact_id: Optional[int] = None
 
     project_name: Optional[str]
     notes: Optional[str]

@@ -5,7 +5,7 @@ from typing import List, Optional
 from fastapi import HTTPException
 import json
 from datetime import datetime, date
-from backend.database import get_db_connection
+from database import get_db_connection
 from psycopg2.extras import RealDictCursor
 
 

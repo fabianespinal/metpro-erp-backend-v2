@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from .models import PaymentCreate
 from .service import create_payment
-from backend.database import get_db
+from database import get_db
 
 router = APIRouter(prefix="/payments", tags=["payments"])
 

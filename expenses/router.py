@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from backend.database import get_db
+from database import get_db
 from .models import ExpenseCreate, ExpenseUpdate
 from .services import (
     create_expense,

@@ -10,7 +10,7 @@ from backend.invoices.payments.models import PaymentCreate
 from backend.invoices.payments.service import create_payment
 
 # DB dependency
-from backend.database import get_db
+from database import get_db
 
 router = APIRouter(prefix='/invoices', tags=['invoices'])
 

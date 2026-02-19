@@ -49,7 +49,7 @@ if os.path.exists("assets"):
 # ROUTERS (MUST BE IMPORTED AFTER CORS)
 # ============================================================
 
-from backend.database import get_db
+from database import get_db
 
 from backend.auth.router import router as auth_router
 from backend.users.router import router as users_router

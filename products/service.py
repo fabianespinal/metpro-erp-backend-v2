@@ -2,7 +2,7 @@ from typing import List
 from fastapi import HTTPException
 import csv
 import io
-from backend.database import get_db_connection
+from database import get_db_connection
 from psycopg2.extras import RealDictCursor
 
 

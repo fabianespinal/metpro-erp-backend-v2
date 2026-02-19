@@ -52,16 +52,16 @@ if os.path.exists("assets"):
 from database import get_db
 
 from auth.router import router as auth_router
-from backend.users.router import router as users_router
-from backend.clients.router import router as clients_router
-from backend.products.router import router as products_router
-from backend.quotes.router import router as quotes_router
-from backend.invoices.router import router as invoices_router
-from backend.projects.router import router as projects_router
-from backend.reports.router import router as reports_router
-from backend.pdf.router import router as pdf_router
-from backend.expenses.router import router as expenses_router
-from backend.contacts.router import router as contacts_router
+from users.router import router as users_router
+from clients.router import router as clients_router
+from products.router import router as products_router
+from quotes.router import router as quotes_router
+from invoices.router import router as invoices_router
+from projects.router import router as projects_router
+from reports.router import router as reports_router
+from pdf.router import router as pdf_router
+from expenses.router import router as expenses_router
+from contacts.router import router as contacts_router
 
 app.include_router(auth_router)
 app.include_router(users_router)

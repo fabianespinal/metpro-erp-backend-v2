@@ -355,5 +355,16 @@ def build_quote_invoice_pdf(
 
         pdf.ln(8)
 
+    # ==================== NOTES SECTION ====================
+    if notes:
+        pdf.set_font("Arial", "B", 9)
+        pdf.set_text_color(30, 30, 30)
+        pdf.cell(0, 6, "Notas", 0, 1, "L")
+        pdf.ln(1)
+        pdf.set_font("Arial", "", 8)
+        pdf.set_text_color(80, 80, 80)
+        pdf.multi_cell(0, 5, sanitize_text(str(notes)))
+        pdf.ln(6)
+
     add_footer_with_signature(pdf)
     return pdf

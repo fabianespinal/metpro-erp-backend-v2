@@ -1,7 +1,7 @@
 import io
 import os
 from fpdf import FPDF
-from backend.pdf.utils.text_utils import sanitize_text
+from pdf.utils.text_utils import sanitize_text
 
 # Import external footer helper
 try:

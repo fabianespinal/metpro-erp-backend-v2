@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from . import service
-from backend.auth.service import verify_token
+from auth.service import verify_token
 
 router = APIRouter(prefix='/pdf', tags=['pdf'])
 

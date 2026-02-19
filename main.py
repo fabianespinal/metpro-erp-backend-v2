@@ -51,7 +51,7 @@ if os.path.exists("assets"):
 
 from database import get_db
 
-from backend.auth.router import router as auth_router
+from auth.router import router as auth_router
 from backend.users.router import router as users_router
 from backend.clients.router import router as clients_router
 from backend.products.router import router as products_router

@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
-from backend.models.contact import Contact
-from backend.contacts.schemas import ContactCreate, ContactUpdate
+from models.contact import Contact
+from contacts.schemas import ContactCreate, ContactUpdate
 
 
 def create_contact(db: Session, contact_in: ContactCreate):

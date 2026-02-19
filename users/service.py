@@ -1,7 +1,7 @@
 from typing import List, Optional
 from fastapi import HTTPException
 from database import get_db_connection
-from backend.auth.service import get_password_hash, verify_password
+from auth.service import get_password_hash, verify_password
 from psycopg2.extras import RealDictCursor
 
 

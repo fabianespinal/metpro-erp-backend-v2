@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from typing import List
 from .models import User, UserCreate, UserUpdate, UserPasswordUpdate
 from . import service
-from backend.auth.service import verify_token
+from auth.service import verify_token
 
 router = APIRouter(prefix='/users', tags=['users'])
 

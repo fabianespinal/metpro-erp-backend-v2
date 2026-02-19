@@ -3,11 +3,11 @@ from typing import List, Optional
 
 from .models import Invoice, InvoiceCreate, InvoiceStatusUpdate
 from . import service
-from backend.auth.service import verify_token
+from auth.service import verify_token
 
-# CORRECT IMPORTS FOR PAYMENTS (matches your folder structure)
-from backend.invoices.payments.models import PaymentCreate
-from backend.invoices.payments.service import create_payment
+# CORRECT IMPORTS FOR PAYMENTS (flat structure)
+from invoices.payments.models import PaymentCreate
+from invoices.payments.service import create_payment
 
 # DB dependency
 from database import get_db

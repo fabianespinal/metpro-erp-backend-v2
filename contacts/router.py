@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from database import get_db
-from backend.contacts.schemas import ContactCreate, ContactRead, ContactUpdate
+from contacts.schemas import ContactCreate, ContactRead, ContactUpdate
 from .service import (
     create_contact,
     get_contacts_by_company,

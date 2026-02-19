@@ -1,5 +1,5 @@
 import io
-from backend.pdf.utils.layout_utils import build_quote_invoice_pdf
+from pdf.utils.layout_utils import build_quote_invoice_pdf
 
 def create_quote_pdf(
     doc_type,

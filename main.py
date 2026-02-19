@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 load_dotenv()
 
@@ -19,14 +20,18 @@ app = FastAPI(
 )
 
 # ============================================================
+# PROXY HEADERS (Railway / reverse proxy support)
+# ============================================================
+
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
+
+# ============================================================
 # CORS CONFIGURATION — LOCAL + CUSTOM DOMAIN
 # ============================================================
 
 allowed_origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-
-    # Frontend (Custom Domain)
     "https://app.metprord.com",
 ]
 

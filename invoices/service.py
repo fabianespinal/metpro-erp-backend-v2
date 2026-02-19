@@ -5,9 +5,11 @@ import json
 from database import get_db_connection
 from psycopg2.extras import RealDictCursor
 
+
 def generate_invoice_number() -> str:
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
     return f"INV-{timestamp}"
+
 
 def calculate_invoice_totals(items: List[dict], charges: dict) -> dict:
     items_total = sum(float(item["quantity"] or 0) * float(item["unit_price"] or 0) for item in items)
@@ -51,6 +53,7 @@ def calculate_invoice_totals(items: List[dict], charges: dict) -> dict:
         "grand_total": grand_total,
     }
 
+
 def create_invoice_from_quote(quote_id: str, notes: Optional[str] = None) -> dict:
     conn = None
     try:
@@ -88,40 +91,38 @@ def create_invoice_from_quote(quote_id: str, notes: Optional[str] = None) -> dic
                 charges = raw_charges or {}
         except Exception:
             charges = {
-                "supervision": True,
-                "supervision_percentage": 10.0,
-                "admin": True,
-                "admin_percentage": 4.0,
-                "insurance": True,
-                "insurance_percentage": 1.0,
-                "transport": True,
-                "transport_percentage": 3.0,
-                "contingency": True,
-                "contingency_percentage": 3.0,
+                "supervision": True, "supervision_percentage": 10.0,
+                "admin": True, "admin_percentage": 4.0,
+                "insurance": True, "insurance_percentage": 1.0,
+                "transport": True, "transport_percentage": 3.0,
+                "contingency": True, "contingency_percentage": 3.0,
             }
 
         totals = calculate_invoice_totals(items, charges)
+        grand_total = totals["grand_total"]
 
         invoice_number = generate_invoice_number()
         invoice_date = datetime.now().strftime("%Y-%m-%d")
 
-        cursor.execute(
-            """
+        cursor.execute("""
             INSERT INTO invoices
-            (quote_id, invoice_number, invoice_date, client_id, total_amount, status, notes)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            RETURNING id, invoice_number, quote_id, client_id, total_amount, status, invoice_date, notes, created_at, updated_at
-            """,
-            (
-                quote_id,
-                invoice_number,
-                invoice_date,
-                quote["client_id"],
-                totals["grand_total"],
-                "Pending",
-                notes,
-            ),
-        )
+                (quote_id, invoice_number, invoice_date, client_id,
+                 total_amount, amount_paid, amount_due, status, notes)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id, invoice_number, quote_id, client_id, total_amount,
+                      amount_paid, amount_due, status, invoice_date, notes,
+                      created_at, updated_at
+        """, (
+            quote_id,
+            invoice_number,
+            invoice_date,
+            quote["client_id"],
+            grand_total,
+            0,
+            grand_total,
+            "Pending",
+            notes,
+        ))
 
         invoice = dict(cursor.fetchone())
 
@@ -149,6 +150,7 @@ def create_invoice_from_quote(quote_id: str, notes: Optional[str] = None) -> dic
         if conn:
             conn.close()
 
+
 def get_all_invoices(client_id: Optional[int] = None, status: Optional[str] = None) -> List[dict]:
     conn = None
     try:
@@ -156,7 +158,7 @@ def get_all_invoices(client_id: Optional[int] = None, status: Optional[str] = No
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
         query = """
-            SELECT 
+            SELECT
                 i.id,
                 i.quote_id,
                 i.invoice_number,
@@ -164,6 +166,8 @@ def get_all_invoices(client_id: Optional[int] = None, status: Optional[str] = No
                 i.client_id,
                 c.company_name AS client_name,
                 i.total_amount,
+                COALESCE(i.amount_paid, 0) AS amount_paid,
+                COALESCE(i.amount_due, i.total_amount) AS amount_due,
                 i.status,
                 i.notes,
                 i.created_at,
@@ -189,6 +193,7 @@ def get_all_invoices(client_id: Optional[int] = None, status: Optional[str] = No
         if conn:
             conn.close()
 
+
 def get_invoice_by_id(invoice_id: int) -> dict:
     conn = None
     try:
@@ -201,6 +206,10 @@ def get_invoice_by_id(invoice_id: int) -> dict:
             raise HTTPException(status_code=404, detail="Invoice not found")
 
         invoice = dict(invoice)
+
+        # Ensure safe defaults
+        invoice["amount_paid"] = float(invoice.get("amount_paid") or 0)
+        invoice["amount_due"] = float(invoice.get("amount_due") or invoice.get("total_amount") or 0)
 
         cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s", (invoice["quote_id"],))
         items = [dict(row) for row in cursor.fetchall()]
@@ -227,6 +236,7 @@ def get_invoice_by_id(invoice_id: int) -> dict:
         if conn:
             conn.close()
 
+
 def get_invoice_by_number(invoice_number: str) -> dict:
     conn = None
     try:
@@ -244,6 +254,7 @@ def get_invoice_by_number(invoice_number: str) -> dict:
         if conn:
             conn.close()
 
+
 def update_invoice_status(invoice_id: int, status: str) -> dict:
     conn = None
     try:
@@ -257,21 +268,17 @@ def update_invoice_status(invoice_id: int, status: str) -> dict:
                 detail=f"Invalid status. Must be one of: {valid_statuses}",
             )
 
-        cursor.execute(
-            """
+        cursor.execute("""
             UPDATE invoices
             SET status = %s, updated_at = CURRENT_TIMESTAMP
             WHERE id = %s
             RETURNING *
-            """,
-            (status, invoice_id),
-        )
+        """, (status, invoice_id))
 
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Invoice not found")
 
         conn.commit()
-
         return dict(cursor.fetchone())
 
     except HTTPException:
@@ -286,6 +293,7 @@ def update_invoice_status(invoice_id: int, status: str) -> dict:
         if conn:
             conn.close()
 
+
 def delete_invoice(invoice_id: int) -> dict:
     conn = None
     try:
@@ -299,12 +307,9 @@ def delete_invoice(invoice_id: int) -> dict:
 
         quote_id = invoice["quote_id"]
 
+        cursor.execute("DELETE FROM invoice_payments WHERE invoice_id = %s", (invoice_id,))
         cursor.execute("DELETE FROM invoices WHERE id = %s", (invoice_id,))
-
-        cursor.execute(
-            "UPDATE quotes SET status = 'Approved' WHERE quote_id = %s",
-            (quote_id,),
-        )
+        cursor.execute("UPDATE quotes SET status = 'Approved' WHERE quote_id = %s", (quote_id,))
 
         conn.commit()
         return {"message": "Invoice deleted successfully", "quote_reverted": True}
@@ -320,30 +325,3 @@ def delete_invoice(invoice_id: int) -> dict:
     finally:
         if conn:
             conn.close()
-
-def get_invoice_with_payments(conn, invoice_id):
-    with conn.cursor(cursor_factory=RealDictCursor) as cur:
-        cur.execute("SELECT * FROM invoices WHERE id=%s", (invoice_id,))
-        invoice = cur.fetchone()
-
-        cur.execute("SELECT * FROM invoice_payments WHERE invoice_id=%s", (invoice_id,))
-        payments = cur.fetchall()
-
-        amount_paid = sum(p["amount"] for p in payments)
-        amount_due = invoice["total_amount"] - amount_paid
-
-        invoice["payments"] = payments
-        invoice["amount_paid"] = amount_paid
-        invoice["amount_due"] = amount_due
-
-        return invoice
-
-def create_payment(conn, invoice_id, data):
-    with conn.cursor(cursor_factory=RealDictCursor) as cur:
-        cur.execute("""
-            INSERT INTO invoice_payments (invoice_id, amount, method, notes)
-            VALUES (%s, %s, %s, %s)
-            RETURNING id
-        """, (invoice_id, data.amount, data.method, data.notes))
-        conn.commit()
-        return cur.fetchone()["id"]

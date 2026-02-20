@@ -54,14 +54,13 @@ def get_quote_pdf(quote_id: str, current_user: dict = Depends(verify_token)):
     # Load quote joined with the selected contact (not company default)
     quote = service.get_quote_with_contact(quote_id)
 
-    # Build client dict from the joined contact fields
+    # Build client dict — keys must match what layout_utils.py looks for
     client = {
-        "company_name":      quote["company_name"],
-        "address":           quote.get("company_address", ""),
-        "contact_name":      quote["contact_name"],
-        "contact_email":     quote.get("contact_email", ""),
-        "contact_phone":     quote.get("contact_phone", ""),
-        "contact_job_title": quote.get("contact_job_title", ""),
+        "company_name": quote["company_name"],
+        "address":      quote.get("company_address", ""),
+        "contact_name": quote.get("contact_name", ""),
+        "email":        quote.get("contact_email", ""),
+        "phone":        quote.get("contact_phone", ""),
     }
 
     # Parse included_charges — may come back as dict or JSON string

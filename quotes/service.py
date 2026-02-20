@@ -230,8 +230,7 @@ def get_quote_with_contact(quote_id: str) -> dict:
 
                 ct.name          AS contact_name,
                 ct.email         AS contact_email,
-                ct.phone         AS contact_phone,
-                ct.job_title     AS contact_job_title
+                ct.phone         AS contact_phone
 
             FROM quotes q
             JOIN clients  c  ON q.client_id  = c.id

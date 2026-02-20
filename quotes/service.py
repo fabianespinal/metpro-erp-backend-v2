@@ -93,7 +93,7 @@ def create_quote(
 
         # Validate that the contact belongs to the selected client
         cursor.execute(
-            "SELECT id FROM contacts WHERE id = %s AND client_id = %s",
+            "SELECT id FROM contacts WHERE id = %s AND company_id = %s",
             (contact_id, client_id),
         )
         if not cursor.fetchone():
@@ -235,7 +235,7 @@ def get_quote_with_contact(quote_id: str) -> dict:
 
             FROM quotes q
             JOIN clients  c  ON q.client_id  = c.id
-            JOIN contacts ct ON q.contact_id = ct.id
+            JOIN contacts ct ON q.contact_id = ct.id AND ct.company_id = q.client_id
             WHERE q.quote_id = %s
         """, (quote_id,))
         row = cursor.fetchone()

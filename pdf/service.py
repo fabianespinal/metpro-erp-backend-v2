@@ -27,10 +27,31 @@ def generate_quote_pdf(quote_id: str) -> StreamingResponse:
         quote = dict(quote)
 
         cursor.execute('SELECT * FROM clients WHERE id = %s', (quote['client_id'],))
-        client = cursor.fetchone()
-        if not client:
+        raw_client = cursor.fetchone()
+        if not raw_client:
             raise HTTPException(status_code=404, detail='Client not found')
-        client = dict(client)
+        raw_client = dict(raw_client)
+
+        # Fetch the contact selected on this quote — not any company default
+        contact = {}
+        if quote.get('contact_id'):
+            cursor.execute(
+                'SELECT name, email, phone FROM contacts WHERE id = %s',
+                (quote['contact_id'],)
+            )
+            row = cursor.fetchone()
+            if row:
+                contact = dict(row)
+
+        # Build client dict with keys that layout_utils.py expects
+        client = {
+            'company_name': raw_client.get('company_name', ''),
+            'address':      raw_client.get('address', ''),
+            'tax_id':       raw_client.get('tax_id', ''),
+            'contact_name': contact.get('name', ''),
+            'email':        contact.get('email', ''),
+            'phone':        contact.get('phone', ''),
+        }
 
         cursor.execute('SELECT * FROM quote_items WHERE quote_id = %s', (quote_id,))
         items = [dict(row) for row in cursor.fetchall()]
@@ -154,10 +175,30 @@ def generate_invoice_pdf(invoice_id: int) -> StreamingResponse:
         invoice = dict(invoice)
 
         cursor.execute('SELECT * FROM clients WHERE id = %s', (invoice['client_id'],))
-        client = cursor.fetchone()
-        if not client:
+        raw_client = cursor.fetchone()
+        if not raw_client:
             raise HTTPException(status_code=404, detail='Client not found')
-        client = dict(client)
+        raw_client = dict(raw_client)
+
+        # Fetch the contact stored on the invoice (carried over from the quote)
+        contact = {}
+        if invoice.get('contact_id'):
+            cursor.execute(
+                'SELECT name, email, phone FROM contacts WHERE id = %s',
+                (invoice['contact_id'],)
+            )
+            row = cursor.fetchone()
+            if row:
+                contact = dict(row)
+
+        client = {
+            'company_name': raw_client.get('company_name', ''),
+            'address':      raw_client.get('address', ''),
+            'tax_id':       raw_client.get('tax_id', ''),
+            'contact_name': contact.get('name', ''),
+            'email':        contact.get('email', ''),
+            'phone':        contact.get('phone', ''),
+        }
 
         cursor.execute('SELECT * FROM quote_items WHERE quote_id = %s', (invoice['quote_id'],))
         items = [dict(row) for row in cursor.fetchall()]
@@ -305,10 +346,29 @@ def generate_conduce_pdf(invoice_id: int) -> StreamingResponse:
         invoice = dict(invoice)
 
         cursor.execute('SELECT * FROM clients WHERE id = %s', (invoice['client_id'],))
-        client = cursor.fetchone()
-        if not client:
+        raw_client = cursor.fetchone()
+        if not raw_client:
             raise HTTPException(status_code=404, detail='Client not found')
-        client = dict(client)
+        raw_client = dict(raw_client)
+
+        # Fetch the contact stored on the invoice
+        contact = {}
+        if invoice.get('contact_id'):
+            cursor.execute(
+                'SELECT name, email, phone FROM contacts WHERE id = %s',
+                (invoice['contact_id'],)
+            )
+            row = cursor.fetchone()
+            if row:
+                contact = dict(row)
+
+        client = {
+            'company_name': raw_client.get('company_name', ''),
+            'address':      raw_client.get('address', ''),
+            'contact_name': contact.get('name', ''),
+            'email':        contact.get('email', ''),
+            'phone':        contact.get('phone', ''),
+        }
 
         cursor.execute('SELECT * FROM quote_items WHERE quote_id = %s', (invoice['quote_id'],))
         items = [dict(row) for row in cursor.fetchall()]

@@ -74,6 +74,7 @@ def _serialize_date(d) -> Optional[str]:
 # =============================================================================
 def create_quote(
     client_id: int,
+    contact_id: int,
     project_name: Optional[str],
     notes: Optional[str],
     items: List[dict],
@@ -90,18 +91,30 @@ def create_quote(
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Client not found")
 
+        # Validate that the contact belongs to the selected client
+        cursor.execute(
+            "SELECT id FROM contacts WHERE id = %s AND client_id = %s",
+            (contact_id, client_id),
+        )
+        if not cursor.fetchone():
+            raise HTTPException(
+                status_code=400,
+                detail=f"Contact {contact_id} does not belong to client {client_id}",
+            )
+
         quote_id = generate_quote_id()
         totals = calculate_quote_totals(items, included_charges)
 
         cursor.execute("""
             INSERT INTO quotes
-                (quote_id, client_id, project_name, notes, status,
+                (quote_id, client_id, contact_id, project_name, notes, status,
                  included_charges, total_amount, payment_terms, valid_until)
             VALUES
-                (%s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s)
+                (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s)
         """, (
             quote_id,
             client_id,
+            contact_id,
             project_name,
             notes,
             "Draft",
@@ -128,7 +141,7 @@ def create_quote(
         conn.commit()
 
         cursor.execute("""
-            SELECT quote_id, client_id, project_name, notes, status,
+            SELECT quote_id, client_id, contact_id, project_name, notes, status,
                    included_charges, total_amount, payment_terms, valid_until,
                    created_at, updated_at
             FROM quotes
@@ -163,7 +176,7 @@ def get_quote_by_id(quote_id: str) -> dict:
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
         cursor.execute("""
-            SELECT quote_id, client_id, project_name, notes, status,
+            SELECT quote_id, client_id, contact_id, project_name, notes, status,
                    included_charges, total_amount, payment_terms, valid_until,
                    created_at, updated_at
             FROM quotes
@@ -175,6 +188,62 @@ def get_quote_by_id(quote_id: str) -> dict:
             raise HTTPException(status_code=404, detail="Quote not found")
 
         quote = dict(quote)
+
+        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s", (quote_id,))
+        quote["items"] = cursor.fetchall()
+
+        return quote
+
+    finally:
+        if conn:
+            conn.close()
+
+
+def get_quote_with_contact(quote_id: str) -> dict:
+    """
+    Load a quote joined with full client and selected contact info.
+    Always use this function when building a PDF — never get_quote_by_id.
+    The contact comes from quotes.contact_id, not from any company default.
+    """
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+        cursor.execute("""
+            SELECT
+                q.quote_id,
+                q.client_id,
+                q.contact_id,
+                q.project_name,
+                q.notes,
+                q.status,
+                q.included_charges,
+                q.total_amount,
+                q.payment_terms,
+                q.valid_until,
+                q.created_at,
+                q.updated_at,
+
+                c.company_name,
+                c.address        AS company_address,
+
+                ct.name          AS contact_name,
+                ct.email         AS contact_email,
+                ct.phone         AS contact_phone,
+                ct.job_title     AS contact_job_title
+
+            FROM quotes q
+            JOIN clients  c  ON q.client_id  = c.id
+            JOIN contacts ct ON q.contact_id = ct.id
+            WHERE q.quote_id = %s
+        """, (quote_id,))
+        row = cursor.fetchone()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="Quote not found")
+
+        quote = dict(row)
 
         cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s", (quote_id,))
         quote["items"] = cursor.fetchall()
@@ -376,7 +445,7 @@ def duplicate_quote(quote_id: str) -> dict:
 
         # 1. Fetch original quote
         cursor.execute("""
-            SELECT quote_id, client_id, project_name, notes, status,
+            SELECT quote_id, client_id, contact_id, project_name, notes, status,
                    included_charges, total_amount, payment_terms, valid_until
             FROM quotes
             WHERE quote_id = %s
@@ -407,12 +476,13 @@ def duplicate_quote(quote_id: str) -> dict:
         # 6. Insert duplicated quote
         cursor.execute("""
             INSERT INTO quotes
-                (quote_id, client_id, project_name, notes, status,
+                (quote_id, client_id, contact_id, project_name, notes, status,
                  included_charges, total_amount, payment_terms, valid_until)
-            VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s)
         """, (
             new_quote_id,
             original["client_id"],
+            original["contact_id"],
             original.get("project_name"),
             f"[DUPLICATE] {original.get('notes', '')}" if original.get("notes") else None,
             "Draft",
@@ -516,7 +586,7 @@ def convert_quote_to_invoice(quote_id: str) -> dict:
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
         cursor.execute("""
-            SELECT quote_id, client_id, project_name, notes, status,
+            SELECT quote_id, client_id, contact_id, project_name, notes, status,
                    included_charges, total_amount, payment_terms, valid_until
             FROM quotes
             WHERE quote_id = %s
@@ -559,15 +629,16 @@ def convert_quote_to_invoice(quote_id: str) -> dict:
         # so the PDF context has everything it needs.
         cursor.execute("""
             INSERT INTO invoices
-                (quote_id, invoice_number, invoice_date, client_id,
+                (quote_id, invoice_number, invoice_date, client_id, contact_id,
                  total_amount, status, notes, payment_terms, valid_until)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
             quote_id,
             invoice_number,
             invoice_date,
             quote["client_id"],
+            quote["contact_id"],
             totals["grand_total"],
             "Pending",
             quote.get("notes"),

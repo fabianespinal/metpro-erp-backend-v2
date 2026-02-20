@@ -26,13 +26,18 @@ app = FastAPI(
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
 # ============================================================
-# CORS CONFIGURATION — LOCAL + CUSTOM DOMAIN
+# CORS CONFIGURATION — LOCAL + PRODUCTION + STAGING
 # ============================================================
 
 allowed_origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+
+    # Production frontend
     "https://app.metprord.com",
+
+    # Staging frontend
+    "https://metpro-erp-frontend-staging-production.up.railway.app",
 ]
 
 app.add_middleware(

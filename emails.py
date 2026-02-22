@@ -13,7 +13,7 @@ resend.api_key = RESEND_API_KEY
 def send_test_email():
     params = {
         "from": "onboarding@resend.dev",  # guaranteed to work
-        "to": ["youremail@example.com"],  # replace with your real email
+        "to": ["info@metprord.com"],  # replace with your real email
         "subject": "METPRO test email",
         "html": "<strong>If you see this, Resend + FastAPI works.</strong>",
     }

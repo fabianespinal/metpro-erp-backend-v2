@@ -4,16 +4,13 @@ from fastapi import APIRouter
 
 router = APIRouter()
 
-# Load API key safely
-RESEND_API_KEY = os.getenv("RESEND_API_KEY")
-resend.api_key = RESEND_API_KEY
-
+resend.api_key = os.getenv("RESEND_API_KEY")
 
 @router.post("/test-email")
 def send_test_email():
     params = {
-        "from": "onboarding@resend.dev",  # guaranteed to work
-        "to": ["info@metprord.com"],  # replace with your real email
+        "from": "onboarding@resend.dev",          # required for unverified domains
+        "to": ["info@metprord.com"],              # your real email
         "subject": "METPRO test email",
         "html": "<strong>If you see this, Resend + FastAPI works.</strong>",
     }

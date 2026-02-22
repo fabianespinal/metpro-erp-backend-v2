@@ -11,10 +11,9 @@ resend.api_key = RESEND_API_KEY
 
 @router.post("/test-email")
 def send_test_email():
-    # Use the guaranteed working sender
     params = {
-        "from": "onboarding@resend.dev",   # MUST use this unless your domain is verified
-        "to": ["youremail@example.com"],   # <-- replace with your real email
+        "from": "onboarding@resend.dev",  # guaranteed to work
+        "to": ["youremail@example.com"],  # replace with your real email
         "subject": "METPRO test email",
         "html": "<strong>If you see this, Resend + FastAPI works.</strong>",
     }

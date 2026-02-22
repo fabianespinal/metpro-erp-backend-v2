@@ -9,8 +9,8 @@ resend.api_key = os.getenv("RESEND_API_KEY")
 @router.post("/test-email")
 def send_test_email():
     params = {
-        "from": "onboarding@resend.dev",          # required for unverified domains
-        "to": ["fabianespinale@gmail.com"],              # your real email
+        "from": "fabianespinale@gmail.com",
+        "to": ["fabianespinale@gmail.com"],
         "subject": "METPRO test email",
         "html": "<strong>If you see this, Resend + FastAPI works.</strong>",
     }

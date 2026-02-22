@@ -10,7 +10,7 @@ resend.api_key = os.getenv("RESEND_API_KEY")
 def send_test_email():
     params = {
         "from": "onboarding@resend.dev",          # required for unverified domains
-        "to": ["info@metprord.com"],              # your real email
+        "to": ["fabianespinale@gmail.com"],              # your real email
         "subject": "METPRO test email",
         "html": "<strong>If you see this, Resend + FastAPI works.</strong>",
     }

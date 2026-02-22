@@ -87,7 +87,6 @@ app.include_router(reports_router)
 app.include_router(pdf_router)
 app.include_router(expenses_router)
 app.include_router(contacts_router)
-app = FastAPI()
 app.include_router(emails_router)
 
 

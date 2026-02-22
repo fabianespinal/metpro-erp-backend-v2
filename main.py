@@ -73,7 +73,7 @@ from pdf.router import router as pdf_router
 from expenses.router import router as expenses_router
 from contacts.router import router as contacts_router
 from fastapi import FastAPI
-from .emails import router as emails_router  # adjust import path
+from emails import router as emails_router  # adjust import path
 
 
 app.include_router(auth_router)

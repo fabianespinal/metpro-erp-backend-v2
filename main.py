@@ -72,6 +72,9 @@ from reports.router import router as reports_router
 from pdf.router import router as pdf_router
 from expenses.router import router as expenses_router
 from contacts.router import router as contacts_router
+from fastapi import FastAPI
+from .emails import router as emails_router  # adjust import path
+
 
 app.include_router(auth_router)
 app.include_router(users_router)
@@ -84,6 +87,9 @@ app.include_router(reports_router)
 app.include_router(pdf_router)
 app.include_router(expenses_router)
 app.include_router(contacts_router)
+app = FastAPI()
+app.include_router(emails_router)
+
 
 # ============================================================
 # ROOT & HEALTH ENDPOINTS

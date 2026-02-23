@@ -156,3 +156,87 @@ def convert_to_invoice(quote_id: str, current_user: dict = Depends(verify_token)
 def delete_quote(quote_id: str, current_user: dict = Depends(verify_token)):
     """Delete a quote"""
     return service.delete_quote(quote_id)
+
+@router.post("/{quote_id}/send")
+def send_quote_to_client(quote_id: int, current_user: dict = Depends(verify_token)):
+    """Generate PDF, build public link, render email template, and send quote to client."""
+
+    # 1. Fetch quote
+    quote = service.get_quote_by_id(quote_id)
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+
+    client = quote.get("client")
+    if not client:
+        raise HTTPException(status_code=400, detail="Quote has no client assigned")
+
+    client_email = client.get("email")
+    if not client_email:
+        raise HTTPException(
+            status_code=400,
+            detail="Client does not have an email address. Please update the client record."
+        )
+
+    # 2. Generate PDF using your existing PDF builder
+    try:
+        pdf_bytes = create_quote_pdf(
+            doc_type="COTIZACION",
+            doc_id=quote["quote_id"],
+            doc_date=quote.get("created_at") or quote.get("updated_at") or "",
+            client=quote["client"],
+            project_name=quote["project_name"],
+            notes=quote["notes"],
+            items=quote["items"],
+            charges=quote["charges"],
+            items_total=quote["items_total"],
+            total_discounts=quote["total_discounts"],
+            items_after_discount=quote["items_after_discount"],
+            supervision=quote["supervision"],
+            supervision_pct=quote["supervision_pct"],
+            admin=quote["admin"],
+            admin_pct=quote["admin_pct"],
+            insurance=quote["insurance"],
+            insurance_pct=quote["insurance_pct"],
+            transport=quote["transport"],
+            transport_pct=quote["transport_pct"],
+            contingency=quote["contingency"],
+            contingency_pct=quote["contingency_pct"],
+            subtotal_general=quote["subtotal_general"],
+            itbis=quote["itbis"],
+            grand_total=quote["grand_total"],
+            payment_terms=quote.get("payment_terms"),
+            valid_until=quote.get("valid_until"),
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"PDF generation failed: {str(e)}")
+
+    # 3. Build public link
+    public_url = f"https://app.metprord.com/quotes/{quote_id}"
+
+    # 4. Render branded METPRO email template
+    html = render_quote_email(
+        client_name=client.get("contact_name") or client.get("company_name"),
+        quote_id=quote_id,
+        public_url=public_url
+    )
+
+    # 5. Prepare email payload
+    params = {
+        "from": "info@metprord.com",  # after domain verification
+        "to": [client_email],
+        "subject": f"METPRO Cotización #{quote_id}",
+        "html": html,
+        "attachments": [
+            {
+                "filename": f"cotizacion_{quote_id}.pdf",
+                "content": base64.b64encode(pdf_bytes).decode(),
+            }
+        ],
+    }
+
+    # 6. Send email via Resend
+    try:
+        email = resend.Emails.send(params)
+        return {"status": "sent", "email_id": email.id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Email sending failed: {str(e)}")

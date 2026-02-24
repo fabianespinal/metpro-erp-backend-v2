@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Optional
 
@@ -27,6 +29,74 @@ def get_invoices(
 ):
     invoices = service.get_all_invoices(client_id, status)
     return [Invoice(**inv) for inv in invoices]
+
+@router.post('/{invoice_id}/send')
+def send_invoice(invoice_id: int, current_user: dict = Depends(verify_token)):
+    """Send invoice PDF to client via email"""
+    from email_service import send_invoice_email
+    from invoices.service import calculate_invoice_totals
+    from pdf.builder_invoice import create_invoice_pdf
+
+    invoice = service.get_invoice_with_contact(invoice_id)
+
+    client = {
+        "company_name": invoice["company_name"],
+        "address":      invoice.get("company_address", ""),
+        "contact_name": invoice.get("contact_name", ""),
+        "email":        invoice.get("contact_email", ""),
+        "phone":        invoice.get("contact_phone", ""),
+    }
+
+    raw_charges = invoice.get("included_charges") or {}
+    if isinstance(raw_charges, str):
+        raw_charges = json.loads(raw_charges)
+
+    items = invoice.get("items", [])
+    totals = calculate_invoice_totals(items, raw_charges)
+
+    pdf_stream = create_invoice_pdf(
+        doc_type="FACTURA",
+        doc_id=invoice["invoice_number"],
+        doc_date=str(invoice["invoice_date"])[:10] if invoice.get("invoice_date") else "",
+        client=client,
+        project_name=invoice.get("notes", ""),
+        notes=invoice.get("notes", ""),
+        items=items,
+        charges=raw_charges,
+        items_total=totals["items_total"],
+        total_discounts=totals["total_discounts"],
+        items_after_discount=totals["items_after_discount"],
+        supervision=totals["supervision"],
+        supervision_pct=raw_charges.get("supervision_percentage", 10.0),
+        admin=totals["admin"],
+        admin_pct=raw_charges.get("admin_percentage", 4.0),
+        insurance=totals["insurance"],
+        insurance_pct=raw_charges.get("insurance_percentage", 1.0),
+        transport=totals["transport"],
+        transport_pct=raw_charges.get("transport_percentage", 3.0),
+        contingency=totals["contingency"],
+        contingency_pct=raw_charges.get("contingency_percentage", 3.0),
+        subtotal_general=totals["subtotal_general"],
+        itbis=totals["itbis"],
+        grand_total=totals["grand_total"],
+        payment_terms=None,
+        valid_until=None,
+        amount_paid=invoice.get("amount_paid", 0),
+        amount_due=invoice.get("amount_due", 0),
+    )
+
+    pdf_bytes = pdf_stream.read()
+
+    send_invoice_email(
+        contact_email=invoice["contact_email"],
+        contact_name=invoice["contact_name"],
+        company_name=invoice["company_name"],
+        project_name=invoice.get("notes", ""),
+        invoice_id=str(invoice["invoice_number"]),
+        pdf_bytes=pdf_bytes,
+    )
+
+    return {"message": "Factura enviada exitosamente", "invoice_id": invoice_id}
 
 
 @router.get('/{invoice_id}', response_model=Invoice)

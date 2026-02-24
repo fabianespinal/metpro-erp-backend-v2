@@ -1,9 +1,10 @@
 import os
 import resend
+import base64
 
 resend.api_key = os.getenv("RESEND_API_KEY")
 
-FROM_EMAIL = "noreply@send.metprord.site"  # updated to metprord.site
+FROM_EMAIL = "noreply@send.metprord.site"  # verified domain
 
 
 def send_quote_email(contact_email, contact_name, company_name, project_name, quote_id, pdf_bytes):
@@ -23,7 +24,7 @@ def send_quote_email(contact_email, contact_name, company_name, project_name, qu
         "attachments": [
             {
                 "filename": f"cotizacion_{quote_id}.pdf",
-                "content": list(pdf_bytes),
+                "content": base64.b64encode(pdf_bytes).decode(),
             }
         ],
     }
@@ -47,7 +48,7 @@ def send_invoice_email(contact_email, contact_name, company_name, project_name, 
         "attachments": [
             {
                 "filename": f"factura_{invoice_id}.pdf",
-                "content": list(pdf_bytes),
+                "content": base64.b64encode(pdf_bytes).decode(),
             }
         ],
     }

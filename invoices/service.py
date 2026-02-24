@@ -325,3 +325,67 @@ def delete_invoice(invoice_id: int) -> dict:
     finally:
         if conn:
             conn.close()
+
+def get_invoice_with_contact(invoice_id: int) -> dict:
+    """
+    Load an invoice joined with full client and contact info.
+    Always use this when building a PDF or sending an email.
+    """
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+        cursor.execute("""
+            SELECT
+                i.id,
+                i.quote_id,
+                i.invoice_number,
+                i.invoice_date,
+                i.client_id,
+                i.total_amount,
+                COALESCE(i.amount_paid, 0) AS amount_paid,
+                COALESCE(i.amount_due, i.total_amount) AS amount_due,
+                i.status,
+                i.notes,
+                i.created_at,
+                i.updated_at,
+
+                c.company_name,
+                c.address AS company_address,
+
+                ct.name  AS contact_name,
+                ct.email AS contact_email,
+                ct.phone AS contact_phone
+
+            FROM invoices i
+            JOIN clients  c  ON i.client_id  = c.id
+            JOIN quotes   q  ON i.quote_id   = q.quote_id
+            JOIN contacts ct ON q.contact_id = ct.id AND ct.company_id = i.client_id
+            WHERE i.id = %s
+        """, (invoice_id,))
+
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+
+        invoice = dict(row)
+
+        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s", (invoice["quote_id"],))
+        invoice["items"] = [dict(r) for r in cursor.fetchall()]
+
+        cursor.execute("SELECT included_charges FROM quotes WHERE quote_id = %s", (invoice["quote_id"],))
+        quote_row = cursor.fetchone()
+        if quote_row:
+            raw_charges = quote_row["included_charges"]
+            if isinstance(raw_charges, str):
+                raw_charges = json.loads(raw_charges)
+            invoice["included_charges"] = raw_charges or {}
+        else:
+            invoice["included_charges"] = {}
+
+        return invoice
+
+    finally:
+        if conn:
+            conn.close()

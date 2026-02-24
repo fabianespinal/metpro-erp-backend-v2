@@ -3,7 +3,7 @@ import resend
 
 resend.api_key = os.getenv("RESEND_API_KEY")
 
-FROM_EMAIL = "noreply@send.metprord.link"
+FROM_EMAIL = "noreply@send.metprord.site"
 
 
 def send_quote_email(contact_email, contact_name, company_name, project_name, quote_id, pdf_bytes):

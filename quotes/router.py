@@ -44,6 +44,11 @@ def get_quotes(
     """Get all quotes with optional filters"""
     return service.get_all_quotes(client_id, status)
 
+@router.get('/{quote_id}/public')
+def get_quote_public(quote_id: str):
+    """Public endpoint — no auth required. Used for client view page."""
+    return service.get_quote_with_contact(quote_id)
+
 
 @router.post("/{quote_id}/send")
 def send_quote(quote_id: str, current_user: dict = Depends(verify_token)):

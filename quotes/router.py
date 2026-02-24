@@ -17,7 +17,7 @@ def create_quote(quote: QuoteCreate, current_user: dict = Depends(verify_token))
     charges = quote.included_charges.dict()
     result = service.create_quote(
         client_id=quote.client_id,
-        contact_id=quote.contact_id,       # <-- was missing, caused the 500
+        contact_id=quote.contact_id,
         project_name=quote.project_name,
         notes=quote.notes,
         items=items,
@@ -38,6 +38,74 @@ def get_quotes(
     return service.get_all_quotes(client_id, status)
 
 
+@router.post('/{quote_id}/send')
+def send_quote(quote_id: str, current_user: dict = Depends(verify_token)):
+    """Send quote PDF to client via email"""
+    from email_service import send_quote_email
+    from quotes.service import calculate_quote_totals
+
+    quote = service.get_quote_with_contact(quote_id)
+
+    client = {
+        "company_name": quote["company_name"],
+        "address":      quote.get("company_address", ""),
+        "contact_name": quote.get("contact_name", ""),
+        "email":        quote.get("contact_email", ""),
+        "phone":        quote.get("contact_phone", ""),
+    }
+
+    raw_charges = quote.get("included_charges") or {}
+    if isinstance(raw_charges, str):
+        raw_charges = json.loads(raw_charges)
+
+    items = quote.get("items", [])
+    totals = calculate_quote_totals(items, raw_charges)
+
+    pdf_stream = create_quote_pdf(
+        doc_type="COTIZACIÓN",
+        doc_id=quote["quote_id"],
+        doc_date=str(quote["created_at"])[:10] if quote.get("created_at") else "",
+        client=client,
+        project_name=quote.get("project_name", ""),
+        notes=quote.get("notes", ""),
+        items=items,
+        charges=raw_charges,
+        items_total=totals["items_total"],
+        total_discounts=totals["total_discounts"],
+        items_after_discount=totals["items_after_discount"],
+        supervision=totals["supervision"],
+        supervision_pct=raw_charges.get("supervision_percentage", 10.0),
+        admin=totals["admin"],
+        admin_pct=raw_charges.get("admin_percentage", 4.0),
+        insurance=totals["insurance"],
+        insurance_pct=raw_charges.get("insurance_percentage", 1.0),
+        transport=totals["transport"],
+        transport_pct=raw_charges.get("transport_percentage", 3.0),
+        contingency=totals["contingency"],
+        contingency_pct=raw_charges.get("contingency_percentage", 3.0),
+        subtotal_general=totals["subtotal_general"],
+        itbis=totals["itbis"],
+        grand_total=totals["grand_total"],
+        payment_terms=quote.get("payment_terms"),
+        valid_until=str(quote["valid_until"]) if quote.get("valid_until") else None,
+    )
+
+    pdf_bytes = pdf_stream.read()
+
+    send_quote_email(
+        contact_email=quote["contact_email"],
+        contact_name=quote["contact_name"],
+        company_name=quote["company_name"],
+        project_name=quote.get("project_name", ""),
+        quote_id=quote_id,
+        pdf_bytes=pdf_bytes,
+    )
+
+    service.update_quote_status(quote_id, "Sent")
+
+    return {"message": "Cotización enviada exitosamente", "quote_id": quote_id}
+
+
 @router.get('/{quote_id}')
 def get_quote(quote_id: str, current_user: dict = Depends(verify_token)):
     """Get a single quote"""
@@ -51,10 +119,8 @@ def get_quote_pdf(quote_id: str, current_user: dict = Depends(verify_token)):
     Uses get_quote_with_contact so the PDF always reflects the selected
     contact — never the company default.
     """
-    # Load quote joined with the selected contact (not company default)
     quote = service.get_quote_with_contact(quote_id)
 
-    # Build client dict — keys must match what layout_utils.py looks for
     client = {
         "company_name": quote["company_name"],
         "address":      quote.get("company_address", ""),
@@ -63,7 +129,6 @@ def get_quote_pdf(quote_id: str, current_user: dict = Depends(verify_token)):
         "phone":        quote.get("contact_phone", ""),
     }
 
-    # Parse included_charges — may come back as dict or JSON string
     raw_charges = quote.get("included_charges") or {}
     if isinstance(raw_charges, str):
         raw_charges = json.loads(raw_charges)

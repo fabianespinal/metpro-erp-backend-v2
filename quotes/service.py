@@ -293,7 +293,7 @@ def get_all_quotes(
 
 
 def update_quote(quote_id: str, quote_update) -> dict:
-    """Update an existing quote. Only Draft quotes can be edited."""
+    """Update an existing quote."""
     conn = None
     try:
         conn = get_db_connection()
@@ -304,11 +304,6 @@ def update_quote(quote_id: str, quote_update) -> dict:
         if not quote:
             raise HTTPException(status_code=404, detail="Quote not found")
 
-        if quote['status'] != 'Draft':
-            raise HTTPException(
-                status_code=400,
-                detail="Only Draft quotes can be edited"
-            )
 
         update_dict = quote_update.dict(exclude_unset=True)
 

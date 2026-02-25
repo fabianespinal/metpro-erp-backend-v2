@@ -4,9 +4,9 @@ from pdf.utils.text_utils import sanitize_text
 
 try:
     from pdf.utils.pdf_utils import add_footer_with_signature
-    print("✓ Signature function loaded")
+    print("✓ pdf_utils import OK")
 except ImportError as e:
-    print(f"✗ Signature import failed: {e}")
+    print(f"✗ pdf_utils import FAILED: {e}")
     def add_footer_with_signature(pdf):
         pass
 

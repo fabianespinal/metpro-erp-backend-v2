@@ -99,7 +99,7 @@ def send_invoice(invoice_id: int, current_user: dict = Depends(verify_token)):
     contact_name=invoice["contact_name"],
     company_name=invoice["company_name"],
     project_name=invoice.get("notes", ""),
-    invoice_id=str(invoice["invoice_id"]),   # ✔ numeric ID
+    invoice_id=str(invoice["id"]),   # ✔ numeric ID
     pdf_bytes=pdf_bytes,
 )
 

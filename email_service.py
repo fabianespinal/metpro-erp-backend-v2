@@ -7,9 +7,22 @@ FROM_EMAIL = "METPRO SRL <noreply@metprord.site>"
 
 
 # ---------------------------------------------------------
+# HELPERS
+# ---------------------------------------------------------
+def clean_text(value: str) -> str:
+    """Remove newlines and sanitize text for email subjects."""
+    if not value:
+        return ""
+    return value.replace("\n", " ").replace("\r", " ").strip()
+
+
+# ---------------------------------------------------------
 # QUOTES
 # ---------------------------------------------------------
 def send_quote_email(contact_email, contact_name, company_name, project_name, quote_id, pdf_bytes):
+
+    clean_title = clean_text(project_name or company_name)
+
     html = f"""
         <p>Estimado/a {contact_name},</p>
 
@@ -33,7 +46,7 @@ def send_quote_email(contact_email, contact_name, company_name, project_name, qu
     params = {
         "from": FROM_EMAIL,
         "to": [contact_email],
-        "subject": f"Cotización {quote_id} - {project_name or company_name}",
+        "subject": f"Cotización {quote_id} - {clean_title}",
         "html": html,
         "attachments": [
             {
@@ -50,6 +63,9 @@ def send_quote_email(contact_email, contact_name, company_name, project_name, qu
 # INVOICES
 # ---------------------------------------------------------
 def send_invoice_email(contact_email, contact_name, company_name, project_name, invoice_id, pdf_bytes):
+
+    clean_title = clean_text(project_name or company_name)
+
     html = f"""
         <p>Estimado/a {contact_name},</p>
 
@@ -73,7 +89,7 @@ def send_invoice_email(contact_email, contact_name, company_name, project_name, 
     params = {
         "from": FROM_EMAIL,
         "to": [contact_email],
-        "subject": f"Factura {invoice_id} - {project_name or company_name}",
+        "subject": f"Factura {invoice_id} - {clean_title}",
         "html": html,
         "attachments": [
             {

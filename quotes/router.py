@@ -44,10 +44,67 @@ def get_quotes(
     """Get all quotes with optional filters"""
     return service.get_all_quotes(client_id, status)
 
-@router.get('/{quote_id}/public')
+
+@router.get("/{quote_id}/public")
 def get_quote_public(quote_id: str):
     """Public endpoint — no auth required. Used for client view page."""
     return service.get_quote_with_contact(quote_id)
+
+
+@router.get("/{quote_id}/public/pdf")
+def get_quote_public_pdf(quote_id: str):
+    """Public PDF endpoint — no auth required."""
+    quote = service.get_quote_with_contact(quote_id)
+
+    client = {
+        "company_name": quote["company_name"],
+        "address":      quote.get("company_address", ""),
+        "contact_name": quote.get("contact_name", ""),
+        "email":        quote.get("contact_email", ""),
+        "phone":        quote.get("contact_phone", ""),
+    }
+
+    raw_charges = quote.get("included_charges") or {}
+    if isinstance(raw_charges, str):
+        raw_charges = json.loads(raw_charges)
+
+    items = quote.get("items", [])
+    totals = calculate_quote_totals(items, raw_charges)
+
+    pdf_stream = create_quote_pdf(
+        doc_type="COTIZACIÓN",
+        doc_id=quote["quote_id"],
+        doc_date=str(quote["created_at"])[:10] if quote.get("created_at") else "",
+        client=client,
+        project_name=quote.get("project_name", ""),
+        notes=quote.get("notes", ""),
+        items=items,
+        charges=raw_charges,
+        items_total=totals["items_total"],
+        total_discounts=totals["total_discounts"],
+        items_after_discount=totals["items_after_discount"],
+        supervision=totals["supervision"],
+        supervision_pct=raw_charges.get("supervision_percentage", 10.0),
+        admin=totals["admin"],
+        admin_pct=raw_charges.get("admin_percentage", 4.0),
+        insurance=totals["insurance"],
+        insurance_pct=raw_charges.get("insurance_percentage", 1.0),
+        transport=totals["transport"],
+        transport_pct=raw_charges.get("transport_percentage", 3.0),
+        contingency=totals["contingency"],
+        contingency_pct=raw_charges.get("contingency_percentage", 3.0),
+        subtotal_general=totals["subtotal_general"],
+        itbis=totals["itbis"],
+        grand_total=totals["grand_total"],
+        payment_terms=quote.get("payment_terms"),
+        valid_until=str(quote["valid_until"]) if quote.get("valid_until") else None,
+    )
+
+    return StreamingResponse(
+        pdf_stream,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"inline; filename=quote_{quote_id}.pdf"},
+    )
 
 
 @router.post("/{quote_id}/send")

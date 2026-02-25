@@ -4,7 +4,7 @@ def render_quote_email(client_name: str, quote_id: int, public_url: str) -> str:
         
         <!-- Logo -->
         <div style="text-align: center; margin-bottom: 30px;">
-            <img src="https://app.metprord.com/logo.png" alt="METPRO Logo" style="width: 180px;">
+            <img src="https://metprord.site/logo.png" alt="METPRO Logo" style="width: 180px;">
         </div>
 
         <!-- Card -->
@@ -42,13 +42,15 @@ def render_quote_email(client_name: str, quote_id: int, public_url: str) -> str:
 
     </div>
     """
+
+
 def render_invoice_email(client_name: str, invoice_id: int, public_url: str) -> str:
     return f"""
     <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #f4f4f4;">
         
         <!-- Logo -->
         <div style="text-align: center; margin-bottom: 30px;">
-            <img src="https://app.metprord.com/logo.png" alt="METPRO Logo" style="width: 180px;">
+            <img src="https://metprord.site/logo.png" alt="METPRO Logo" style="width: 180px;">
         </div>
 
         <!-- Card -->

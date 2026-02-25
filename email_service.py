@@ -4,7 +4,7 @@ import resend
 resend.api_key = os.getenv("RESEND_API_KEY")
 
 # Your verified domain
-FROM_EMAIL = "METPRO SRL <noreply@send.metprord.site>"
+FROM_EMAIL = "METPRO SRL <noreply@metprord.site>"
 
 
 # ---------------------------------------------------------

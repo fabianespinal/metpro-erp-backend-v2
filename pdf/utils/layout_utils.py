@@ -2,19 +2,17 @@ import os
 from fpdf import FPDF
 from pdf.utils.text_utils import sanitize_text
 
-try:
-    from pdf.utils.pdf_utils import add_footer_with_signature
-except ImportError:
-    def add_footer_with_signature(pdf):
-        pass
-
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 LOGO_PATH = os.path.join(BASE_DIR, "assets", "logo.png")
 
+
 def add_footer_with_signature(pdf):
-    sig_y = pdf.get_y()
-    if sig_y < 230:
-        sig_y = 230
+    """Add signature section with two columns to PDF"""
+
+    sig_y = pdf.get_y() + 10
+    if sig_y > 260:
+        pdf.add_page()
+        sig_y = 20
 
     FONT_PATH = os.path.join(BASE_DIR, "fonts", "GreatVibes-Regular.ttf")
 
@@ -26,7 +24,7 @@ def add_footer_with_signature(pdf):
         print(f"Font load failed: {e}")
 
     # Left — METPRO signature
-    pdf.set_xy(15, sig_y + 5)
+    pdf.set_xy(15, sig_y)
     if font_loaded:
         pdf.set_font("GreatVibes", "", 18)
     else:
@@ -35,17 +33,17 @@ def add_footer_with_signature(pdf):
     pdf.cell(75, 6, "Karmary Mata", 0, 1, "C")
 
     pdf.set_draw_color(180, 180, 180)
-    pdf.line(15, sig_y + 12, 90, sig_y + 12)
+    pdf.line(15, sig_y + 8, 90, sig_y + 8)
 
-    pdf.set_xy(15, sig_y + 17)
+    pdf.set_xy(15, sig_y + 10)
     pdf.set_font("Arial", "B", 7)
     pdf.set_text_color(100, 100, 100)
     pdf.cell(75, 4, "Representante Metpro", 0, 1, "C")
 
     # Right — client signature
-    pdf.line(115, sig_y + 12, 190, sig_y + 12)
+    pdf.line(115, sig_y + 8, 190, sig_y + 8)
 
-    pdf.set_xy(115, sig_y + 17)
+    pdf.set_xy(115, sig_y + 10)
     pdf.set_font("Arial", "B", 7)
     pdf.set_text_color(100, 100, 100)
     pdf.cell(75, 4, "Representante Cliente", 0, 1, "C")
@@ -63,7 +61,6 @@ def build_quote_invoice_pdf(
     amount_paid=0,
     amount_due=0
 ):
-    # Safe defaults
     payments = payments or []
     amount_paid = amount_paid or 0
     amount_due = amount_due or 0
@@ -333,7 +330,7 @@ def build_quote_invoice_pdf(
     pdf.ln(8)
 
     # ==================== PAYMENT SECTION (INVOICES ONLY) ====================
-    if 'COTIZACION' not in doc_type.upper().replace('Ó', 'O').replace('Ó', 'O'):
+    if doc_type != 'COTIZACION':
         pdf.set_font("Arial", "B", 10)
         pdf.set_text_color(30, 30, 30)
         pdf.cell(0, 6, "Resumen de Pagos", 0, 1, "L")
@@ -405,5 +402,7 @@ def build_quote_invoice_pdf(
         pdf.multi_cell(0, 5, sanitize_text(str(notes)))
         pdf.ln(6)
 
+    # ==================== SIGNATURES ====================
     add_footer_with_signature(pdf)
+
     return pdf

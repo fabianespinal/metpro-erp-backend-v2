@@ -150,3 +150,64 @@ def get_public_invoice(invoice_id: int):
         raise HTTPException(status_code=404, detail="Invoice not found")
 
     return invoice
+
+@router.get("/{invoice_id}/public/pdf")
+def get_public_invoice_pdf(invoice_id: int):
+    """Public PDF download for invoices"""
+    invoice = service.get_invoice_with_contact(invoice_id)
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+
+    raw_charges = invoice.get("included_charges") or {}
+    if isinstance(raw_charges, str):
+        raw_charges = json.loads(raw_charges)
+
+    items = invoice.get("items", [])
+    totals = calculate_invoice_totals(items, raw_charges)
+
+    pdf_stream = create_invoice_pdf(
+        doc_type="FACTURA",
+        doc_id=invoice["invoice_number"],
+        doc_date=str(invoice["invoice_date"])[:10] if invoice.get("invoice_date") else "",
+        client={
+            "company_name": invoice["company_name"],
+            "address": invoice.get("company_address", ""),
+            "contact_name": invoice.get("contact_name", ""),
+            "email": invoice.get("contact_email", ""),
+            "phone": invoice.get("contact_phone", ""),
+        },
+        project_name=invoice.get("notes", ""),
+        notes=invoice.get("notes", ""),
+        items=items,
+        charges=raw_charges,
+        items_total=totals["items_total"],
+        total_discounts=totals["total_discounts"],
+        items_after_discount=totals["items_after_discount"],
+        supervision=totals["supervision"],
+        supervision_pct=raw_charges.get("supervision_percentage", 10.0),
+        admin=totals["admin"],
+        admin_pct=raw_charges.get("admin_percentage", 4.0),
+        insurance=totals["insurance"],
+        insurance_pct=raw_charges.get("insurance_percentage", 1.0),
+        transport=totals["transport"],
+        transport_pct=raw_charges.get("transport_percentage", 3.0),
+        contingency=totals["contingency"],
+        contingency_pct=raw_charges.get("contingency_percentage", 3.0),
+        subtotal_general=totals["subtotal_general"],
+        itbis=totals["itbis"],
+        grand_total=totals["grand_total"],
+        payment_terms=None,
+        valid_until=None,
+        amount_paid=invoice.get("amount_paid", 0),
+        amount_due=invoice.get("amount_due", 0),
+    )
+
+    pdf_bytes = pdf_stream.read()
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename=factura_{invoice_id}.pdf"
+        }
+    )

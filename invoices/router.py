@@ -95,13 +95,13 @@ def send_invoice(invoice_id: int, current_user: dict = Depends(verify_token)):
 
     # FIXED: Correct signature for send_invoice_email
     send_invoice_email(
-        contact_email=invoice["contact_email"],
-        contact_name=invoice["contact_name"],
-        company_name=invoice["company_name"],
-        project_name=invoice.get("notes", ""),
-        invoice_id=str(invoice["invoice_number"]),
-        pdf_bytes=pdf_bytes,
-    )
+    contact_email=invoice["contact_email"],
+    contact_name=invoice["contact_name"],
+    company_name=invoice["company_name"],
+    project_name=invoice.get("notes", ""),
+    invoice_id=str(invoice["invoice_id"]),   # ✔ numeric ID
+    pdf_bytes=pdf_bytes,
+)
 
     return {"message": "Factura enviada exitosamente", "invoice_id": invoice_id}
 

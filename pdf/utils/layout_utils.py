@@ -4,14 +4,51 @@ from pdf.utils.text_utils import sanitize_text
 
 try:
     from pdf.utils.pdf_utils import add_footer_with_signature
-    print("✓ pdf_utils import OK")
-except ImportError as e:
-    print(f"✗ pdf_utils import FAILED: {e}")
+except ImportError:
     def add_footer_with_signature(pdf):
         pass
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 LOGO_PATH = os.path.join(BASE_DIR, "assets", "logo.png")
+
+def add_footer_with_signature(pdf):
+    sig_y = pdf.get_y()
+    if sig_y < 230:
+        sig_y = 230
+
+    FONT_PATH = os.path.join(BASE_DIR, "fonts", "GreatVibes-Regular.ttf")
+
+    font_loaded = False
+    try:
+        pdf.add_font("GreatVibes", "", FONT_PATH, uni=True)
+        font_loaded = True
+    except Exception as e:
+        print(f"Font load failed: {e}")
+
+    # Left — METPRO signature
+    pdf.set_xy(15, sig_y + 5)
+    if font_loaded:
+        pdf.set_font("GreatVibes", "", 18)
+    else:
+        pdf.set_font("Arial", "I", 12)
+    pdf.set_text_color(60, 60, 60)
+    pdf.cell(75, 6, "Karmary Mata", 0, 1, "C")
+
+    pdf.set_draw_color(180, 180, 180)
+    pdf.line(15, sig_y + 12, 90, sig_y + 12)
+
+    pdf.set_xy(15, sig_y + 17)
+    pdf.set_font("Arial", "B", 7)
+    pdf.set_text_color(100, 100, 100)
+    pdf.cell(75, 4, "Representante Metpro", 0, 1, "C")
+
+    # Right — client signature
+    pdf.line(115, sig_y + 12, 190, sig_y + 12)
+
+    pdf.set_xy(115, sig_y + 17)
+    pdf.set_font("Arial", "B", 7)
+    pdf.set_text_color(100, 100, 100)
+    pdf.cell(75, 4, "Representante Cliente", 0, 1, "C")
 
 
 def build_quote_invoice_pdf(

@@ -151,13 +151,17 @@ def get_public_invoice(invoice_id: int):
 
     return invoice
 
+from fastapi import Response
+
 @router.get("/{invoice_id}/public/pdf")
 def get_public_invoice_pdf(invoice_id: int):
     """Public PDF download for invoices"""
+
     invoice = service.get_invoice_with_contact(invoice_id)
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
 
+    # Parse charges
     raw_charges = invoice.get("included_charges") or {}
     if isinstance(raw_charges, str):
         raw_charges = json.loads(raw_charges)
@@ -165,6 +169,7 @@ def get_public_invoice_pdf(invoice_id: int):
     items = invoice.get("items", [])
     totals = calculate_invoice_totals(items, raw_charges)
 
+    # Build PDF
     pdf_stream = create_invoice_pdf(
         doc_type="FACTURA",
         doc_id=invoice["invoice_number"],

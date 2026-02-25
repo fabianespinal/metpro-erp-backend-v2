@@ -3,7 +3,6 @@ import resend
 
 resend.api_key = os.getenv("RESEND_API_KEY")
 
-# Your verified domain
 FROM_EMAIL = "METPRO SRL <noreply@metprord.site>"
 
 
@@ -17,14 +16,12 @@ def send_quote_email(contact_email, contact_name, company_name, project_name, qu
         <p>Adjunto encontrará la cotización <strong>{quote_id}</strong> correspondiente al proyecto <strong>{project_name or 'su proyecto'}</strong>.</p>
 
         <p>Puede ver la cotización en línea aquí:</p>
-        <p><a href="https://metprord.site/q/{quote_id}">Ver Cotización en línea</a></p>
 
-        <p>O descargar el PDF directamente:</p>
         <p>
-            <a href="https://api.metprord.com/quotes/{quote_id}/pdf"
-               style="display:inline-block;padding:10px 16px;background:#0052cc;color:white;
-                      text-decoration:none;border-radius:6px;font-weight:bold;">
-                Descargar PDF
+            <a href="https://metprord.site/q/{quote_id}"
+               style="display:inline-block;padding:12px 20px;background:#0052cc;color:white;
+                      text-decoration:none;border-radius:6px;font-weight:bold;font-size:15px;">
+                Ver Cotización en Línea
             </a>
         </p>
 
@@ -41,7 +38,7 @@ def send_quote_email(contact_email, contact_name, company_name, project_name, qu
         "attachments": [
             {
                 "filename": f"cotizacion_{quote_id}.pdf",
-                "content": list(pdf_bytes),  # Resend requires list of ints
+                "content": list(pdf_bytes),
             }
         ],
     }
@@ -59,14 +56,12 @@ def send_invoice_email(contact_email, contact_name, company_name, project_name, 
         <p>Adjunto encontrará la factura <strong>{invoice_id}</strong> correspondiente al proyecto <strong>{project_name or 'su proyecto'}</strong>.</p>
 
         <p>Puede ver la factura en línea aquí:</p>
-        <p><a href="https://metprord.site/inv/{invoice_id}">Ver Factura en línea</a></p>
 
-        <p>O descargar el PDF directamente:</p>
         <p>
-            <a href="https://api.metprord.com/invoices/{invoice_id}/pdf"
-               style="display:inline-block;padding:10px 16px;background:#0052cc;color:white;
-                      text-decoration:none;border-radius:6px;font-weight:bold;">
-                Descargar PDF
+            <a href="https://metprord.site/inv/{invoice_id}"
+               style="display:inline-block;padding:12px 20px;background:#0a7d4f;color:white;
+                      text-decoration:none;border-radius:6px;font-weight:bold;font-size:15px;">
+                Ver / Pagar Factura
             </a>
         </p>
 

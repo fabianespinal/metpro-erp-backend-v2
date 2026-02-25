@@ -42,6 +42,9 @@ def send_invoice(invoice_id: int, current_user: dict = Depends(verify_token)):
 
     invoice = service.get_invoice_with_contact(invoice_id)
 
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+
     client = {
         "company_name": invoice["company_name"],
         "address": invoice.get("company_address", ""),
@@ -90,6 +93,7 @@ def send_invoice(invoice_id: int, current_user: dict = Depends(verify_token)):
 
     pdf_bytes = pdf_stream.read()
 
+    # FIXED: Correct signature for send_invoice_email
     send_invoice_email(
         contact_email=invoice["contact_email"],
         contact_name=invoice["contact_name"],

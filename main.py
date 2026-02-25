@@ -38,6 +38,9 @@ allowed_origins = [
 
     # Staging frontend
     "https://metpro-erp-frontend-staging-production.up.railway.app",
+
+    # Public quotes/invoices site
+    "https://metprord.site",
 ]
 
 app.add_middleware(

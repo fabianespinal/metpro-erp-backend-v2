@@ -1,6 +1,5 @@
 import os
 import resend
-import base64
 
 resend.api_key = os.getenv("RESEND_API_KEY")
 
@@ -16,7 +15,7 @@ def send_quote_email(contact_email, contact_name, company_name, project_name, qu
             <p>Estimado/a {contact_name},</p>
             <p>Adjunto encontrará la cotización <strong>{quote_id}</strong> correspondiente al proyecto <strong>{project_name or 'su proyecto'}</strong>.</p>
             <p>También puede ver el documento en línea usando el siguiente enlace:</p>
-            <p><a href="https://app.metprord.com/quotes/{quote_id}/view">Ver Cotización en línea</a></p>
+            <a href="https://metprord.site/q/{quote_id}">Ver Cotización en línea</a>
             <p>Quedamos a su disposición para cualquier consulta.</p>
             <br/>
             <p>Atentamente,<br/>Equipo METPRO</p>
@@ -24,7 +23,7 @@ def send_quote_email(contact_email, contact_name, company_name, project_name, qu
         "attachments": [
             {
                 "filename": f"cotizacion_{quote_id}.pdf",
-                "content": base64.b64encode(pdf_bytes).decode(),
+                "content": list(pdf_bytes),
             }
         ],
     }
@@ -40,7 +39,7 @@ def send_invoice_email(contact_email, contact_name, company_name, project_name, 
             <p>Estimado/a {contact_name},</p>
             <p>Adjunto encontrará la factura <strong>{invoice_id}</strong> correspondiente al proyecto <strong>{project_name or 'su proyecto'}</strong>.</p>
             <p>También puede ver el documento en línea usando el siguiente enlace:</p>
-            <p><a href="https://app.metprord.com/invoices/{invoice_id}/view">Ver Factura en línea</a></p>
+            <a href="https://metprord.site/inv/{invoice_id}">Ver Factura en línea</a>
             <p>Quedamos a su disposición para cualquier consulta.</p>
             <br/>
             <p>Atentamente,<br/>Equipo METPRO</p>
@@ -48,7 +47,7 @@ def send_invoice_email(contact_email, contact_name, company_name, project_name, 
         "attachments": [
             {
                 "filename": f"factura_{invoice_id}.pdf",
-                "content": base64.b64encode(pdf_bytes).decode(),
+                "content": list(pdf_bytes),
             }
         ],
     }

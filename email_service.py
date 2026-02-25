@@ -77,7 +77,7 @@ def send_invoice_email(contact_email, contact_name, company_name, project_name, 
             <a href="https://metprord.site/inv/{invoice_id}"
                style="display:inline-block;padding:12px 20px;background:#0a7d4f;color:white;
                       text-decoration:none;border-radius:6px;font-weight:bold;font-size:15px;">
-                Ver / Pagar Factura
+                Ver Factura
             </a>
         </p>
 

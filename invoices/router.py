@@ -141,3 +141,12 @@ def add_payment(invoice_id: int, data: PaymentCreate):
         return {"payment_id": payment_id}
     finally:
         conn.close()
+
+@router.get("/{invoice_id}/public")
+def get_public_invoice(invoice_id: int):
+    """Public invoice view without authentication"""
+    invoice = service.get_invoice_with_contact(invoice_id)
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+
+    return invoice

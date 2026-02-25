@@ -296,7 +296,7 @@ def build_quote_invoice_pdf(
     pdf.ln(8)
 
     # ==================== PAYMENT SECTION (INVOICES ONLY) ====================
-    if doc_type != 'COTIZACION':
+    if 'COTIZACION' not in doc_type.upper().replace('Ó', 'O').replace('Ó', 'O'):
         pdf.set_font("Arial", "B", 10)
         pdf.set_text_color(30, 30, 30)
         pdf.cell(0, 6, "Resumen de Pagos", 0, 1, "L")

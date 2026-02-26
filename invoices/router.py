@@ -1,7 +1,7 @@
 import json
 import base64
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from typing import List, Optional
 
 from .models import Invoice, InvoiceCreate, InvoiceStatusUpdate
@@ -12,6 +12,7 @@ from invoices.payments.models import PaymentCreate
 from invoices.payments.service import create_payment
 
 from database import get_db_connection
+from psycopg2.extras import RealDictCursor
 
 from email_service import send_invoice_email
 from invoices.service import calculate_invoice_totals
@@ -41,7 +42,6 @@ def send_invoice(invoice_id: int, current_user: dict = Depends(verify_token)):
     """Send invoice PDF to client via email"""
 
     invoice = service.get_invoice_with_contact(invoice_id)
-
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
 
@@ -59,6 +59,19 @@ def send_invoice(invoice_id: int, current_user: dict = Depends(verify_token)):
 
     items = invoice.get("items", [])
     totals = calculate_invoice_totals(items, raw_charges)
+
+    # ---- NEW: fetch payments for this invoice so Historial de Pagos is populated ----
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute(
+            "SELECT * FROM invoice_payments WHERE invoice_id = %s ORDER BY id ASC",
+            (invoice_id,),
+        )
+        payments = [dict(row) for row in cursor.fetchall()]
+    finally:
+        conn.close()
+    # -------------------------------------------------------------------------------
 
     pdf_stream = create_invoice_pdf(
         doc_type="FACTURA",
@@ -89,19 +102,19 @@ def send_invoice(invoice_id: int, current_user: dict = Depends(verify_token)):
         valid_until=None,
         amount_paid=invoice.get("amount_paid", 0),
         amount_due=invoice.get("amount_due", 0),
+        payments=payments,  # ✅ now the PDF has the full payment history
     )
 
     pdf_bytes = pdf_stream.read()
 
-    # FIXED: Correct signature for send_invoice_email
     send_invoice_email(
-    contact_email=invoice["contact_email"],
-    contact_name=invoice["contact_name"],
-    company_name=invoice["company_name"],
-    project_name=invoice.get("notes", ""),
-    invoice_id=str(invoice["id"]),   # ✔ numeric ID
-    pdf_bytes=pdf_bytes,
-)
+        contact_email=invoice["contact_email"],
+        contact_name=invoice["contact_name"],
+        company_name=invoice["company_name"],
+        project_name=invoice.get("notes", ""),
+        invoice_id=str(invoice["id"]),
+        pdf_bytes=pdf_bytes,
+    )
 
     return {"message": "Factura enviada exitosamente", "invoice_id": invoice_id}
 
@@ -142,6 +155,7 @@ def add_payment(invoice_id: int, data: PaymentCreate):
     finally:
         conn.close()
 
+
 @router.get("/{invoice_id}/public")
 def get_public_invoice(invoice_id: int):
     """Public invoice view without authentication"""
@@ -151,7 +165,6 @@ def get_public_invoice(invoice_id: int):
 
     return invoice
 
-from fastapi import Response
 
 @router.get("/{invoice_id}/public/pdf")
 def get_public_invoice_pdf(invoice_id: int):
@@ -161,7 +174,6 @@ def get_public_invoice_pdf(invoice_id: int):
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
 
-    # Parse charges
     raw_charges = invoice.get("included_charges") or {}
     if isinstance(raw_charges, str):
         raw_charges = json.loads(raw_charges)
@@ -169,7 +181,19 @@ def get_public_invoice_pdf(invoice_id: int):
     items = invoice.get("items", [])
     totals = calculate_invoice_totals(items, raw_charges)
 
-    # Build PDF
+    # ---- NEW: fetch payments for this invoice so Historial de Pagos matches download ----
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute(
+            "SELECT * FROM invoice_payments WHERE invoice_id = %s ORDER BY id ASC",
+            (invoice_id,),
+        )
+        payments = [dict(row) for row in cursor.fetchall()]
+    finally:
+        conn.close()
+    # -------------------------------------------------------------------------------
+
     pdf_stream = create_invoice_pdf(
         doc_type="FACTURA",
         doc_id=invoice["invoice_number"],
@@ -205,6 +229,7 @@ def get_public_invoice_pdf(invoice_id: int):
         valid_until=None,
         amount_paid=invoice.get("amount_paid", 0),
         amount_due=invoice.get("amount_due", 0),
+        payments=payments,  # ✅ same payment history as internal/download PDF
     )
 
     pdf_bytes = pdf_stream.read()
@@ -214,5 +239,5 @@ def get_public_invoice_pdf(invoice_id: int):
         media_type="application/pdf",
         headers={
             "Content-Disposition": f"attachment; filename=factura_{invoice_id}.pdf"
-        }
+        },
     )

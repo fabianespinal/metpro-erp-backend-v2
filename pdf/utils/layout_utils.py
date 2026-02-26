@@ -406,5 +406,5 @@ def build_quote_invoice_pdf(
     # ==================== SIGNATURES ====================
     add_footer_with_signature(pdf)
 
-    pdf_bytes = pdf.output(dest="S").encode("latin1")
+    pdf_bytes = pdf.output(dest="S")   # already bytearray
     return io.BytesIO(pdf_bytes)

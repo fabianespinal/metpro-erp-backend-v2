@@ -307,7 +307,7 @@ def delete_invoice(invoice_id: int) -> dict:
 
         quote_id = invoice["quote_id"]
 
-        cursor.execute("DELETE FROM invoice_payments WHERE invoice_id = %s", (invoice_id,))
+        cursor.execute("DELETE FROM invoice_payments WHERE id = %s", (invoice_id,))
         cursor.execute("DELETE FROM invoices WHERE id = %s", (invoice_id,))
         cursor.execute("UPDATE quotes SET status = 'Approved' WHERE quote_id = %s", (quote_id,))
 

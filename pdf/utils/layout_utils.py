@@ -1,3 +1,4 @@
+import io
 import os
 from fpdf import FPDF
 from pdf.utils.text_utils import sanitize_text
@@ -405,4 +406,5 @@ def build_quote_invoice_pdf(
     # ==================== SIGNATURES ====================
     add_footer_with_signature(pdf)
 
-    return pdf
+    pdf_bytes = pdf.output(dest="S").encode("latin1")
+    return io.BytesIO(pdf_bytes)

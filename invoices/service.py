@@ -361,7 +361,7 @@ def get_invoice_with_contact(invoice_id: int) -> dict:
             FROM invoices i
             JOIN clients  c  ON i.client_id  = c.id
             JOIN quotes   q  ON i.quote_id   = q.quote_id
-            JOIN contacts ct ON q.contact_id = ct.id AND ct.company_id = i.client_id
+            JOIN contacts ct ON i.contact_id = ct.id
             WHERE i.id = %s
         """, (invoice_id,))
 

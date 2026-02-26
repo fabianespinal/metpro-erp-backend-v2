@@ -12,7 +12,10 @@ from .services import (
 router = APIRouter(prefix="/expenses", tags=["Expenses"])
 
 
-@router.post("/", response_model=dict)
+# -----------------------------
+# CREATE EXPENSE
+# -----------------------------
+@router.post("", response_model=dict)
 def create_expense_endpoint(expense: ExpenseCreate):
     conn = get_db_connection()
     try:
@@ -23,7 +26,10 @@ def create_expense_endpoint(expense: ExpenseCreate):
         conn.close()
 
 
-@router.get("/", response_model=list)
+# -----------------------------
+# LIST EXPENSES
+# -----------------------------
+@router.get("", response_model=list)
 def list_expenses_endpoint():
     conn = get_db_connection()
     try:
@@ -32,6 +38,9 @@ def list_expenses_endpoint():
         conn.close()
 
 
+# -----------------------------
+# GET SINGLE EXPENSE
+# -----------------------------
 @router.get("/{expense_id}", response_model=dict)
 def get_expense_endpoint(expense_id: int):
     conn = get_db_connection()
@@ -44,6 +53,9 @@ def get_expense_endpoint(expense_id: int):
         conn.close()
 
 
+# -----------------------------
+# UPDATE EXPENSE
+# -----------------------------
 @router.put("/{expense_id}", response_model=dict)
 def update_expense_endpoint(expense_id: int, data: ExpenseUpdate):
     conn = get_db_connection()
@@ -57,6 +69,9 @@ def update_expense_endpoint(expense_id: int, data: ExpenseUpdate):
         conn.close()
 
 
+# -----------------------------
+# DELETE EXPENSE
+# -----------------------------
 @router.delete("/{expense_id}", response_model=dict)
 def delete_expense_endpoint(expense_id: int):
     conn = get_db_connection()

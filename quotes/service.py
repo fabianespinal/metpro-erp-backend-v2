@@ -591,6 +591,7 @@ def convert_quote_to_invoice(quote_id: str) -> dict:
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
+        # 1. Load quote
         cursor.execute("""
             SELECT quote_id, client_id, contact_id, project_name, notes, status,
                    included_charges, total_amount, payment_terms, valid_until
@@ -609,6 +610,7 @@ def convert_quote_to_invoice(quote_id: str) -> dict:
                 detail="Only approved quotes can be converted to invoices",
             )
 
+        # 2. Prevent duplicate invoices
         cursor.execute("SELECT id FROM invoices WHERE quote_id = %s", (quote_id,))
         if cursor.fetchone():
             raise HTTPException(
@@ -616,23 +618,20 @@ def convert_quote_to_invoice(quote_id: str) -> dict:
                 detail="Invoice already exists for this quote",
             )
 
+        # 3. Load quote items
         cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s", (quote_id,))
         items = [dict(row) for row in cursor.fetchall()]
 
         raw_charges = quote.get("included_charges")
-        if isinstance(raw_charges, str):
-            charges = json.loads(raw_charges)
-        else:
-            charges = raw_charges or {}
+        charges = json.loads(raw_charges) if isinstance(raw_charges, str) else (raw_charges or {})
 
         totals = calculate_quote_totals(items, charges)
 
+        # 4. Create invoice
         timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
         invoice_number = f"INV-{timestamp}"
         invoice_date = datetime.now().strftime("%Y-%m-%d")
 
-        # payment_terms and valid_until are passed through to the invoice
-        # so the PDF context has everything it needs.
         cursor.execute("""
             INSERT INTO invoices
                 (quote_id, invoice_number, invoice_date, client_id, contact_id,
@@ -652,9 +651,9 @@ def convert_quote_to_invoice(quote_id: str) -> dict:
             _serialize_date(quote.get("valid_until")),
         ))
 
-        invoiceid = cursor.fetchone()["id"]
+        invoice_id = cursor.fetchone()["id"]   # FIXED
 
-        # Insert invoice items
+        # 5. Insert invoice items
         for item in items:
             line_total = (item["quantity"] * item["unit_price"]) - item.get("discount_value", 0)
             cursor.execute("""
@@ -662,7 +661,7 @@ def convert_quote_to_invoice(quote_id: str) -> dict:
                     (invoice_id, product_id, description, quantity, unit_price, discount, total)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
             """, (
-                invoice_id,
+                invoice_id,                     # FIXED
                 item["product_id"],
                 item["product_name"],
                 item["quantity"],
@@ -673,17 +672,16 @@ def convert_quote_to_invoice(quote_id: str) -> dict:
 
         conn.commit()
 
+        # 6. Return invoice with items
         cursor.execute("""
-            SELECT i.*,
-                   q.payment_terms,
-                   q.valid_until
+            SELECT i.*, q.payment_terms, q.valid_until
             FROM invoices i
             JOIN quotes q ON i.quote_id = q.quote_id
             WHERE i.id = %s
-        """, (invoice_id,))
+        """, (invoice_id,))                     # FIXED
         new_invoice = dict(cursor.fetchone())
 
-        cursor.execute("SELECT * FROM invoice_items WHERE invoice_id = %s", (id,))
+        cursor.execute("SELECT * FROM invoice_items WHERE invoice_id = %s", (invoice_id,))  # FIXED
         new_invoice["items"] = cursor.fetchall()
 
         return new_invoice

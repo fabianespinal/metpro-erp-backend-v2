@@ -350,7 +350,13 @@ def update_quote(quote_id: str, quote_update) -> dict:
             current_items = [dict(row) for row in cursor.fetchall()]
 
             if included_charges is not None:
-                charges = included_charges.dict() if hasattr(included_charges, 'dict') else included_charges
+                if hasattr(included_charges, 'dict'):
+                    charges = included_charges.dict()
+                elif isinstance(included_charges, str):
+                    import json
+                    charges = json.loads(included_charges)
+                else:
+                    charges = included_charges
             else:
                 cursor.execute(
                     "SELECT included_charges FROM quotes WHERE quote_id = %s", (quote_id,)

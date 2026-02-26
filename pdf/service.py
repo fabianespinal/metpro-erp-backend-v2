@@ -237,7 +237,7 @@ def generate_invoice_pdf(invoice_id: int) -> StreamingResponse:
 
         # Fetch payments
         cursor.execute(
-            'SELECT * FROM invoice_payments WHERE invoiceid = %s ORDER BY id ASC',
+            'SELECT * FROM invoice_payments WHERE invoice_id = %s ORDER BY id ASC',
             (invoice_id,)
         )
         payments = [dict(row) for row in cursor.fetchall()]

@@ -15,7 +15,7 @@ def create_payment(conn, invoice_id: int, data):
         cursor.execute("""
             SELECT COALESCE(SUM(amount), 0) AS total_paid
             FROM invoice_payments
-            WHERE invoice_id = %s
+            WHERE id = %s
         """, (invoice_id,))
         total_paid = float(cursor.fetchone()["total_paid"])
 
@@ -47,6 +47,6 @@ def create_payment(conn, invoice_id: int, data):
 def get_payments_for_invoice(conn, invoice_id: int):
     with conn.cursor(cursor_factory=RealDictCursor) as cursor:
         cursor.execute("""
-            SELECT * FROM invoice_payments WHERE invoice_id = %s ORDER BY id ASC
+            SELECT * FROM invoice_payments WHERE id = %s ORDER BY id ASC
         """, (invoice_id,))
         return cursor.fetchall()

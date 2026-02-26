@@ -4,11 +4,10 @@ def create_expense(conn, expense: ExpenseCreate):
     with conn.cursor() as cur:
         cur.execute("""
             INSERT INTO expenses 
-            (client_id, date, category, description, amount, payment_method, project_id, quote_id)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+            (date, category, description, amount, payment_method, project_id, quote_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             RETURNING expense_id;
         """, (
-            expense.client_id,
             expense.date,
             expense.category,
             expense.description,
@@ -17,7 +16,10 @@ def create_expense(conn, expense: ExpenseCreate):
             expense.project_id,
             expense.quote_id
         ))
-        return cur.fetchone()[0]
+        row = cur.fetchone()
+        if not row:
+            raise RuntimeError("INSERT failed — no expense_id returned")
+        return row[0]
 
 
 def get_expenses(conn):

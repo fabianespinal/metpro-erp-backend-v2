@@ -2,24 +2,26 @@ from .models import ExpenseCreate, ExpenseUpdate
 
 def create_expense(conn, expense: ExpenseCreate):
     with conn.cursor() as cur:
-        cur.execute("""
-            INSERT INTO expenses 
-            (date, category, description, amount, payment_method, project_id, quote_id)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            RETURNING expense_id;
-        """, (
-            expense.date,
-            expense.category,
-            expense.description,
-            expense.amount,
-            expense.payment_method,
-            expense.project_id,
-            expense.quote_id
-        ))
-        row = cur.fetchone()
-        if not row:
-            raise RuntimeError("INSERT failed — no expense_id returned")
-        return row[0]
+        try:
+            cur.execute("""
+                INSERT INTO expenses 
+                (date, category, description, amount, payment_method, project_id, quote_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING expense_id;
+            """, (
+                expense.date,
+                expense.category,
+                expense.description,
+                expense.amount,
+                expense.payment_method,
+                str(expense.project_id) if expense.project_id else None,
+                str(expense.quote_id) if expense.quote_id else None
+            ))
+            row = cur.fetchone()
+            return row[0]
+        except Exception as e:
+            print("🔥 REAL SQL ERROR:", e)
+            raise
 
 
 def get_expenses(conn):

@@ -2,8 +2,8 @@ from pydantic import BaseModel
 from typing import Optional
 from datetime import date
 
+
 class ExpenseBase(BaseModel):
-    client_id: Optional[int] = None
     date: date
     category: str
     description: Optional[str] = None
@@ -12,8 +12,10 @@ class ExpenseBase(BaseModel):
     project_id: Optional[str] = None
     quote_id: Optional[str] = None
 
+
 class ExpenseCreate(ExpenseBase):
     pass
+
 
 class ExpenseUpdate(BaseModel):
     date: Optional[date] = None
@@ -23,6 +25,7 @@ class ExpenseUpdate(BaseModel):
     payment_method: Optional[str] = None
     project_id: Optional[str] = None
     quote_id: Optional[str] = None
+
 
 class Expense(ExpenseBase):
     expense_id: int

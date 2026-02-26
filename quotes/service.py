@@ -304,19 +304,16 @@ def update_quote(quote_id: str, quote_update) -> dict:
         if not quote:
             raise HTTPException(status_code=404, detail="Quote not found")
 
-
         update_dict = quote_update.dict(exclude_unset=True)
 
         # Pull these out — they're handled separately below.
         items = update_dict.pop('items', None)
         included_charges = update_dict.pop('included_charges', None)
 
-        # valid_until comes in as a date object from Pydantic. Serialize it
-        # so psycopg2 doesn't choke when building the dynamic SET clause.
         if 'valid_until' in update_dict and update_dict['valid_until'] is not None:
             update_dict['valid_until'] = _serialize_date(update_dict['valid_until'])
 
-        # Scalar fields update (project_name, notes, payment_terms, valid_until)
+        # Scalar fields update
         if update_dict:
             set_clause = ", ".join([f"{key} = %s" for key in update_dict.keys()])
             query = f"""
@@ -331,15 +328,21 @@ def update_quote(quote_id: str, quote_update) -> dict:
             cursor.execute("DELETE FROM quote_items WHERE quote_id = %s", (quote_id,))
 
             for item in items:
+                # Normalize — item may be a dict or a Pydantic model
+                if hasattr(item, 'dict'):
+                    item = item.dict()
+                elif isinstance(item, str):
+                    item = json.loads(item)
+
                 cursor.execute("""
                     INSERT INTO quote_items
                         (quote_id, product_name, quantity, unit_price, discount_type, discount_value)
                     VALUES (%s, %s, %s, %s, %s, %s)
                 """, (
                     quote_id,
-                    item["product_name"],
-                    item["quantity"],
-                    item["unit_price"],
+                    item.get("product_name", ""),
+                    item.get("quantity", 1),
+                    item.get("unit_price", 0),
                     item.get("discount_type", "none"),
                     item.get("discount_value", 0.0),
                 ))
@@ -353,7 +356,6 @@ def update_quote(quote_id: str, quote_update) -> dict:
                 if hasattr(included_charges, 'dict'):
                     charges = included_charges.dict()
                 elif isinstance(included_charges, str):
-                    import json
                     charges = json.loads(included_charges)
                 else:
                     charges = included_charges
@@ -362,7 +364,11 @@ def update_quote(quote_id: str, quote_update) -> dict:
                     "SELECT included_charges FROM quotes WHERE quote_id = %s", (quote_id,)
                 )
                 row = cursor.fetchone()
-                charges = row['included_charges'] if row else {}
+                raw = row['included_charges'] if row else {}
+                if isinstance(raw, str):
+                    charges = json.loads(raw)
+                else:
+                    charges = raw or {}
 
             totals = calculate_quote_totals(current_items, charges)
 

@@ -4,10 +4,10 @@ def create_expense(conn, expense: ExpenseCreate):
     with conn.cursor() as cur:
         try:
             cur.execute("""
-                INSERT INTO expenses 
-                (date, category, description, amount, payment_method, project_id, quote_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                RETURNING expense_id;
+            INSERT INTO expenses
+            (date, category, description, amount, payment_method, project_id, quote_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING expense_id;
             """, (
                 expense.date,
                 expense.category,
@@ -18,7 +18,15 @@ def create_expense(conn, expense: ExpenseCreate):
                 str(expense.quote_id) if expense.quote_id else None
             ))
             row = cur.fetchone()
-            return row[0]
+            
+            # Handle both dict and tuple cursor types
+            if isinstance(row, dict):
+                return row['expense_id']
+            elif row:
+                return row[0]
+            else:
+                raise Exception("Insert failed to return ID")
+                
         except Exception as e:
             print("🔥 REAL SQL ERROR:", e)
             raise

@@ -6,6 +6,7 @@ from datetime import date
 class ExpenseBase(BaseModel):
     date: date
     category: str
+    client_name: Optional[str] = None   # <-- ADD THIS
     description: Optional[str] = None
     amount: float
     payment_method: Optional[str] = None
@@ -20,6 +21,7 @@ class ExpenseCreate(ExpenseBase):
 class ExpenseUpdate(BaseModel):
     date: Optional[date] = None
     category: Optional[str] = None
+    client_name: Optional[str] = None   # <-- ADD THIS
     description: Optional[str] = None
     amount: Optional[float] = None
     payment_method: Optional[str] = None

@@ -1,14 +1,27 @@
+from fastapi import HTTPException
 from .models import ExpenseCreate, ExpenseUpdate
 
+def _resolve_client_name(conn, client_id):
+    """Look up clients.company_name for a client_id. None if no client_id."""
+    if client_id is None:
+        return None
+    with conn.cursor() as cur:
+        cur.execute("SELECT company_name FROM clients WHERE id = %s", (client_id,))
+        row = cur.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Client not found")
+    return row[0]
+
 def create_expense(conn, expense: ExpenseCreate):
+    client_name = _resolve_client_name(conn, expense.client_id)
     with conn.cursor() as cur:
         cur.execute("""
             INSERT INTO expenses 
-            (client_id, date, category, description, amount, payment_method, project_id, quote_id)
+            (client_name, date, category, description, amount, payment_method, project_id, quote_id)
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
             RETURNING expense_id;
         """, (
-            expense.client_id,
+            client_name,
             expense.date,
             expense.category,
             expense.description,

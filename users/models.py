@@ -1,3 +1,4 @@
+from datetime import datetime
 from pydantic import BaseModel
 from typing import Optional
 
@@ -19,7 +20,7 @@ class UserUpdate(BaseModel):
 class User(UserBase):
     id: str
     is_active: bool
-    created_at: str
+    created_at: datetime
     
     class Config:
         from_attributes = True

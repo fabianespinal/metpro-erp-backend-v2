@@ -53,7 +53,7 @@ def generate_quote_pdf(quote_id: str) -> StreamingResponse:
             'phone':        contact.get('phone', ''),
         }
 
-        cursor.execute('SELECT * FROM quote_items WHERE quote_id = %s', (quote_id,))
+        cursor.execute('SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id', (quote_id,))
         items = [dict(row) for row in cursor.fetchall()]
 
         raw_charges = quote.get('included_charges')
@@ -200,7 +200,7 @@ def generate_invoice_pdf(invoice_id: int) -> StreamingResponse:
             'phone':        contact.get('phone', ''),
         }
 
-        cursor.execute('SELECT * FROM quote_items WHERE quote_id = %s', (invoice['quote_id'],))
+        cursor.execute('SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id', (invoice['quote_id'],))
         items = [dict(row) for row in cursor.fetchall()]
 
         cursor.execute(
@@ -370,7 +370,7 @@ def generate_conduce_pdf(invoice_id: int) -> StreamingResponse:
             'phone':        contact.get('phone', ''),
         }
 
-        cursor.execute('SELECT * FROM quote_items WHERE quote_id = %s', (invoice['quote_id'],))
+        cursor.execute('SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id', (invoice['quote_id'],))
         items = [dict(row) for row in cursor.fetchall()]
 
         cursor.execute('SELECT project_name FROM quotes WHERE quote_id = %s', (invoice['quote_id'],))

@@ -149,7 +149,7 @@ def create_quote(
         """, (quote_id,))
         quote = dict(cursor.fetchone())
 
-        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s", (quote_id,))
+        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id", (quote_id,))
         quote["items"] = cursor.fetchall()
 
         return quote
@@ -189,7 +189,7 @@ def get_quote_by_id(quote_id: str) -> dict:
 
         quote = dict(quote)
 
-        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s", (quote_id,))
+        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id", (quote_id,))
         quote["items"] = cursor.fetchall()
 
         return quote
@@ -244,7 +244,7 @@ def get_quote_with_contact(quote_id: str) -> dict:
 
         quote = dict(row)
 
-        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s", (quote_id,))
+        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id", (quote_id,))
         quote["items"] = cursor.fetchall()
 
         return quote
@@ -351,7 +351,7 @@ def update_quote(quote_id: str, quote_update) -> dict:
 
         # Recalculate totals if items or charges changed
         if included_charges is not None or items is not None:
-            cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s", (quote_id,))
+            cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id", (quote_id,))
             current_items = [dict(row) for row in cursor.fetchall()]
 
             if included_charges is not None:
@@ -384,7 +384,7 @@ def update_quote(quote_id: str, quote_update) -> dict:
         """, (quote_id,))
         updated_quote = dict(cursor.fetchone())
 
-        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s", (quote_id,))
+        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id", (quote_id,))
         updated_quote["items"] = cursor.fetchall()
 
         return updated_quote
@@ -456,7 +456,7 @@ def duplicate_quote(quote_id: str) -> dict:
         original = dict(original)
 
         # 2. Fetch original items
-        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s", (quote_id,))
+        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id", (quote_id,))
         original_items = cursor.fetchall()
 
         # 3. Generate new quote ID
@@ -518,7 +518,7 @@ def duplicate_quote(quote_id: str) -> dict:
         """, (new_quote_id,))
         new_quote = dict(cursor.fetchone())
 
-        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s", (new_quote_id,))
+        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id", (new_quote_id,))
         new_quote["items"] = cursor.fetchall()
 
         return new_quote
@@ -609,7 +609,7 @@ def convert_quote_to_invoice(quote_id: str) -> dict:
                 detail="Invoice already exists for this quote",
             )
 
-        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s", (quote_id,))
+        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id", (quote_id,))
         items = [dict(row) for row in cursor.fetchall()]
 
         raw_charges = quote.get("included_charges")
@@ -676,7 +676,7 @@ def convert_quote_to_invoice(quote_id: str) -> dict:
         """, (invoice_id,))
         new_invoice = dict(cursor.fetchone())
 
-        cursor.execute("SELECT * FROM invoice_items WHERE invoice_id = %s", (invoice_id,))
+        cursor.execute("SELECT * FROM invoice_items WHERE invoice_id = %s ORDER BY id", (invoice_id,))
         new_invoice["items"] = cursor.fetchall()
 
         return new_invoice

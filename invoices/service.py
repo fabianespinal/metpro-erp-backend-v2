@@ -80,7 +80,7 @@ def create_invoice_from_quote(quote_id: str, notes: Optional[str] = None) -> dic
                 detail="Invoice already exists for this quote",
             )
 
-        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s", (quote_id,))
+        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id", (quote_id,))
         items = [dict(row) for row in cursor.fetchall()]
 
         raw_charges = quote.get("included_charges")
@@ -211,7 +211,7 @@ def get_invoice_by_id(invoice_id: int) -> dict:
         invoice["amount_paid"] = float(invoice.get("amount_paid") or 0)
         invoice["amount_due"] = float(invoice.get("amount_due") or invoice.get("total_amount") or 0)
 
-        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s", (invoice["quote_id"],))
+        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id", (invoice["quote_id"],))
         items = [dict(row) for row in cursor.fetchall()]
         invoice["items"] = items
 
@@ -371,7 +371,7 @@ def get_invoice_with_contact(invoice_id: int) -> dict:
 
         invoice = dict(row)
 
-        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s", (invoice["quote_id"],))
+        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id", (invoice["quote_id"],))
         invoice["items"] = [dict(r) for r in cursor.fetchall()]
 
         cursor.execute("SELECT included_charges FROM quotes WHERE quote_id = %s", (invoice["quote_id"],))

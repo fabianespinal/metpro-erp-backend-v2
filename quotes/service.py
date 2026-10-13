@@ -676,7 +676,7 @@ def convert_quote_to_invoice(quote_id: str) -> dict:
         """, (invoice_id,))
         new_invoice = dict(cursor.fetchone())
 
-        cursor.execute("SELECT * FROM invoice_items WHERE invoice_id = %s ORDER BY id", (invoice_id,))
+        cursor.execute("SELECT * FROM invoice_items WHERE invoice_id = %s", (invoice_id,))
         new_invoice["items"] = cursor.fetchall()
 
         return new_invoice

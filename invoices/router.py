@@ -130,7 +130,7 @@ def delete_invoice(invoice_id: int, current_user: dict = Depends(verify_token)):
 
 
 @router.post("/{invoice_id}/payments")
-def add_payment(invoice_id: int, data: PaymentCreate):
+def add_payment(invoice_id: int, data: PaymentCreate, current_user: dict = Depends(verify_token)):
     conn = get_db_connection()
     try:
         payment_id = create_payment(conn, invoice_id, data)

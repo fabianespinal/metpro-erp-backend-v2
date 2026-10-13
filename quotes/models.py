@@ -85,14 +85,13 @@ class StatusUpdate(BaseModel):
 # -----------------------------
 class QuoteResponse(BaseModel):
     id: int
-    quote_number: str
+    quote_id: str   # ← FIXED
     client_id: int
     contact_id: Optional[int] = None
 
     project_name: Optional[str]
     notes: Optional[str]
 
-    # NEW FIELDS
     payment_terms: Optional[str]
     valid_until: Optional[date]
 

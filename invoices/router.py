@@ -1,7 +1,7 @@
 import json
 import base64
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from typing import List, Optional
 
 from .models import Invoice, InvoiceCreate, InvoiceStatusUpdate
@@ -12,6 +12,7 @@ from invoices.payments.models import PaymentCreate
 from invoices.payments.service import create_payment
 
 from database import get_db_connection
+from psycopg2.extras import RealDictCursor
 
 from email_service import send_invoice_email
 from invoices.service import calculate_invoice_totals
@@ -41,6 +42,8 @@ def send_invoice(invoice_id: int, current_user: dict = Depends(verify_token)):
     """Send invoice PDF to client via email"""
 
     invoice = service.get_invoice_with_contact(invoice_id)
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
 
     client = {
         "company_name": invoice["company_name"],
@@ -57,12 +60,25 @@ def send_invoice(invoice_id: int, current_user: dict = Depends(verify_token)):
     items = invoice.get("items", [])
     totals = calculate_invoice_totals(items, raw_charges)
 
+    # ---- NEW: fetch payments for this invoice so Historial de Pagos is populated ----
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute(
+            "SELECT * FROM invoice_payments WHERE invoice_id = %s ORDER BY id ASC",
+            (invoice_id,),
+        )
+        payments = [dict(row) for row in cursor.fetchall()]
+    finally:
+        conn.close()
+    # -------------------------------------------------------------------------------
+
     pdf_stream = create_invoice_pdf(
         doc_type="FACTURA",
         doc_id=invoice["invoice_number"],
         doc_date=str(invoice["invoice_date"])[:10] if invoice.get("invoice_date") else "",
         client=client,
-        project_name=invoice.get("notes", ""),
+        project_name=invoice.get("project_name", ""),
         notes=invoice.get("notes", ""),
         items=items,
         charges=raw_charges,
@@ -86,6 +102,7 @@ def send_invoice(invoice_id: int, current_user: dict = Depends(verify_token)):
         valid_until=None,
         amount_paid=invoice.get("amount_paid", 0),
         amount_due=invoice.get("amount_due", 0),
+        payments=payments,  # ✅ now the PDF has the full payment history
     )
 
     pdf_bytes = pdf_stream.read()
@@ -94,8 +111,8 @@ def send_invoice(invoice_id: int, current_user: dict = Depends(verify_token)):
         contact_email=invoice["contact_email"],
         contact_name=invoice["contact_name"],
         company_name=invoice["company_name"],
-        project_name=invoice.get("notes", ""),
-        invoice_id=str(invoice["invoice_number"]),
+        project_name=invoice.get("project_name", ""),
+        invoice_id=str(invoice["id"]),
         pdf_bytes=pdf_bytes,
     )
 
@@ -137,3 +154,90 @@ def add_payment(invoice_id: int, data: PaymentCreate, current_user: dict = Depen
         return {"payment_id": payment_id}
     finally:
         conn.close()
+
+
+@router.get("/{invoice_id}/public")
+def get_public_invoice(invoice_id: int):
+    """Public invoice view without authentication"""
+    invoice = service.get_invoice_with_contact(invoice_id)
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+
+    return invoice
+
+
+@router.get("/{invoice_id}/public/pdf")
+def get_public_invoice_pdf(invoice_id: int):
+    """Public PDF download for invoices"""
+
+    invoice = service.get_invoice_with_contact(invoice_id)
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+
+    raw_charges = invoice.get("included_charges") or {}
+    if isinstance(raw_charges, str):
+        raw_charges = json.loads(raw_charges)
+
+    items = invoice.get("items", [])
+    totals = calculate_invoice_totals(items, raw_charges)
+
+    # ---- NEW: fetch payments for this invoice so Historial de Pagos matches download ----
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute(
+            "SELECT * FROM invoice_payments WHERE invoice_id = %s ORDER BY id ASC",
+            (invoice_id,),
+        )
+        payments = [dict(row) for row in cursor.fetchall()]
+    finally:
+        conn.close()
+    # -------------------------------------------------------------------------------
+
+    pdf_stream = create_invoice_pdf(
+        doc_type="FACTURA",
+        doc_id=invoice["invoice_number"],
+        doc_date=str(invoice["invoice_date"])[:10] if invoice.get("invoice_date") else "",
+        client={
+            "company_name": invoice["company_name"],
+            "address": invoice.get("company_address", ""),
+            "contact_name": invoice.get("contact_name", ""),
+            "email": invoice.get("contact_email", ""),
+            "phone": invoice.get("contact_phone", ""),
+        },
+        project_name=invoice.get("project_name", ""),
+        notes=invoice.get("notes", ""),
+        items=items,
+        charges=raw_charges,
+        items_total=totals["items_total"],
+        total_discounts=totals["total_discounts"],
+        items_after_discount=totals["items_after_discount"],
+        supervision=totals["supervision"],
+        supervision_pct=raw_charges.get("supervision_percentage", 10.0),
+        admin=totals["admin"],
+        admin_pct=raw_charges.get("admin_percentage", 4.0),
+        insurance=totals["insurance"],
+        insurance_pct=raw_charges.get("insurance_percentage", 1.0),
+        transport=totals["transport"],
+        transport_pct=raw_charges.get("transport_percentage", 3.0),
+        contingency=totals["contingency"],
+        contingency_pct=raw_charges.get("contingency_percentage", 3.0),
+        subtotal_general=totals["subtotal_general"],
+        itbis=totals["itbis"],
+        grand_total=totals["grand_total"],
+        payment_terms=None,
+        valid_until=None,
+        amount_paid=invoice.get("amount_paid", 0),
+        amount_due=invoice.get("amount_due", 0),
+        payments=payments,  # ✅ same payment history as internal/download PDF
+    )
+
+    pdf_bytes = pdf_stream.read()
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename=factura_{invoice_id}.pdf"
+        },
+    )

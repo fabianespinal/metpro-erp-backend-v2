@@ -9,6 +9,7 @@ from pdf.utils.date_utils import format_date
 from pdf.builder_quote import create_quote_pdf
 from pdf.builder_invoice import create_invoice_pdf
 from pdf.builder_conduce import create_conduce_pdf
+from pdf.utils.layout_utils import build_quote_invoice_pdf   # ✅ ADD THIS
 
 
 # ============================================================
@@ -112,7 +113,7 @@ def generate_quote_pdf(quote_id: str) -> StreamingResponse:
         payment_terms = quote.get('payment_terms') or ''
         valid_until = quote.get('valid_until') or ''
 
-        pdf_stream = create_quote_pdf(
+        pdf_stream = build_quote_invoice_pdf(
             doc_type='COTIZACION',
             doc_id=quote['quote_id'],
             doc_date=doc_date,
@@ -289,7 +290,7 @@ def generate_invoice_pdf(invoice_id: int) -> StreamingResponse:
 
         doc_date = format_date(invoice['invoice_date'])
 
-        pdf_stream = create_invoice_pdf(
+        pdf_stream = build_quote_invoice_pdf(
             doc_type='FACTURA',
             doc_id=invoice['invoice_number'],
             doc_date=doc_date,

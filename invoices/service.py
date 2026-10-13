@@ -307,7 +307,7 @@ def delete_invoice(invoice_id: int) -> dict:
 
         quote_id = invoice["quote_id"]
 
-        cursor.execute("DELETE FROM invoice_payments WHERE invoice_id = %s", (invoice_id,))
+        cursor.execute("DELETE FROM invoice_payments WHERE id = %s", (invoice_id,))
         cursor.execute("DELETE FROM invoices WHERE id = %s", (invoice_id,))
         cursor.execute("UPDATE quotes SET status = 'Approved' WHERE quote_id = %s", (quote_id,))
 
@@ -360,8 +360,8 @@ def get_invoice_with_contact(invoice_id: int) -> dict:
 
             FROM invoices i
             JOIN clients  c  ON i.client_id  = c.id
-            JOIN quotes   q  ON i.quote_id   = q.quote_id
-            JOIN contacts ct ON q.contact_id = ct.id AND ct.company_id = i.client_id
+            LEFT JOIN quotes q ON TRIM(i.quote_id) = TRIM(q.quote_id)
+            JOIN contacts ct ON i.contact_id = ct.id
             WHERE i.id = %s
         """, (invoice_id,))
 

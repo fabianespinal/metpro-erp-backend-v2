@@ -62,7 +62,7 @@ def send_quote_email(contact_email, contact_name, company_name, project_name, qu
 # ---------------------------------------------------------
 # INVOICES
 # ---------------------------------------------------------
-def send_invoice_email(contact_email, contact_name, company_name, project_name, invoice_id, pdf_bytes):
+def send_invoice_email(contact_email, contact_name, company_name, project_name, invoice_id, public_token, pdf_bytes):
 
     clean_title = clean_text(project_name or company_name)
 
@@ -74,7 +74,7 @@ def send_invoice_email(contact_email, contact_name, company_name, project_name, 
         <p>Puede ver la factura en línea aquí:</p>
 
         <p>
-            <a href="https://metprord.site/inv/{invoice_id}"
+            <a href="https://metprord.site/inv/{public_token}"
                style="display:inline-block;padding:12px 20px;background:#0a7d4f;color:white;
                       text-decoration:none;border-radius:6px;font-weight:bold;font-size:15px;">
                 Ver Factura

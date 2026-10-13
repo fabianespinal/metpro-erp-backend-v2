@@ -1,8 +1,8 @@
 import json
 import base64
 
-from fastapi import APIRouter, Depends, HTTPException, Response
-from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, Path, Response
+from typing import Annotated, List, Optional
 
 from .models import Invoice, InvoiceCreate, InvoiceStatusUpdate
 from . import service
@@ -113,6 +113,7 @@ def send_invoice(invoice_id: int, current_user: dict = Depends(verify_token)):
         company_name=invoice["company_name"],
         project_name=invoice.get("project_name", ""),
         invoice_id=str(invoice["id"]),
+        public_token=str(invoice["public_token"]),
         pdf_bytes=pdf_bytes,
     )
 
@@ -156,23 +157,41 @@ def add_payment(invoice_id: int, data: PaymentCreate, current_user: dict = Depen
         conn.close()
 
 
-@router.get("/{invoice_id}/public")
-def get_public_invoice(invoice_id: int):
-    """Public invoice view without authentication"""
-    invoice = service.get_invoice_with_contact(invoice_id)
-    if not invoice:
-        raise HTTPException(status_code=404, detail="Invoice not found")
+# ============================================================
+# PUBLIC INVOICE VIEW (no auth, unguessable UUID4 token)
+# Sequential invoice IDs are NOT exposed publicly.
+# ============================================================
 
+PUBLIC_TOKEN_PATTERN = (
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+)
+
+
+def _invoice_id_for_public_token(token: str) -> int:
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SELECT id FROM invoices WHERE public_token = %s", (token,))
+        row = cursor.fetchone()
+    finally:
+        conn.close()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    return row["id"]
+
+
+@router.get("/public/{token}")
+def get_public_invoice(token: Annotated[str, Path(pattern=PUBLIC_TOKEN_PATTERN)]):
+    """Public invoice view. Access is by unguessable token only."""
+    invoice_id = _invoice_id_for_public_token(token)
+    invoice = service.get_invoice_with_contact(invoice_id)
+    invoice.pop("public_token", None)  # never echo the token back
     return invoice
 
 
-@router.get("/{invoice_id}/public/pdf")
-def get_public_invoice_pdf(invoice_id: int):
-    """Public PDF download for invoices"""
-
+def _render_public_invoice_pdf(invoice_id: int) -> Response:
     invoice = service.get_invoice_with_contact(invoice_id)
-    if not invoice:
-        raise HTTPException(status_code=404, detail="Invoice not found")
 
     raw_charges = invoice.get("included_charges") or {}
     if isinstance(raw_charges, str):
@@ -181,7 +200,7 @@ def get_public_invoice_pdf(invoice_id: int):
     items = invoice.get("items", [])
     totals = calculate_invoice_totals(items, raw_charges)
 
-    # ---- NEW: fetch payments for this invoice so Historial de Pagos matches download ----
+    # Payment history so the public PDF matches the internal download.
     conn = get_db_connection()
     try:
         cursor = conn.cursor(cursor_factory=RealDictCursor)
@@ -192,7 +211,6 @@ def get_public_invoice_pdf(invoice_id: int):
         payments = [dict(row) for row in cursor.fetchall()]
     finally:
         conn.close()
-    # -------------------------------------------------------------------------------
 
     pdf_stream = create_invoice_pdf(
         doc_type="FACTURA",
@@ -229,7 +247,7 @@ def get_public_invoice_pdf(invoice_id: int):
         valid_until=None,
         amount_paid=invoice.get("amount_paid", 0),
         amount_due=invoice.get("amount_due", 0),
-        payments=payments,  # ✅ same payment history as internal/download PDF
+        payments=payments,
     )
 
     pdf_bytes = pdf_stream.read()
@@ -241,3 +259,10 @@ def get_public_invoice_pdf(invoice_id: int):
             "Content-Disposition": f"attachment; filename=factura_{invoice_id}.pdf"
         },
     )
+
+
+@router.get("/public/{token}/pdf")
+def get_public_invoice_pdf(token: Annotated[str, Path(pattern=PUBLIC_TOKEN_PATTERN)]):
+    """Public PDF download. Access is by unguessable token only."""
+    invoice_id = _invoice_id_for_public_token(token)
+    return _render_public_invoice_pdf(invoice_id)

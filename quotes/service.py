@@ -7,7 +7,9 @@ import json
 import uuid
 from datetime import datetime, date
 from database import get_db_connection
-from psycopg2.extras import RealDictCursor
+from psycopg2.extras import RealDictCursor, execute_values
+
+INS_SQL = "INSERT INTO quote_items (quote_id, product_name, quantity, unit_price, discount_type, discount_value) VALUES %s"
 
 
 # =============================================================================
@@ -125,19 +127,19 @@ def create_quote(
             _serialize_date(valid_until),
         ))
 
-        for item in items:
-            cursor.execute("""
-                INSERT INTO quote_items
-                    (quote_id, product_name, quantity, unit_price, discount_type, discount_value)
-                VALUES (%s, %s, %s, %s, %s, %s)
-            """, (
+        rows = [
+            (
                 quote_id,
                 item["product_name"],
                 item["quantity"],
                 item["unit_price"],
                 item.get("discount_type", "none"),
                 item.get("discount_value", 0.0),
-            ))
+            )
+            for item in items
+        ]
+        if rows:
+            execute_values(cursor, INS_SQL, rows)
 
         conn.commit()
 
@@ -340,25 +342,28 @@ def update_quote(quote_id: str, quote_update) -> dict:
         if items is not None:
             cursor.execute("DELETE FROM quote_items WHERE quote_id = %s", (quote_id,))
 
+            normalized = []
             for item in items:
                 # Normalize — item may be a dict or a Pydantic model
                 if hasattr(item, 'dict'):
                     item = item.dict()
                 elif isinstance(item, str):
                     item = json.loads(item)
+                normalized.append(item)
 
-                cursor.execute("""
-                    INSERT INTO quote_items
-                        (quote_id, product_name, quantity, unit_price, discount_type, discount_value)
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                """, (
+            rows = [
+                (
                     quote_id,
                     item.get("product_name", ""),
                     item.get("quantity", 1),
                     item.get("unit_price", 0),
                     item.get("discount_type", "none"),
                     item.get("discount_value", 0.0),
-                ))
+                )
+                for item in normalized
+            ]
+            if rows:
+                execute_values(cursor, INS_SQL, rows)
 
         # Recalculate totals if items or charges changed
         if included_charges is not None or items is not None:
@@ -512,19 +517,19 @@ def duplicate_quote(quote_id: str) -> dict:
         ))
 
         # 7. Duplicate quote items
-        for item in original_items:
-            cursor.execute("""
-                INSERT INTO quote_items
-                    (quote_id, product_name, quantity, unit_price, discount_type, discount_value)
-                VALUES (%s, %s, %s, %s, %s, %s)
-            """, (
+        rows = [
+            (
                 new_quote_id,
                 item["product_name"],
                 item["quantity"],
                 item["unit_price"],
                 item.get("discount_type") or "none",
                 item.get("discount_value") or 0.0,
-            ))
+            )
+            for item in original_items
+        ]
+        if rows:
+            execute_values(cursor, INS_SQL, rows)
 
         conn.commit()
 
@@ -667,21 +672,24 @@ def convert_quote_to_invoice(quote_id: str) -> dict:
         invoice_id = cursor.fetchone()["id"]   # FIXED
 
         # 5. Insert invoice items
-        for item in items:
-            line_total = (item["quantity"] * item["unit_price"]) - item.get("discount_value", 0)
-            cursor.execute("""
-                INSERT INTO invoice_items
-                    (invoice_id, product_id, description, quantity, unit_price, discount, total)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """, (
-                invoice_id,                     # FIXED
+        invoice_item_rows = [
+            (
+                invoice_id,
                 item["product_id"],
                 item["product_name"],
                 item["quantity"],
                 item["unit_price"],
                 item.get("discount_value", 0),
-                line_total,
-            ))
+                (item["quantity"] * item["unit_price"]) - item.get("discount_value", 0),
+            )
+            for item in items
+        ]
+        if invoice_item_rows:
+            execute_values(
+                cursor,
+                "INSERT INTO invoice_items (invoice_id, product_id, description, quantity, unit_price, discount, total) VALUES %s",
+                invoice_item_rows,
+            )
 
         conn.commit()
 

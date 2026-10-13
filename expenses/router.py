@@ -13,7 +13,11 @@ from .services import (
 router = APIRouter(prefix="/expenses", tags=["Expenses"])
 
 
-@router.post("/", response_model=dict)
+# Both "/expenses" (main frontend) and "/expenses/" (dev frontend) are served.
+# The trailing-slash variant is hidden from OpenAPI to avoid duplicate entries.
+
+@router.post("", response_model=dict)
+@router.post("/", response_model=dict, include_in_schema=False)
 def create_expense_endpoint(expense: ExpenseCreate, _user: dict = Depends(verify_token)):
     conn = get_db_connection()
     try:
@@ -24,7 +28,8 @@ def create_expense_endpoint(expense: ExpenseCreate, _user: dict = Depends(verify
         conn.close()
 
 
-@router.get("/", response_model=list)
+@router.get("", response_model=list)
+@router.get("/", response_model=list, include_in_schema=False)
 def list_expenses_endpoint(_user: dict = Depends(verify_token)):
     conn = get_db_connection()
     try:

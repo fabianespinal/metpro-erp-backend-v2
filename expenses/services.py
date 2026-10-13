@@ -1,8 +1,15 @@
 from fastapi import HTTPException
 from .models import ExpenseCreate, ExpenseUpdate
 
+
 def _resolve_client_name(conn, client_id):
-    """Look up clients.company_name for a client_id. None if no client_id."""
+    """
+    Look up clients.company_name for a client_id.
+    Returns None when client_id is not provided.
+    Raises 404 when client_id does not exist.
+
+    get_db_connection() uses RealDictCursor, so rows are dicts.
+    """
     if client_id is None:
         return None
     with conn.cursor() as cur:
@@ -10,27 +17,42 @@ def _resolve_client_name(conn, client_id):
         row = cur.fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Client not found")
+    if isinstance(row, dict):
+        return row.get("company_name")
     return row[0]
 
+
 def create_expense(conn, expense: ExpenseCreate):
-    client_name = _resolve_client_name(conn, expense.client_id)
+    # Two frontends are live:
+    #   - main frontend sends client_name (free text)
+    #   - dev frontend sends client_id (select from clients)
+    # client_id, when present, is resolved and wins. Otherwise client_name is used.
+    client_name = _resolve_client_name(conn, expense.client_id) or expense.client_name
+
     with conn.cursor() as cur:
         cur.execute("""
-            INSERT INTO expenses 
-            (client_name, date, category, description, amount, payment_method, project_id, quote_id)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+            INSERT INTO expenses
+            (date, category, client_name, description, amount, payment_method, project_id, quote_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING expense_id;
         """, (
-            client_name,
             expense.date,
             expense.category,
+            client_name,
             expense.description,
             expense.amount,
             expense.payment_method,
-            expense.project_id,
-            expense.quote_id
+            str(expense.project_id) if expense.project_id else None,
+            str(expense.quote_id) if expense.quote_id else None,
         ))
-        return cur.fetchone()[0]
+
+        row = cur.fetchone()
+
+    if isinstance(row, dict):
+        return row["expense_id"]
+    if row:
+        return row[0]
+    raise HTTPException(status_code=500, detail="Insert failed to return expense_id")
 
 
 def get_expenses(conn):

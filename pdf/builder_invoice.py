@@ -16,7 +16,7 @@ def create_invoice_pdf(
     amount_due=0
 ):
     try:
-        pdf = build_quote_invoice_pdf(
+        pdf_stream = build_quote_invoice_pdf(
             doc_type=doc_type,
             doc_id=doc_id,
             doc_date=doc_date,
@@ -50,12 +50,8 @@ def create_invoice_pdf(
     except Exception as e:
         raise RuntimeError(f"PDF layout generation failed: {e}")
 
-    if pdf is None:
+    if pdf_stream is None:
         raise ValueError("build_quote_invoice_pdf returned None — check layout_utils.py")
 
-    try:
-        pdf_bytes = pdf.output()
-    except Exception as e:
-        raise RuntimeError(f"FPDF output() failed: {e}")
-
-    return io.BytesIO(pdf_bytes)
+    # pdf_stream is already a BytesIO object — return it directly
+    return pdf_stream

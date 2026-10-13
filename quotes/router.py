@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from typing import Optional
 import json
-import base64
 
 from .models import QuoteCreate, StatusUpdate, QuoteUpdate
 from . import service
@@ -72,7 +71,7 @@ def get_quote_public_pdf(quote_id: str):
     totals = calculate_quote_totals(items, raw_charges)
 
     pdf_stream = create_quote_pdf(
-        doc_type="COTIZACIÓN",
+        doc_type="COTIZACION",
         doc_id=quote["quote_id"],
         doc_date=str(quote["created_at"])[:10] if quote.get("created_at") else "",
         client=client,
@@ -129,7 +128,7 @@ def send_quote(quote_id: str, current_user: dict = Depends(verify_token)):
     totals = calculate_quote_totals(items, raw_charges)
 
     pdf_stream = create_quote_pdf(
-        doc_type="COTIZACIÓN",
+        doc_type="COTIZACION",
         doc_id=quote["quote_id"],
         doc_date=str(quote["created_at"])[:10] if quote.get("created_at") else "",
         client=client,
@@ -201,7 +200,7 @@ def get_quote_pdf(quote_id: str, current_user: dict = Depends(verify_token)):
     totals = calculate_quote_totals(items, raw_charges)
 
     pdf_stream = create_quote_pdf(
-        doc_type="COTIZACIÓN",
+        doc_type="COTIZACION",
         doc_id=quote["quote_id"],
         doc_date=str(quote["created_at"])[:10] if quote.get("created_at") else "",
         client=client,

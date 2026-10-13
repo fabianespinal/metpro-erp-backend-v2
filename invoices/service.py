@@ -350,6 +350,7 @@ def get_invoice_with_contact(invoice_id: int) -> dict:
                 i.notes,
                 i.created_at,
                 i.updated_at,
+                i.public_token,
 
                 c.company_name,
                 c.address AS company_address,

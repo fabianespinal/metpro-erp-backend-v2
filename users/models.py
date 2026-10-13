@@ -17,7 +17,7 @@ class UserUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 class User(UserBase):
-    id: int
+    id: str
     is_active: bool
     created_at: str
     

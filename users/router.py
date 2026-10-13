@@ -1,3 +1,5 @@
+from typing import Annotated
+from fastapi import Path
 from fastapi import APIRouter, Depends
 from typing import List
 from .models import User, UserCreate, UserUpdate, UserPasswordUpdate
@@ -13,7 +15,7 @@ def get_users(current_user: dict = Depends(verify_token)):
     return [User(**u) for u in users]
 
 @router.get('/{user_id}', response_model=User)
-def get_user(user_id: int, current_user: dict = Depends(verify_token)):
+def get_user(user_id: Annotated[str, Path(pattern=r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")], current_user: dict = Depends(verify_token)):
     """Get user by ID"""
     result = service.get_user_by_id(user_id)
     return User(**result)
@@ -38,7 +40,7 @@ def create_user(user: UserCreate, current_user: dict = Depends(verify_token)):
 
 @router.put('/{user_id}', response_model=User)
 def update_user(
-    user_id: int,
+    user_id: Annotated[str, Path(pattern=r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")],
     user_update: UserUpdate,
     current_user: dict = Depends(verify_token)
 ):
@@ -54,7 +56,7 @@ def update_user(
 
 @router.patch('/{user_id}/password')
 def update_password(
-    user_id: int,
+    user_id: Annotated[str, Path(pattern=r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")],
     password_update: UserPasswordUpdate,
     current_user: dict = Depends(verify_token)
 ):
@@ -66,6 +68,6 @@ def update_password(
     )
 
 @router.delete('/{user_id}')
-def delete_user(user_id: int, current_user: dict = Depends(verify_token)):
+def delete_user(user_id: Annotated[str, Path(pattern=r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")], current_user: dict = Depends(verify_token)):
     """Delete user (admin only)"""
     return service.delete_user(user_id)

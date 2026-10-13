@@ -95,7 +95,7 @@ def login(credentials: LoginRequest):
 # ============================
 
 @router.post("/register")
-def register(user_data: RegisterRequest):
+def register(user_data: RegisterRequest, _admin: dict = Depends(require_role("admin"))):
     conn = None
     try:
         conn = get_db_connection()

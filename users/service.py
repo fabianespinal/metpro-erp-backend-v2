@@ -32,7 +32,7 @@ def get_all_users() -> List[dict]:
 # GET USER BY ID
 # ============================================================
 
-def get_user_by_id(user_id: int) -> dict:
+def get_user_by_id(user_id: str) -> dict:
     conn = None
     try:
         conn = get_db_connection()
@@ -140,7 +140,7 @@ def create_user(username: str, password: str, email: str, full_name: str, role: 
 # UPDATE USER
 # ============================================================
 
-def update_user(user_id: int, email: Optional[str], full_name: Optional[str],
+def update_user(user_id: str, email: Optional[str], full_name: Optional[str],
                 role: Optional[str], is_active: Optional[bool]) -> dict:
 
     conn = None
@@ -213,7 +213,7 @@ def update_user(user_id: int, email: Optional[str], full_name: Optional[str],
 # UPDATE USER PASSWORD
 # ============================================================
 
-def update_user_password(user_id: int, current_password: str, new_password: str) -> dict:
+def update_user_password(user_id: str, current_password: str, new_password: str) -> dict:
     conn = None
     try:
         conn = get_db_connection()
@@ -259,7 +259,7 @@ def update_user_password(user_id: int, current_password: str, new_password: str)
 # DELETE USER
 # ============================================================
 
-def delete_user(user_id: int) -> dict:
+def delete_user(user_id: str) -> dict:
     conn = None
     try:
         conn = get_db_connection()

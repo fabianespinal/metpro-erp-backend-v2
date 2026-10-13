@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from database import get_db_connection
+from auth.service import verify_token
 from .models import ExpenseCreate, ExpenseUpdate
 from .services import (
     create_expense,
@@ -13,7 +14,7 @@ router = APIRouter(prefix="/expenses", tags=["Expenses"])
 
 
 @router.post("/", response_model=dict)
-def create_expense_endpoint(expense: ExpenseCreate):
+def create_expense_endpoint(expense: ExpenseCreate, _user: dict = Depends(verify_token)):
     conn = get_db_connection()
     try:
         expense_id = create_expense(conn, expense)
@@ -24,7 +25,7 @@ def create_expense_endpoint(expense: ExpenseCreate):
 
 
 @router.get("/", response_model=list)
-def list_expenses_endpoint():
+def list_expenses_endpoint(_user: dict = Depends(verify_token)):
     conn = get_db_connection()
     try:
         return get_expenses(conn)
@@ -33,7 +34,7 @@ def list_expenses_endpoint():
 
 
 @router.get("/{expense_id}", response_model=dict)
-def get_expense_endpoint(expense_id: int):
+def get_expense_endpoint(expense_id: int, _user: dict = Depends(verify_token)):
     conn = get_db_connection()
     try:
         exp = get_expense(conn, expense_id)
@@ -45,7 +46,7 @@ def get_expense_endpoint(expense_id: int):
 
 
 @router.put("/{expense_id}", response_model=dict)
-def update_expense_endpoint(expense_id: int, data: ExpenseUpdate):
+def update_expense_endpoint(expense_id: int, data: ExpenseUpdate, _user: dict = Depends(verify_token)):
     conn = get_db_connection()
     try:
         updated = update_expense(conn, expense_id, data)
@@ -58,7 +59,7 @@ def update_expense_endpoint(expense_id: int, data: ExpenseUpdate):
 
 
 @router.delete("/{expense_id}", response_model=dict)
-def delete_expense_endpoint(expense_id: int):
+def delete_expense_endpoint(expense_id: int, _user: dict = Depends(verify_token)):
     conn = get_db_connection()
     try:
         delete_expense(conn, expense_id)

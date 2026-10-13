@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from database import get_db_connection
+from auth.service import verify_token
 from .models import ExpenseCreate, ExpenseUpdate
 from .services import (
     create_expense,
@@ -11,8 +12,13 @@ from .services import (
 
 router = APIRouter(prefix="/expenses", tags=["Expenses"])
 
+
+# Both "/expenses" (main frontend) and "/expenses/" (dev frontend) are served.
+# The trailing-slash variant is hidden from OpenAPI to avoid duplicate entries.
+
 @router.post("", response_model=dict)
-def create_expense_endpoint(expense: ExpenseCreate):
+@router.post("/", response_model=dict, include_in_schema=False)
+def create_expense_endpoint(expense: ExpenseCreate, _user: dict = Depends(verify_token)):
     conn = get_db_connection()
     try:
         expense_id = create_expense(conn, expense)
@@ -21,16 +27,19 @@ def create_expense_endpoint(expense: ExpenseCreate):
     finally:
         conn.close()
 
+
 @router.get("", response_model=list)
-def list_expenses_endpoint():
+@router.get("/", response_model=list, include_in_schema=False)
+def list_expenses_endpoint(_user: dict = Depends(verify_token)):
     conn = get_db_connection()
     try:
         return get_expenses(conn)
     finally:
         conn.close()
 
+
 @router.get("/{expense_id}", response_model=dict)
-def get_expense_endpoint(expense_id: int):
+def get_expense_endpoint(expense_id: int, _user: dict = Depends(verify_token)):
     conn = get_db_connection()
     try:
         exp = get_expense(conn, expense_id)
@@ -40,8 +49,9 @@ def get_expense_endpoint(expense_id: int):
     finally:
         conn.close()
 
+
 @router.put("/{expense_id}", response_model=dict)
-def update_expense_endpoint(expense_id: int, data: ExpenseUpdate):
+def update_expense_endpoint(expense_id: int, data: ExpenseUpdate, _user: dict = Depends(verify_token)):
     conn = get_db_connection()
     try:
         updated = update_expense(conn, expense_id, data)
@@ -52,8 +62,9 @@ def update_expense_endpoint(expense_id: int, data: ExpenseUpdate):
     finally:
         conn.close()
 
+
 @router.delete("/{expense_id}", response_model=dict)
-def delete_expense_endpoint(expense_id: int):
+def delete_expense_endpoint(expense_id: int, _user: dict = Depends(verify_token)):
     conn = get_db_connection()
     try:
         delete_expense(conn, expense_id)

@@ -4,9 +4,12 @@
 from typing import List, Optional
 from fastapi import HTTPException
 import json
+import uuid
 from datetime import datetime, date
 from database import get_db_connection
-from psycopg2.extras import RealDictCursor
+from psycopg2.extras import RealDictCursor, execute_values
+
+INS_SQL = "INSERT INTO quote_items (quote_id, product_name, quantity, unit_price, discount_type, discount_value) VALUES %s"
 
 
 # =============================================================================
@@ -56,8 +59,8 @@ def calculate_quote_totals(items: List[dict], charges: dict) -> dict:
 
 
 def generate_quote_id() -> str:
-    timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
-    return f"Q-{timestamp}"
+    """Random UUID4. Not guessable, no same-second collisions."""
+    return str(uuid.uuid4())
 
 
 def _serialize_date(d) -> Optional[str]:
@@ -124,19 +127,19 @@ def create_quote(
             _serialize_date(valid_until),
         ))
 
-        for item in items:
-            cursor.execute("""
-                INSERT INTO quote_items
-                    (quote_id, product_name, quantity, unit_price, discount_type, discount_value)
-                VALUES (%s, %s, %s, %s, %s, %s)
-            """, (
+        rows = [
+            (
                 quote_id,
                 item["product_name"],
                 item["quantity"],
                 item["unit_price"],
                 item.get("discount_type", "none"),
                 item.get("discount_value", 0.0),
-            ))
+            )
+            for item in items
+        ]
+        if rows:
+            execute_values(cursor, INS_SQL, rows)
 
         conn.commit()
 
@@ -149,7 +152,7 @@ def create_quote(
         """, (quote_id,))
         quote = dict(cursor.fetchone())
 
-        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s", (quote_id,))
+        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id", (quote_id,))
         quote["items"] = cursor.fetchall()
 
         return quote
@@ -189,7 +192,7 @@ def get_quote_by_id(quote_id: str) -> dict:
 
         quote = dict(quote)
 
-        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s", (quote_id,))
+        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id", (quote_id,))
         quote["items"] = cursor.fetchall()
 
         return quote
@@ -244,7 +247,7 @@ def get_quote_with_contact(quote_id: str) -> dict:
 
         quote = dict(row)
 
-        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s", (quote_id,))
+        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id", (quote_id,))
         quote["items"] = cursor.fetchall()
 
         return quote
@@ -292,6 +295,12 @@ def get_all_quotes(
             conn.close()
 
 
+# Edit policy toggle.
+#   True  -> quotes can be edited in any status (current main/production behavior).
+#   False -> only Draft quotes can be edited (dev behavior, PR-era rule).
+ALLOW_EDIT_NON_DRAFT_QUOTES = True
+
+
 def update_quote(quote_id: str, quote_update) -> dict:
     """Update an existing quote."""
     conn = None
@@ -303,6 +312,12 @@ def update_quote(quote_id: str, quote_update) -> dict:
         quote = cursor.fetchone()
         if not quote:
             raise HTTPException(status_code=404, detail="Quote not found")
+
+        if not ALLOW_EDIT_NON_DRAFT_QUOTES and quote["status"] != "Draft":
+            raise HTTPException(
+                status_code=400,
+                detail="Only Draft quotes can be edited",
+            )
 
         update_dict = quote_update.dict(exclude_unset=True)
 
@@ -327,29 +342,32 @@ def update_quote(quote_id: str, quote_update) -> dict:
         if items is not None:
             cursor.execute("DELETE FROM quote_items WHERE quote_id = %s", (quote_id,))
 
+            normalized = []
             for item in items:
                 # Normalize — item may be a dict or a Pydantic model
                 if hasattr(item, 'dict'):
                     item = item.dict()
                 elif isinstance(item, str):
                     item = json.loads(item)
+                normalized.append(item)
 
-                cursor.execute("""
-                    INSERT INTO quote_items
-                        (quote_id, product_name, quantity, unit_price, discount_type, discount_value)
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                """, (
+            rows = [
+                (
                     quote_id,
                     item.get("product_name", ""),
                     item.get("quantity", 1),
                     item.get("unit_price", 0),
                     item.get("discount_type", "none"),
                     item.get("discount_value", 0.0),
-                ))
+                )
+                for item in normalized
+            ]
+            if rows:
+                execute_values(cursor, INS_SQL, rows)
 
         # Recalculate totals if items or charges changed
         if included_charges is not None or items is not None:
-            cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s", (quote_id,))
+            cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id", (quote_id,))
             current_items = [dict(row) for row in cursor.fetchall()]
 
             if included_charges is not None:
@@ -391,7 +409,7 @@ def update_quote(quote_id: str, quote_update) -> dict:
         """, (quote_id,))
         updated_quote = dict(cursor.fetchone())
 
-        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s", (quote_id,))
+        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id", (quote_id,))
         updated_quote["items"] = cursor.fetchall()
 
         return updated_quote
@@ -463,7 +481,7 @@ def duplicate_quote(quote_id: str) -> dict:
         original = dict(original)
 
         # 2. Fetch original items
-        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s", (quote_id,))
+        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id", (quote_id,))
         original_items = cursor.fetchall()
 
         # 3. Generate new quote ID
@@ -499,19 +517,19 @@ def duplicate_quote(quote_id: str) -> dict:
         ))
 
         # 7. Duplicate quote items
-        for item in original_items:
-            cursor.execute("""
-                INSERT INTO quote_items
-                    (quote_id, product_name, quantity, unit_price, discount_type, discount_value)
-                VALUES (%s, %s, %s, %s, %s, %s)
-            """, (
+        rows = [
+            (
                 new_quote_id,
                 item["product_name"],
                 item["quantity"],
                 item["unit_price"],
                 item.get("discount_type") or "none",
                 item.get("discount_value") or 0.0,
-            ))
+            )
+            for item in original_items
+        ]
+        if rows:
+            execute_values(cursor, INS_SQL, rows)
 
         conn.commit()
 
@@ -525,7 +543,7 @@ def duplicate_quote(quote_id: str) -> dict:
         """, (new_quote_id,))
         new_quote = dict(cursor.fetchone())
 
-        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s", (new_quote_id,))
+        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id", (new_quote_id,))
         new_quote["items"] = cursor.fetchall()
 
         return new_quote
@@ -618,8 +636,8 @@ def convert_quote_to_invoice(quote_id: str) -> dict:
                 detail="Invoice already exists for this quote",
             )
 
-        # 3. Load quote items
-        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s", (quote_id,))
+        # 3. Load quote items (deterministic order)
+        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id", (quote_id,))
         items = [dict(row) for row in cursor.fetchall()]
 
         raw_charges = quote.get("included_charges")
@@ -654,21 +672,24 @@ def convert_quote_to_invoice(quote_id: str) -> dict:
         invoice_id = cursor.fetchone()["id"]   # FIXED
 
         # 5. Insert invoice items
-        for item in items:
-            line_total = (item["quantity"] * item["unit_price"]) - item.get("discount_value", 0)
-            cursor.execute("""
-                INSERT INTO invoice_items
-                    (invoice_id, product_id, description, quantity, unit_price, discount, total)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """, (
-                invoice_id,                     # FIXED
+        invoice_item_rows = [
+            (
+                invoice_id,
                 item["product_id"],
                 item["product_name"],
                 item["quantity"],
                 item["unit_price"],
                 item.get("discount_value", 0),
-                line_total,
-            ))
+                (item["quantity"] * item["unit_price"]) - item.get("discount_value", 0),
+            )
+            for item in items
+        ]
+        if invoice_item_rows:
+            execute_values(
+                cursor,
+                "INSERT INTO invoice_items (invoice_id, product_id, description, quantity, unit_price, discount, total) VALUES %s",
+                invoice_item_rows,
+            )
 
         conn.commit()
 

@@ -54,7 +54,7 @@ def generate_quote_pdf(quote_id: str) -> StreamingResponse:
             'phone':        contact.get('phone', ''),
         }
 
-        cursor.execute('SELECT * FROM quote_items WHERE quote_id = %s', (quote_id,))
+        cursor.execute('SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id', (quote_id,))
         items = [dict(row) for row in cursor.fetchall()]
 
         raw_charges = quote.get('included_charges')
@@ -181,12 +181,21 @@ def generate_invoice_pdf(invoice_id: int) -> StreamingResponse:
             raise HTTPException(status_code=404, detail='Client not found')
         raw_client = dict(raw_client)
 
-        # Fetch the contact stored on the invoice (carried over from the quote)
+        # Invoice carries the same contact as its source quote (Option A)
         contact = {}
-        if invoice.get('contact_id'):
+        contact_id = invoice.get('contact_id')
+        if not contact_id and invoice.get('quote_id'):
+            cursor.execute(
+                'SELECT contact_id FROM quotes WHERE quote_id = %s',
+                (invoice['quote_id'],)
+            )
+            quote_row = cursor.fetchone()
+            if quote_row:
+                contact_id = quote_row.get('contact_id')
+        if contact_id:
             cursor.execute(
                 'SELECT name, email, phone FROM contacts WHERE id = %s',
-                (invoice['contact_id'],)
+                (contact_id,)
             )
             row = cursor.fetchone()
             if row:
@@ -201,7 +210,7 @@ def generate_invoice_pdf(invoice_id: int) -> StreamingResponse:
             'phone':        contact.get('phone', ''),
         }
 
-        cursor.execute('SELECT * FROM quote_items WHERE quote_id = %s', (invoice['quote_id'],))
+        cursor.execute('SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id', (invoice['quote_id'],))
         items = [dict(row) for row in cursor.fetchall()]
 
         cursor.execute(
@@ -352,12 +361,21 @@ def generate_conduce_pdf(invoice_id: int) -> StreamingResponse:
             raise HTTPException(status_code=404, detail='Client not found')
         raw_client = dict(raw_client)
 
-        # Fetch the contact stored on the invoice
+        # Invoice carries the same contact as its source quote (Option A)
         contact = {}
-        if invoice.get('contact_id'):
+        contact_id = invoice.get('contact_id')
+        if not contact_id and invoice.get('quote_id'):
+            cursor.execute(
+                'SELECT contact_id FROM quotes WHERE quote_id = %s',
+                (invoice['quote_id'],)
+            )
+            quote_row = cursor.fetchone()
+            if quote_row:
+                contact_id = quote_row.get('contact_id')
+        if contact_id:
             cursor.execute(
                 'SELECT name, email, phone FROM contacts WHERE id = %s',
-                (invoice['contact_id'],)
+                (contact_id,)
             )
             row = cursor.fetchone()
             if row:
@@ -371,7 +389,7 @@ def generate_conduce_pdf(invoice_id: int) -> StreamingResponse:
             'phone':        contact.get('phone', ''),
         }
 
-        cursor.execute('SELECT * FROM quote_items WHERE quote_id = %s', (invoice['quote_id'],))
+        cursor.execute('SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id', (invoice['quote_id'],))
         items = [dict(row) for row in cursor.fetchall()]
 
         cursor.execute('SELECT project_name FROM quotes WHERE quote_id = %s', (invoice['quote_id'],))

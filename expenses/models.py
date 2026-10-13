@@ -4,9 +4,12 @@ from datetime import date
 
 
 class ExpenseBase(BaseModel):
+    # client_id: resolved to clients.company_name (dev frontend).
+    # client_name: free text used when client_id is absent (main frontend).
+    client_id: Optional[int] = None
+    client_name: Optional[str] = None
     date: date
     category: str
-    client_name: Optional[str] = None   # <-- ADD THIS
     description: Optional[str] = None
     amount: float
     payment_method: Optional[str] = None
@@ -19,9 +22,10 @@ class ExpenseCreate(ExpenseBase):
 
 
 class ExpenseUpdate(BaseModel):
+    # client_id is intentionally not updatable: it is not a column in expenses.
     date: Optional[date] = None
     category: Optional[str] = None
-    client_name: Optional[str] = None   # <-- ADD THIS
+    client_name: Optional[str] = None
     description: Optional[str] = None
     amount: Optional[float] = None
     payment_method: Optional[str] = None

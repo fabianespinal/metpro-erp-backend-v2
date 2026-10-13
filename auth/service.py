@@ -10,10 +10,9 @@ from passlib.context import CryptContext
 # JWT / SECURITY CONFIG
 # =========================
 
-SECRET_KEY = os.environ.get(
-    "SECRET_KEY",
-    "metpro-erp-secret-key-change-in-production-2026"
-)
+SECRET_KEY = os.environ.get("SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError("SECRET_KEY environment variable is required")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
@@ -56,35 +55,30 @@ def create_access_token(data: dict) -> str:
 
 def verify_token(
     authorization: str = Header(None),
-    token: str = None
 ):
     """
-    Verify JWT token from Authorization header (Bearer <token>)
-    or from a 'token' query parameter (e.g. iframe usage).
+    Verify JWT token from the Authorization header (Bearer <token>).
+    Query-string tokens are not accepted.
     Returns the decoded payload if valid.
     """
-    # Get token from Authorization: Bearer <token> header or from query param
-    if authorization:
-        try:
-            scheme, token_value = authorization.split()
-            if scheme.lower() != "bearer":
-                raise HTTPException(
-                    status_code=401,
-                    detail="Invalid authorization scheme"
-                )
-            token = token_value
-        except ValueError:
-            raise HTTPException(
-                status_code=401,
-                detail="Invalid authorization header format"
-            )
-    elif token:
-        # token provided via query string
-        pass
-    else:
+    if not authorization:
         raise HTTPException(
             status_code=401,
             detail="Missing authorization token"
+        )
+
+    try:
+        scheme, token = authorization.split()
+    except ValueError:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid authorization header format"
+        )
+
+    if scheme.lower() != "bearer":
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid authorization scheme"
         )
 
     if not token:

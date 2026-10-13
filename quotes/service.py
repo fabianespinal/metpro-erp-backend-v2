@@ -4,6 +4,7 @@
 from typing import List, Optional
 from fastapi import HTTPException
 import json
+import uuid
 from datetime import datetime, date
 from database import get_db_connection
 from psycopg2.extras import RealDictCursor
@@ -56,8 +57,8 @@ def calculate_quote_totals(items: List[dict], charges: dict) -> dict:
 
 
 def generate_quote_id() -> str:
-    timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
-    return f"Q-{timestamp}"
+    """Random UUID4. Not guessable, no same-second collisions."""
+    return str(uuid.uuid4())
 
 
 def _serialize_date(d) -> Optional[str]:

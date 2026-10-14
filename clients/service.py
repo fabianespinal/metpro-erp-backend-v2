@@ -4,6 +4,10 @@ import csv
 import io
 from datetime import datetime
 from database import get_db_connection
+from core.errors import internal_error
+import logging
+
+logger = logging.getLogger("metpro.clients")
 from psycopg2.extras import RealDictCursor
 
 
@@ -36,7 +40,7 @@ def create_client(company_name: str, contact_name: Optional[str], email: Optiona
     except Exception as e:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise internal_error("Failed to create client", e)
 
     finally:
         if conn:
@@ -158,7 +162,7 @@ def update_client(client_id: int, company_name: str, contact_name: Optional[str]
     except Exception as e:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to update client: {str(e)}")
+        raise internal_error("Failed to update client", e)
 
     finally:
         if conn:
@@ -188,7 +192,7 @@ def delete_client(client_id: int) -> dict:
     except Exception as e:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
+        raise internal_error("Delete failed", e)
 
     finally:
         if conn:
@@ -289,7 +293,8 @@ async def import_clients_from_csv(file_content: bytes, filename: str, skip_dupli
                 inserted += 1
 
             except Exception as e:
-                errors.append(f"Row {idx} ({company}): {str(e)[:80]}")
+                logger.exception("Client CSV import: row %s (%s) could not be saved", idx, company)
+                errors.append(f"Row {idx} ({company}): row could not be saved")
                 skipped += 1
 
         conn.commit()
@@ -319,8 +324,8 @@ async def import_clients_from_csv(file_content: bytes, filename: str, skip_dupli
     except Exception as e:
         if conn:
             conn.rollback()
-        errors.append(f"System error: {str(e)[:100]}")
-        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)[:100]}")
+        errors.append("System error: import aborted")
+        raise internal_error("Import failed", e)
 
     finally:
         if conn:

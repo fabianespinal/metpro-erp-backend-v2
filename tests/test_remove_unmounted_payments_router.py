@@ -22,7 +22,7 @@ def test_live_payment_route_requires_auth():
     assert len(matches) == 1
 
     dep_names = [d.call.__name__ for d in matches[0].dependant.dependencies if d.call is not None]
-    assert "verify_token" in dep_names
+    assert "require_auth" in dep_names
 
 
 def test_no_unauthenticated_payment_route_is_mounted():
@@ -32,4 +32,4 @@ def test_no_unauthenticated_payment_route_is_mounted():
         path = getattr(r, "path", "")
         if "payments" in path and "POST" in getattr(r, "methods", set()):
             dep_names = [d.call.__name__ for d in r.dependant.dependencies if d.call is not None]
-            assert "verify_token" in dep_names or "require_role" in dep_names, path
+            assert "require_auth" in dep_names or "require_role" in dep_names, path

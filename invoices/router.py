@@ -6,7 +6,7 @@ from typing import Annotated, List, Optional
 
 from .models import Invoice, InvoiceCreate, InvoiceStatusUpdate
 from . import service
-from auth.service import verify_token, require_role
+from auth.service import require_auth, require_role
 from core.rate_limit import public_rate_limit
 
 from invoices.payments.models import PaymentCreate
@@ -23,7 +23,7 @@ router = APIRouter(prefix="/invoices", tags=["invoices"])
 
 
 @router.post("/", response_model=Invoice)
-def create_invoice(invoice: InvoiceCreate, current_user: dict = Depends(verify_token)):
+def create_invoice(invoice: InvoiceCreate, current_user: dict = Depends(require_auth)):
     result = service.create_invoice_from_quote(invoice.quote_id, invoice.notes)
     return Invoice(**result)
 
@@ -32,14 +32,14 @@ def create_invoice(invoice: InvoiceCreate, current_user: dict = Depends(verify_t
 def get_invoices(
     client_id: Optional[int] = None,
     status: Optional[str] = None,
-    current_user: dict = Depends(verify_token),
+    current_user: dict = Depends(require_auth),
 ):
     invoices = service.get_all_invoices(client_id, status)
     return [Invoice(**inv) for inv in invoices]
 
 
 @router.post("/{invoice_id}/send")
-def send_invoice(invoice_id: int, current_user: dict = Depends(verify_token)):
+def send_invoice(invoice_id: int, current_user: dict = Depends(require_auth)):
     """Send invoice PDF to client via email"""
 
     invoice = service.get_invoice_with_contact(invoice_id)
@@ -122,13 +122,13 @@ def send_invoice(invoice_id: int, current_user: dict = Depends(verify_token)):
 
 
 @router.get("/{invoice_id}", response_model=Invoice)
-def get_invoice(invoice_id: int, current_user: dict = Depends(verify_token)):
+def get_invoice(invoice_id: int, current_user: dict = Depends(require_auth)):
     result = service.get_invoice_by_id(invoice_id)
     return Invoice(**result)
 
 
 @router.get("/number/{invoice_number}", response_model=Invoice)
-def get_invoice_by_number(invoice_number: str, current_user: dict = Depends(verify_token)):
+def get_invoice_by_number(invoice_number: str, current_user: dict = Depends(require_auth)):
     result = service.get_invoice_by_number(invoice_number)
     return Invoice(**result)
 
@@ -137,7 +137,7 @@ def get_invoice_by_number(invoice_number: str, current_user: dict = Depends(veri
 def update_invoice_status(
     invoice_id: int,
     status_update: InvoiceStatusUpdate,
-    current_user: dict = Depends(verify_token),
+    current_user: dict = Depends(require_auth),
 ):
     result = service.update_invoice_status(invoice_id, status_update.status)
     return Invoice(**result)
@@ -149,7 +149,7 @@ def delete_invoice(invoice_id: int, _admin: dict = Depends(require_role("admin")
 
 
 @router.post("/{invoice_id}/payments")
-def add_payment(invoice_id: int, data: PaymentCreate, current_user: dict = Depends(verify_token)):
+def add_payment(invoice_id: int, data: PaymentCreate, current_user: dict = Depends(require_auth)):
     conn = get_db_connection()
     try:
         payment_id = create_payment(conn, invoice_id, data)

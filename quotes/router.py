@@ -6,7 +6,7 @@ import json
 
 from .models import QuoteCreate, StatusUpdate, QuoteUpdate
 from . import service
-from auth.service import verify_token, require_role
+from auth.service import require_auth, require_role
 from core.rate_limit import public_rate_limit
 from pdf.builder_quote import create_quote_pdf
 
@@ -18,7 +18,7 @@ router = APIRouter(prefix="/quotes", tags=["quotes"])
 
 
 @router.post("/")
-def create_quote(quote: QuoteCreate, current_user: dict = Depends(verify_token)):
+def create_quote(quote: QuoteCreate, current_user: dict = Depends(require_auth)):
     """Create a new quote"""
     items = [item.dict() for item in quote.items]
     charges = quote.included_charges.dict()
@@ -40,7 +40,7 @@ def create_quote(quote: QuoteCreate, current_user: dict = Depends(verify_token))
 def get_quotes(
     client_id: Optional[int] = None,
     status: Optional[str] = None,
-    current_user: dict = Depends(verify_token),
+    current_user: dict = Depends(require_auth),
 ):
     """Get all quotes with optional filters"""
     return service.get_all_quotes(client_id, status)
@@ -118,7 +118,7 @@ def get_quote_public_pdf(token: Annotated[str, Path(pattern=PUBLIC_TOKEN_PATTERN
 
 
 @router.post("/{quote_id}/send")
-def send_quote(quote_id: str, current_user: dict = Depends(verify_token)):
+def send_quote(quote_id: str, current_user: dict = Depends(require_auth)):
     """Send quote PDF to client via email"""
 
     quote = service.get_quote_with_contact(quote_id)
@@ -185,13 +185,13 @@ def send_quote(quote_id: str, current_user: dict = Depends(verify_token)):
 
 
 @router.get("/{quote_id}")
-def get_quote(quote_id: str, current_user: dict = Depends(verify_token)):
+def get_quote(quote_id: str, current_user: dict = Depends(require_auth)):
     """Get a single quote"""
     return service.get_quote_by_id(quote_id)
 
 
 @router.get("/{quote_id}/pdf")
-def get_quote_pdf(quote_id: str, current_user: dict = Depends(verify_token)):
+def get_quote_pdf(quote_id: str, current_user: dict = Depends(require_auth)):
     """Generate and stream a quote PDF"""
 
     quote = service.get_quote_with_contact(quote_id)
@@ -251,7 +251,7 @@ def get_quote_pdf(quote_id: str, current_user: dict = Depends(verify_token)):
 def update_quote(
     quote_id: str,
     quote_update: QuoteUpdate,
-    current_user: dict = Depends(verify_token),
+    current_user: dict = Depends(require_auth),
 ):
     """Update an existing quote"""
     return service.update_quote(quote_id, quote_update)
@@ -261,20 +261,20 @@ def update_quote(
 def update_quote_status(
     quote_id: str,
     status_update: StatusUpdate,
-    current_user: dict = Depends(verify_token),
+    current_user: dict = Depends(require_auth),
 ):
     """Update quote status"""
     return service.update_quote_status(quote_id, status_update.status)
 
 
 @router.post("/{quote_id}/duplicate")
-def duplicate_quote(quote_id: str, current_user: dict = Depends(verify_token)):
+def duplicate_quote(quote_id: str, current_user: dict = Depends(require_auth)):
     """Duplicate an existing quote"""
     return service.duplicate_quote(quote_id)
 
 
 @router.post("/{quote_id}/convert-to-invoice")
-def convert_to_invoice(quote_id: str, current_user: dict = Depends(verify_token)):
+def convert_to_invoice(quote_id: str, current_user: dict = Depends(require_auth)):
     """Convert approved quote to invoice"""
     invoice = service.convert_quote_to_invoice(quote_id)
     return {

@@ -4,7 +4,7 @@ from .service import (
     verify_password,
     create_access_token,
     get_password_hash,
-    get_current_user_from_bearer,
+    require_auth,
     require_role
 )
 from database import get_db_connection
@@ -158,7 +158,7 @@ def register(user_data: RegisterRequest, _admin: dict = Depends(require_role("ad
 # ============================
 
 @router.get("/me")
-def get_current_user(user = Depends(get_current_user_from_bearer)):
+def get_current_user(user = Depends(require_auth)):
     return {
         "username": user.get("sub"),
         "user_id": user.get("user_id"),
@@ -173,7 +173,7 @@ def get_current_user(user = Depends(get_current_user_from_bearer)):
 @router.post("/change-password")
 def change_password(
     data: ChangePasswordRequest,
-    user = Depends(get_current_user_from_bearer)
+    user = Depends(require_auth)
 ):
     username = user.get("sub")
 

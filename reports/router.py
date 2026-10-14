@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from typing import Optional
 from . import service
-from auth.service import verify_token
+from auth.service import require_auth
 
 router = APIRouter(prefix='/reports', tags=['reports'])
 
@@ -10,7 +10,7 @@ def get_quotes_summary(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     client_id: Optional[int] = None,
-    current_user: dict = Depends(verify_token)
+    current_user: dict = Depends(require_auth)
 ):
     """Quotes summary report: totals + status breakdown"""
     return service.get_quotes_summary(start_date, end_date, client_id)
@@ -20,7 +20,7 @@ def get_revenue_report(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     client_id: Optional[int] = None,
-    current_user: dict = Depends(verify_token)
+    current_user: dict = Depends(require_auth)
 ):
     """Revenue report: approved + invoiced totals"""
     return service.get_revenue_report(start_date, end_date, client_id)
@@ -29,7 +29,7 @@ def get_revenue_report(
 def get_client_activity(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
-    current_user: dict = Depends(verify_token)
+    current_user: dict = Depends(require_auth)
 ):
     """Client activity report"""
     return service.get_client_activity(start_date, end_date)

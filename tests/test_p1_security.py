@@ -60,7 +60,7 @@ def _bearer(auth, username="alice"):
 
 def test_active_user_is_accepted(auth, monkeypatch):
     _patch_db(monkeypatch, [{"is_active": True}])
-    payload = auth.verify_token(_bearer(auth))
+    payload = auth.require_auth(_bearer(auth))
     assert payload["sub"] == "alice"
 
 
@@ -68,7 +68,7 @@ def test_deactivated_user_is_rejected(auth, monkeypatch):
     from fastapi import HTTPException
     _patch_db(monkeypatch, [{"is_active": False}])
     with pytest.raises(HTTPException) as e:
-        auth.verify_token(_bearer(auth))
+        auth.require_auth(_bearer(auth))
     assert e.value.status_code == 401
     assert e.value.detail == "Account disabled"
 
@@ -77,7 +77,7 @@ def test_deleted_user_is_rejected(auth, monkeypatch):
     from fastapi import HTTPException
     _patch_db(monkeypatch, [])
     with pytest.raises(HTTPException) as e:
-        auth.verify_token(_bearer(auth))
+        auth.require_auth(_bearer(auth))
     assert e.value.detail == "User not found"
 
 
@@ -86,7 +86,7 @@ def test_toggle_off_skips_db(auth, monkeypatch):
     import database
     called = []
     monkeypatch.setattr(database, "get_db_connection", lambda: called.append(1))
-    auth.verify_token(_bearer(auth))
+    auth.require_auth(_bearer(auth))
     assert called == []
 
 
@@ -95,7 +95,7 @@ def test_bearer_flow_also_checks_active(auth, monkeypatch):
     _patch_db(monkeypatch, [{"is_active": False}])
     tok = auth.create_access_token({"sub": "alice", "role": "admin"})
     with pytest.raises(HTTPException):
-        auth.get_current_user_from_bearer(tok)
+        auth.require_auth("Bearer " + tok)
 
 
 def test_expiry_is_env_driven(monkeypatch):

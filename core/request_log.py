@@ -14,8 +14,28 @@ Rules:
     raw URL. Raw public paths contain bearer-like tokens.
 """
 import sys
+from contextvars import ContextVar
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Dict, Optional
+
+# Per-request holder, created by the middleware. require_auth writes the
+# validated subject into it. A dict is shared by reference, so writes from
+# threadpool dependencies are visible to the middleware.
+_holder: ContextVar[Optional[Dict[str, object]]] = ContextVar("request_log_holder", default=None)
+
+
+def begin_request_holder() -> Dict[str, object]:
+    holder: Dict[str, object] = {}
+    _holder.set(holder)
+    return holder
+
+
+def mark_authenticated(sub: str) -> None:
+    holder = _holder.get()
+    if holder is not None:
+        holder["user_sub"] = sub
+        holder["is_authenticated"] = True
+
 
 PATH_MAX = 512
 USER_SUB_MAX = 255

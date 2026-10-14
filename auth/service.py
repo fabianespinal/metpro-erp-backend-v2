@@ -1,5 +1,6 @@
 from core.errors import api_error
 from core.rate_limit import enforce_user_limit
+from core.request_log import mark_authenticated
 import os
 from datetime import datetime, timedelta
 
@@ -141,6 +142,7 @@ def require_auth(authorization: str = Header(None)) -> dict:
         raise api_error(401, "Token is empty", "TOKEN_EMPTY")
 
     payload = _validate_access_token(token)
+    mark_authenticated(payload["sub"])
     enforce_user_limit(payload["sub"])
     return payload
 

@@ -54,6 +54,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Audit log (item 12): metadata only, never bodies. Off /health and /auth/login.
+from core.request_log_middleware import RequestLogMiddleware  # noqa: E402
+app.add_middleware(RequestLogMiddleware, asgi_app=app)
+
 # ============================================================
 # STATIC FILES
 # ============================================================

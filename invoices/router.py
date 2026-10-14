@@ -1,5 +1,4 @@
 import json
-import base64
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Response
 from typing import Annotated, List, Optional

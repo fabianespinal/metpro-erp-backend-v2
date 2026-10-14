@@ -1,13 +1,9 @@
 import json
-import io
 from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
 from database import get_db_connection
 from psycopg2.extras import RealDictCursor
-from datetime import datetime
 from pdf.utils.date_utils import format_date
-from pdf.builder_quote import create_quote_pdf
-from pdf.builder_invoice import create_invoice_pdf
 from pdf.builder_conduce import create_conduce_pdf
 from pdf.utils.layout_utils import build_quote_invoice_pdf   # ✅ ADD THIS
 
@@ -85,9 +81,9 @@ def generate_quote_pdf(quote_id: str) -> StreamingResponse:
         for item in items:
             subtotal = float(item.get('quantity') or 0) * float(item.get('unit_price') or 0)
             if item.get('discount_type') == 'percentage':
-                total_discounts += subtotal * (float(item.get('discount_value', 0)) / 100)
+                total_discounts += subtotal * (float(item.get('discount_value') or 0) / 100)
             elif item.get('discount_type') == 'fixed':
-                total_discounts += float(item.get('discount_value', 0))
+                total_discounts += float(item.get('discount_value') or 0)
 
         items_after_discount = items_total - total_discounts
 
@@ -266,9 +262,9 @@ def generate_invoice_pdf(invoice_id: int) -> StreamingResponse:
         for item in items:
             subtotal = float(item.get('quantity') or 0) * float(item.get('unit_price') or 0)
             if item.get('discount_type') == 'percentage':
-                total_discounts += subtotal * (float(item.get('discount_value', 0)) / 100)
+                total_discounts += subtotal * (float(item.get('discount_value') or 0) / 100)
             elif item.get('discount_type') == 'fixed':
-                total_discounts += float(item.get('discount_value', 0))
+                total_discounts += float(item.get('discount_value') or 0)
 
         items_after_discount = items_total - total_discounts
 

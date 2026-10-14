@@ -93,12 +93,12 @@ def test_null_quantity_is_treated_as_zero():
     assert float(result["items_total"]) == 0.0
 
 
-def test_null_discount_value_raises_current_behavior():
-    # Documents existing behavior, not a desired one. float(None) raises for discount rows.
-    # The migration keeps discount_value nullable, so this stays a known gap until handled.
+def test_null_discount_value_treated_as_zero():
+    # Reliability fix: NULL discount_value used to raise TypeError (HTTP 500).
     items = [{"quantity": Decimal("1"), "unit_price": Decimal("10"), "discount_type": "fixed", "discount_value": None}]
-    with pytest.raises(TypeError):
-        calculate_quote_totals(items, {})
+    result = calculate_quote_totals(items, {})
+    assert float(result["total_discounts"]) == 0.0
+    assert float(result["items_total"]) == pytest.approx(10.0)
 
 
 def test_decimal_json_encoding_matches_float_value():

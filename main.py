@@ -24,6 +24,10 @@ app = FastAPI(
 
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
+# Unified error model: {"detail": ..., "code": ...} for every error.
+from core.errors import register_error_handlers  # noqa: E402
+register_error_handlers(app)
+
 # ============================================================
 # CORS CONFIGURATION — LOCAL + PRODUCTION + STAGING
 # ============================================================

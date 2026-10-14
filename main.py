@@ -1,5 +1,4 @@
 import os
-from datetime import datetime
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
@@ -109,20 +108,4 @@ def read_root():
 
 @app.get("/health")
 def health_check():
-    return {
-        "status": "healthy",
-        "timestamp": datetime.now().isoformat(),
-        "modules": [
-            "auth",
-            "users",
-            "clients",
-            "products",
-            "quotes",
-            "invoices",
-            "projects",
-            "reports",
-            "pdf",
-            "expenses",
-            "contacts",
-        ],
-    }
+    return {"status": "healthy"}

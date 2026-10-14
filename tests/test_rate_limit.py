@@ -253,7 +253,7 @@ def test_public_route_success_body_unchanged_under_limit(monkeypatch):
         f"/quotes/public/{QUOTE_TOKEN}", headers={"X-Forwarded-For": "203.0.113.80"}
     )
     assert resp.status_code == 200
-    assert resp.json() == {"quote_id": "Q-7", "company_name": "Acme"}
+    assert resp.json() == {"data": {"quote_id": "Q-7", "company_name": "Acme"}, "success": True}
 
 
 def test_public_limit_disabled_by_toggle(monkeypatch):

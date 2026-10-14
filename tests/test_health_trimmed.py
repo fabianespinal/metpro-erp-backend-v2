@@ -14,7 +14,7 @@ from main import app  # noqa: E402
 def test_health_returns_only_status_field():
     resp = TestClient(app).get("/health")
     assert resp.status_code == 200
-    assert resp.json() == {"status": "healthy"}
+    assert resp.json() == {"data": {"status": "healthy"}, "success": True}
 
 
 def test_health_has_no_module_or_timestamp_fields():

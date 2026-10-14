@@ -113,3 +113,10 @@ def read_root():
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
+
+
+# ============================================================
+# SUCCESS ENVELOPE: {"data": ..., "success": true} for every JSON success
+# ============================================================
+from core.responses import apply_success_envelope  # noqa: E402
+apply_success_envelope(app)

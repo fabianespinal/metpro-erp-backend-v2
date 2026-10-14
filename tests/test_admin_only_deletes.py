@@ -126,4 +126,4 @@ def test_admin_delete_is_allowed(client, monkeypatch, module, name, svc_module):
     )
 
     assert resp.status_code == 200, resp.text
-    assert resp.json() == {"deleted": True}
+    assert resp.json() == {"data": {"deleted": True}, "success": True}

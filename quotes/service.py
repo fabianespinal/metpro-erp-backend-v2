@@ -618,6 +618,23 @@ def update_quote_status(quote_id: str, status: str) -> dict:
             conn.close()
 
 
+def _invoice_line_amounts(item: dict) -> tuple:
+    """Return (discount_amount, line_total) for one quote item, in currency.
+
+    Percentage discounts apply to the line subtotal. Fixed discounts are a flat amount.
+    NULL discount_value is treated as 0 in this path.
+    """
+    subtotal = float(item["quantity"] or 0) * float(item["unit_price"] or 0)
+    discount_value = float(item.get("discount_value") or 0)
+    if item.get("discount_type") == "percentage":
+        discount = subtotal * discount_value / 100
+    elif item.get("discount_type") == "fixed":
+        discount = discount_value
+    else:
+        discount = 0.0
+    return round(discount, 2), round(subtotal - discount, 2)
+
+
 def convert_quote_to_invoice(quote_id: str) -> dict:
     """Convert an approved quote to an invoice."""
     conn = None
@@ -666,11 +683,20 @@ def convert_quote_to_invoice(quote_id: str) -> dict:
         invoice_number = f"INV-{timestamp}"
         invoice_date = datetime.now().strftime("%Y-%m-%d")
 
+        # Header figures, rounded to cents. Identity holds exactly:
+        # subtotal - discount_total + charges_total + itbis_total = grand_total
+        subtotal_r = round(totals["items_total"], 2)
+        discount_r = round(totals["total_discounts"], 2)
+        itbis_r = round(totals["itbis"], 2)
+        grand_r = round(totals["grand_total"], 2)
+        charges_r = round(grand_r - itbis_r - (subtotal_r - discount_r), 2)
+
         cursor.execute("""
             INSERT INTO invoices
                 (quote_id, invoice_number, invoice_date, client_id, contact_id,
+                 subtotal, discount_total, charges_total, itbis_total, grand_total,
                  total_amount, status, notes, payment_terms, valid_until)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
             quote_id,
@@ -678,7 +704,12 @@ def convert_quote_to_invoice(quote_id: str) -> dict:
             invoice_date,
             quote["client_id"],
             quote["contact_id"],
-            totals["grand_total"],
+            subtotal_r,
+            discount_r,
+            charges_r,
+            itbis_r,
+            grand_r,
+            grand_r,
             "Pending",
             quote.get("notes"),
             quote.get("payment_terms"),
@@ -687,19 +718,19 @@ def convert_quote_to_invoice(quote_id: str) -> dict:
 
         invoice_id = cursor.fetchone()["id"]   # FIXED
 
-        # 5. Insert invoice items
-        invoice_item_rows = [
-            (
+        # 5. Insert invoice items (discount stored as currency amount; total = quantity*unit_price - discount)
+        invoice_item_rows = []
+        for item in items:
+            discount_amount, line_total = _invoice_line_amounts(item)
+            invoice_item_rows.append((
                 invoice_id,
                 item["product_id"],
                 item["product_name"],
                 item["quantity"],
                 item["unit_price"],
-                item.get("discount_value", 0),
-                (item["quantity"] * item["unit_price"]) - item.get("discount_value", 0),
-            )
-            for item in items
-        ]
+                discount_amount,
+                line_total,
+            ))
         if invoice_item_rows:
             execute_values(
                 cursor,

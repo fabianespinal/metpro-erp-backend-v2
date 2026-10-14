@@ -1,7 +1,7 @@
 -- ============================================================
 -- P1: fix column defaults that stored literal quote characters
 -- Target:   Supabase PostgreSQL (public schema)
--- Status:   NOT APPLIED. Run only after explicit approval.
+-- Status:   APPLIED to production 2026-10-13 (verified: defaults 'none' and 'Draft').
 -- Safe to re-run: SET DEFAULT is idempotent.
 -- Existing rows are NOT changed. Check them with the verification query.
 -- ============================================================
@@ -13,8 +13,9 @@ ALTER TABLE quotes      ALTER COLUMN status        SET DEFAULT 'Draft';
 
 COMMIT;
 
--- Verification (read-only). Expect 0 rows for the 'bad' checks.
--- SELECT 'quote_items.discount_type' AS col, COUNT(*) AS bad_rows
---   FROM quote_items WHERE discount_type LIKE '''%'''
--- UNION ALL
--- SELECT 'quotes.status', COUNT(*) FROM quotes WHERE status LIKE '''%''';
+-- Verification (read-only). Expect the two rows below with clean defaults.
+-- SELECT table_name, column_name, column_default
+-- FROM information_schema.columns
+-- WHERE table_schema = 'public'
+--   AND ((table_name = 'quote_items' AND column_name = 'discount_type')
+--     OR (table_name = 'quotes' AND column_name = 'status'));

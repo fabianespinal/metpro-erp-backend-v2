@@ -202,6 +202,21 @@ def get_quote_by_id(quote_id: str) -> dict:
             conn.close()
 
 
+def quote_id_for_public_token(token: str) -> str:
+    """Resolve a public token to quotes.quote_id. 404 when not found."""
+    from fastapi import HTTPException
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SELECT quote_id FROM quotes WHERE public_token = %s", (token,))
+        row = cursor.fetchone()
+    finally:
+        conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    return row["quote_id"]
+
+
 def get_quote_with_contact(quote_id: str) -> dict:
     """
     Load a quote joined with full client and selected contact info.
@@ -216,6 +231,7 @@ def get_quote_with_contact(quote_id: str) -> dict:
         cursor.execute("""
             SELECT
                 q.quote_id,
+                q.public_token,
                 q.client_id,
                 q.contact_id,
                 q.project_name,

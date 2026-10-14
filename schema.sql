@@ -401,7 +401,8 @@ CREATE TABLE public.quotes (
     updated_at timestamp without time zone DEFAULT now(),
     payment_terms text,
     valid_until date,
-    contact_id integer
+    contact_id integer,
+    public_token uuid DEFAULT gen_random_uuid() NOT NULL
 );
 
 
@@ -601,6 +602,13 @@ CREATE INDEX idx_projects_dates ON public.projects USING btree (start_date, end_
 --
 
 CREATE INDEX idx_projects_status ON public.projects USING btree (status);
+
+
+--
+-- Name: quotes_public_token_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX quotes_public_token_key ON public.quotes USING btree (public_token);
 
 
 --

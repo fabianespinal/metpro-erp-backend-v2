@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Annotated
+from fastapi import APIRouter, Depends, HTTPException, Path
 from fastapi.responses import StreamingResponse
 from typing import Optional
 import json
@@ -44,15 +45,24 @@ def get_quotes(
     return service.get_all_quotes(client_id, status)
 
 
-@router.get("/{quote_id}/public")
-def get_quote_public(quote_id: str):
-    """Public endpoint — no auth required. Used for client view page."""
-    return service.get_quote_with_contact(quote_id)
+PUBLIC_TOKEN_PATTERN = (
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+)
 
 
-@router.get("/{quote_id}/public/pdf")
-def get_quote_public_pdf(quote_id: str):
-    """Public PDF endpoint — no auth required."""
+@router.get("/public/{token}")
+def get_quote_public(token: Annotated[str, Path(pattern=PUBLIC_TOKEN_PATTERN)]):
+    """Public quote view. Access is by unguessable token only."""
+    quote_id = service.quote_id_for_public_token(token)
+    quote = service.get_quote_with_contact(quote_id)
+    quote.pop("public_token", None)
+    return quote
+
+
+@router.get("/public/{token}/pdf")
+def get_quote_public_pdf(token: Annotated[str, Path(pattern=PUBLIC_TOKEN_PATTERN)]):
+    """Public quote PDF. Access is by unguessable token only."""
+    quote_id = service.quote_id_for_public_token(token)
     quote = service.get_quote_with_contact(quote_id)
 
     client = {
@@ -164,6 +174,7 @@ def send_quote(quote_id: str, current_user: dict = Depends(verify_token)):
         company_name=quote["company_name"],
         project_name=quote.get("project_name", ""),
         quote_id=quote_id,
+        public_token=str(quote["public_token"]),
         pdf_bytes=pdf_bytes,
     )
 

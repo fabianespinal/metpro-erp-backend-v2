@@ -129,3 +129,13 @@ def register_error_handlers(app) -> None:
     app.add_exception_handler(StarletteHTTPException, _http_exception_handler)
     app.add_exception_handler(RequestValidationError, _validation_exception_handler)
     app.add_exception_handler(Exception, _unhandled_exception_handler)
+
+
+def api_error(status_code: int, message: str, code: str) -> HTTPException:
+    """Return an HTTPException whose error code is set explicitly.
+
+    The message is the client-facing text and is passed through unchanged.
+    """
+    exc = HTTPException(status_code=status_code, detail=message)
+    exc.code = code  # type: ignore[attr-defined]
+    return exc

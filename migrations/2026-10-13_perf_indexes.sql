@@ -1,7 +1,8 @@
 -- ============================================================
 -- Module E: indexes on filter, join, and ORDER BY columns
 -- Target:   Supabase PostgreSQL (public schema)
--- Status:   NOT APPLIED. Run only after explicit approval.
+-- Status:   APPLIED to production 2026-10-13. 15 indexes created, 1 skipped
+--           (projects.client_id already indexed). Index count on target tables: 32.
 --
 -- Idempotent. For each (table, column):
 --   creates idx_<table>_<column> only if NO existing index already

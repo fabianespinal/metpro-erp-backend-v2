@@ -19,7 +19,7 @@ def clean_text(value: str) -> str:
 # ---------------------------------------------------------
 # QUOTES
 # ---------------------------------------------------------
-def send_quote_email(contact_email, contact_name, company_name, project_name, quote_id, pdf_bytes):
+def send_quote_email(contact_email, contact_name, company_name, project_name, quote_id, public_token, pdf_bytes):
 
     clean_title = clean_text(project_name or company_name)
 
@@ -31,7 +31,7 @@ def send_quote_email(contact_email, contact_name, company_name, project_name, qu
         <p>Puede ver la cotización en línea aquí:</p>
 
         <p>
-            <a href="https://metprord.site/q/{quote_id}"
+            <a href="https://metprord.site/q/{public_token}"
                style="display:inline-block;padding:12px 20px;background:#0052cc;color:white;
                       text-decoration:none;border-radius:6px;font-weight:bold;font-size:15px;">
                 Ver Cotización en Línea

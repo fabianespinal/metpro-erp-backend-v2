@@ -3,6 +3,7 @@ from fastapi import HTTPException
 from datetime import datetime
 import json
 from database import get_db_connection
+from core.errors import internal_error
 from psycopg2.extras import RealDictCursor
 
 
@@ -145,7 +146,7 @@ def create_invoice_from_quote(quote_id: str, notes: Optional[str] = None) -> dic
     except Exception as e:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to create invoice: {str(e)}")
+        raise internal_error("Failed to create invoice", e)
     finally:
         if conn:
             conn.close()
@@ -288,7 +289,7 @@ def update_invoice_status(invoice_id: int, status: str) -> dict:
     except Exception as e:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Update failed: {str(e)}")
+        raise internal_error("Update failed", e)
     finally:
         if conn:
             conn.close()
@@ -321,7 +322,7 @@ def delete_invoice(invoice_id: int) -> dict:
     except Exception as e:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
+        raise internal_error("Delete failed", e)
     finally:
         if conn:
             conn.close()

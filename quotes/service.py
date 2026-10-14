@@ -7,6 +7,7 @@ import json
 import uuid
 from datetime import datetime, date
 from database import get_db_connection
+from core.errors import internal_error
 from psycopg2.extras import RealDictCursor, execute_values
 
 INS_SQL = "INSERT INTO quote_items (quote_id, product_name, quantity, unit_price, discount_type, discount_value) VALUES %s"
@@ -165,7 +166,7 @@ def create_quote(
     except Exception as e:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to create quote: {str(e)}")
+        raise internal_error("Failed to create quote", e)
 
     finally:
         if conn:
@@ -438,7 +439,7 @@ def update_quote(quote_id: str, quote_update) -> dict:
     except Exception as e:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to update quote: {str(e)}")
+        raise internal_error("Failed to update quote", e)
 
     finally:
         if conn:
@@ -466,7 +467,7 @@ def delete_quote(quote_id: str) -> dict:
     except Exception as e:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
+        raise internal_error("Delete failed", e)
 
     finally:
         if conn:
@@ -572,7 +573,7 @@ def duplicate_quote(quote_id: str) -> dict:
     except Exception as e:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to duplicate quote: {str(e)}")
+        raise internal_error("Failed to duplicate quote", e)
 
     finally:
         if conn:
@@ -611,7 +612,7 @@ def update_quote_status(quote_id: str, status: str) -> dict:
     except Exception as e:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to update status: {str(e)}")
+        raise internal_error("Failed to update status", e)
 
     finally:
         if conn:
@@ -731,7 +732,7 @@ def convert_quote_to_invoice(quote_id: str) -> dict:
     except Exception as e:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to convert quote to invoice: {str(e)}")
+        raise internal_error("Failed to convert quote to invoice", e)
 
     finally:
         if conn:

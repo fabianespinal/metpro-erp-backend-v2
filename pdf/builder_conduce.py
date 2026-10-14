@@ -2,6 +2,9 @@ import io
 import os
 from fpdf import FPDF
 from pdf.utils.text_utils import sanitize_text
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Import external footer helper
 try:
@@ -29,9 +32,9 @@ def create_conduce_pdf(doc_id, doc_date, client, project_name, notes, items):
         if os.path.exists(LOGO_PATH):
             pdf.image(LOGO_PATH, x=10, y=10, w=15)
         else:
-            print(f"Logo not found at: {LOGO_PATH}")
+            logger.error("Logo not found at: %s", LOGO_PATH)
     except Exception as e:
-        print(f"Logo loading failed: {str(e)}")
+        logger.error("Logo loading failed: %s", e)
 
     pdf.set_font('Arial', '', 6)
     pdf.set_text_color(120, 120, 120)

@@ -2,6 +2,9 @@ import io
 import os
 from fpdf import FPDF
 from pdf.utils.text_utils import sanitize_text
+import logging
+
+logger = logging.getLogger(__name__)
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 LOGO_PATH = os.path.join(BASE_DIR, "assets", "logo.png")
@@ -22,7 +25,7 @@ def add_footer_with_signature(pdf):
         pdf.add_font("GreatVibes", "", FONT_PATH, uni=True)
         font_loaded = True
     except Exception as e:
-        print(f"Font load failed: {e}")
+        logger.error("Font load failed: %s", e)
 
     # Left — METPRO signature
     pdf.set_xy(15, sig_y)
@@ -74,7 +77,7 @@ def build_quote_invoice_pdf(
         if os.path.exists(LOGO_PATH):
             pdf.image(LOGO_PATH, x=10, y=10, w=15)
     except Exception as e:
-        print(f"Logo loading failed: {str(e)}")
+        logger.error("Logo loading failed: %s", e)
 
     pdf.set_font('Arial', '', 6)
     pdf.set_text_color(120, 120, 120)

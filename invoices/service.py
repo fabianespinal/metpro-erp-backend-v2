@@ -17,9 +17,9 @@ def calculate_invoice_totals(items: List[dict], charges: dict) -> dict:
     for item in items:
         subtotal = float(item["quantity"] or 0) * float(item["unit_price"] or 0)
         if item.get("discount_type") == "percentage":
-            total_discounts += subtotal * (float(item.get("discount_value", 0)) / 100)
+            total_discounts += subtotal * (float(item.get("discount_value") or 0) / 100)
         elif item.get("discount_type") == "fixed":
-            total_discounts += float(item.get("discount_value", 0))
+            total_discounts += float(item.get("discount_value") or 0)
 
     items_after_discount = items_total - total_discounts
 

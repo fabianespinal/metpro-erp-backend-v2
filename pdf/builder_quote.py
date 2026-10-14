@@ -1,4 +1,3 @@
-import io
 from pdf.utils.layout_utils import build_quote_invoice_pdf
 
 def create_quote_pdf(

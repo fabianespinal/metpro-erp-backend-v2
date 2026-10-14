@@ -7,6 +7,7 @@ from typing import Annotated, List, Optional
 from .models import Invoice, InvoiceCreate, InvoiceStatusUpdate
 from . import service
 from auth.service import verify_token, require_role
+from core.rate_limit import public_rate_limit
 
 from invoices.payments.models import PaymentCreate
 from invoices.payments.service import create_payment
@@ -181,7 +182,7 @@ def _invoice_id_for_public_token(token: str) -> int:
     return row["id"]
 
 
-@router.get("/public/{token}")
+@router.get("/public/{token}", dependencies=[Depends(public_rate_limit)])
 def get_public_invoice(token: Annotated[str, Path(pattern=PUBLIC_TOKEN_PATTERN)]):
     """Public invoice view. Access is by unguessable token only."""
     invoice_id = _invoice_id_for_public_token(token)
@@ -261,7 +262,7 @@ def _render_public_invoice_pdf(invoice_id: int) -> Response:
     )
 
 
-@router.get("/public/{token}/pdf")
+@router.get("/public/{token}/pdf", dependencies=[Depends(public_rate_limit)])
 def get_public_invoice_pdf(token: Annotated[str, Path(pattern=PUBLIC_TOKEN_PATTERN)]):
     """Public PDF download. Access is by unguessable token only."""
     invoice_id = _invoice_id_for_public_token(token)

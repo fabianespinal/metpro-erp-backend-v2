@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, File, UploadFile
 from typing import List
 from .models import Product, ProductBase
 from . import service
-from auth.service import verify_token
+from auth.service import verify_token, require_role
 
 router = APIRouter(prefix='/products', tags=['products'])
 
@@ -40,7 +40,7 @@ def update_product(product_id: int, product: ProductBase, current_user: dict = D
     return Product(**result)
 
 @router.delete('/{product_id}')
-def delete_product(product_id: int, current_user: dict = Depends(verify_token)):
+def delete_product(product_id: int, _admin: dict = Depends(require_role("admin"))):
     """Delete a product"""
     return service.delete_product(product_id)
 

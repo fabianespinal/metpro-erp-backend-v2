@@ -6,7 +6,7 @@ import json
 
 from .models import QuoteCreate, StatusUpdate, QuoteUpdate
 from . import service
-from auth.service import verify_token
+from auth.service import verify_token, require_role
 from pdf.builder_quote import create_quote_pdf
 
 # Email sending
@@ -289,6 +289,6 @@ def convert_to_invoice(quote_id: str, current_user: dict = Depends(verify_token)
 
 
 @router.delete("/{quote_id}")
-def delete_quote(quote_id: str, current_user: dict = Depends(verify_token)):
+def delete_quote(quote_id: str, _admin: dict = Depends(require_role("admin"))):
     """Delete a quote"""
     return service.delete_quote(quote_id)

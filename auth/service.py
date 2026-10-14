@@ -52,6 +52,49 @@ def create_access_token(data: dict) -> str:
 
 
 # =========================
+# UNIFIED TOKEN VALIDATION
+# =========================
+# Every protected route reaches this function, through verify_token or
+# get_current_user_from_bearer. Keep it the only place a JWT is accepted.
+
+_REQUIRED_CLAIMS = {"require_sub": True, "require_exp": True}
+
+
+def _validate_access_token(token: str) -> dict:
+    """
+    Validate a bearer JWT and return its payload.
+
+    Rules, in order:
+      1. Token must be non-empty.
+      2. Signature must verify with HS256 only (algorithms pinned).
+      3. Token must be unexpired and carry an "exp" claim.
+      4. Token must carry a non-empty string "sub" claim.
+      5. The user named in "sub" must exist and be active (see _assert_user_active).
+    """
+    if not token:
+        raise HTTPException(status_code=401, detail="Token is empty")
+
+    try:
+        payload = jwt.decode(
+            token,
+            SECRET_KEY,
+            algorithms=[ALGORITHM],
+            options=_REQUIRED_CLAIMS,
+        )
+    except ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    sub = payload.get("sub")
+    if not isinstance(sub, str) or not sub:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    _assert_user_active(sub)
+    return payload
+
+
+# =========================
 # TOKEN VERIFICATION (HEADER OR QUERY)
 # =========================
 
@@ -107,27 +150,7 @@ def verify_token(
             detail="Invalid authorization scheme"
         )
 
-    if not token:
-        raise HTTPException(
-            status_code=401,
-            detail="Token is empty"
-        )
-
-    # Decode and validate JWT
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    except ExpiredSignatureError:
-        raise HTTPException(
-            status_code=401,
-            detail="Token expired"
-        )
-    except JWTError:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid token"
-        )
-    _assert_user_active(payload.get("sub"))
-    return payload
+    return _validate_access_token(token)
 
 
 # =========================
@@ -141,20 +164,7 @@ def get_current_user_from_bearer(
     Get current user payload from standard Bearer token (Authorization header).
     Use this in typical protected routes.
     """
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    except ExpiredSignatureError:
-        raise HTTPException(
-            status_code=401,
-            detail="Token expired"
-        )
-    except JWTError:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid token"
-        )
-    _assert_user_active(payload.get("sub"))
-    return payload
+    return _validate_access_token(token)
 
 
 def require_role(required_role: str):

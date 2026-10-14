@@ -6,7 +6,7 @@ from typing import Annotated, List, Optional
 
 from .models import Invoice, InvoiceCreate, InvoiceStatusUpdate
 from . import service
-from auth.service import verify_token
+from auth.service import verify_token, require_role
 
 from invoices.payments.models import PaymentCreate
 from invoices.payments.service import create_payment
@@ -143,7 +143,7 @@ def update_invoice_status(
 
 
 @router.delete("/{invoice_id}")
-def delete_invoice(invoice_id: int, current_user: dict = Depends(verify_token)):
+def delete_invoice(invoice_id: int, _admin: dict = Depends(require_role("admin"))):
     return service.delete_invoice(invoice_id)
 
 

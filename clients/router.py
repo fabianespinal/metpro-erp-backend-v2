@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, File, UploadFile
 from typing import List
 from .models import Client, ClientBase
 from . import service
-from auth.service import verify_token
+from auth.service import verify_token, require_role
 
 router = APIRouter(prefix='/clients', tags=['clients'])
 
@@ -48,7 +48,7 @@ def update_client(client_id: int, client: ClientBase, current_user: dict = Depen
     return Client(**result)
 
 @router.delete('/{client_id}')
-def delete_client(client_id: int, current_user: dict = Depends(verify_token)):
+def delete_client(client_id: int, _admin: dict = Depends(require_role("admin"))):
     """Delete a client"""
     return service.delete_client(client_id)
 

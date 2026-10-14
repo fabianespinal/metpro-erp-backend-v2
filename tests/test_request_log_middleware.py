@@ -212,3 +212,18 @@ def test_db_failure_does_not_change_response(monkeypatch, capsys):
     assert resp.json()["data"]["username"] == "dave"
     time.sleep(0.1)
     assert "request_log: write failed: ConnectionError" in capsys.readouterr().err
+
+
+def test_record_error_is_reported_without_payload_and_response_unchanged(monkeypatch, capsys):
+    from core import request_log_middleware as rlm
+
+    def broken_template(app, scope):
+        raise RuntimeError("secret-internal-detail")
+
+    monkeypatch.setattr(rlm, "_route_template", broken_template)
+    resp = _client().get("/auth/me", headers=_hdr("erin"))
+    assert resp.status_code == 200
+    assert resp.json()["data"]["username"] == "erin"
+    err = capsys.readouterr().err
+    assert "request_log: record failed: RuntimeError" in err
+    assert "secret-internal-detail" not in err

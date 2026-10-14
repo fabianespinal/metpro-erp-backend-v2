@@ -13,6 +13,7 @@ No request or response body is read or stored.
 The DB write runs in a worker thread after the response has been sent,
 so it does not block the event loop or add to time-to-first-byte.
 """
+import sys
 import time
 from typing import Optional
 
@@ -74,8 +75,9 @@ class RequestLogMiddleware:
             rl._holder.reset(token)
             try:
                 await self._record(scope, holder, status["code"], latency_ms)
-            except Exception:  # noqa: BLE001 - audit must never fail a request
-                pass
+            except Exception as exc:  # noqa: BLE001 - audit must never fail a request
+                # Report the exception type only, never its message or payload.
+                print(f"request_log: record failed: {type(exc).__name__}", file=sys.stderr)
 
     async def _record(self, scope, holder, status_code, latency_ms):
         path = scope.get("path", "")

@@ -1,6 +1,7 @@
 from typing import List, Optional
 from fastapi import HTTPException
 from database import get_db_connection
+from core.errors import internal_error
 from auth.service import get_password_hash, verify_password
 from psycopg2.extras import RealDictCursor
 
@@ -129,7 +130,7 @@ def create_user(username: str, password: str, email: str, full_name: str, role: 
     except Exception as e:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to create user: {str(e)}")
+        raise internal_error("Failed to create user", e)
 
     finally:
         if conn:
@@ -202,7 +203,7 @@ def update_user(user_id: str, email: Optional[str], full_name: Optional[str],
     except Exception as e:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to update user: {str(e)}")
+        raise internal_error("Failed to update user", e)
 
     finally:
         if conn:
@@ -248,7 +249,7 @@ def update_user_password(user_id: str, current_password: str, new_password: str)
     except Exception as e:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to update password: {str(e)}")
+        raise internal_error("Failed to update password", e)
 
     finally:
         if conn:
@@ -281,7 +282,7 @@ def delete_user(user_id: str) -> dict:
     except Exception as e:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to delete user: {str(e)}")
+        raise internal_error("Failed to delete user", e)
 
     finally:
         if conn:

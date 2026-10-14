@@ -3,6 +3,7 @@ from typing import List, Optional
 from .models import Project, ProjectBase, ProjectUpdate
 from . import service
 from auth.service import verify_token
+from core.errors import internal_error
 
 router = APIRouter(prefix='/projects', tags=['projects'])
 
@@ -18,7 +19,7 @@ def create_project(project: ProjectBase, current_user: dict = Depends(verify_tok
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Create failed: {str(e)}")
+        raise internal_error("Create failed", e)
 
 @router.get('/', response_model=List[Project])
 def get_projects(
@@ -31,7 +32,7 @@ def get_projects(
         projects = service.get_all_projects(client_id, status)
         return [Project(**p) for p in projects]
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Fetch failed: {str(e)}")
+        raise internal_error("Fetch failed", e)
 
 @router.get('/{project_id}', response_model=Project)
 def get_project(project_id: int, current_user: dict = Depends(verify_token)):
@@ -42,7 +43,7 @@ def get_project(project_id: int, current_user: dict = Depends(verify_token)):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Fetch failed: {str(e)}")
+        raise internal_error("Fetch failed", e)
 
 @router.put('/{project_id}', response_model=Project)
 def update_project(
@@ -67,7 +68,7 @@ def update_project(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Update failed: {str(e)}")
+        raise internal_error("Update failed", e)
 
 @router.delete('/{project_id}')
 def delete_project(project_id: int, current_user: dict = Depends(verify_token)):
@@ -77,4 +78,4 @@ def delete_project(project_id: int, current_user: dict = Depends(verify_token)):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
+        raise internal_error("Delete failed", e)

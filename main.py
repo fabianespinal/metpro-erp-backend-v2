@@ -39,6 +39,9 @@ allowed_origins = [
     # Staging frontend
     "https://metpro-erp-frontend-staging-production.up.railway.app",
 
+    # Preview frontend (feat/ui-overview, staging backend only)
+    "https://metpro-erp-frontend-preview-production.up.railway.app",
+
     # Public quotes/invoices site
     "https://metprord.site",
 ]

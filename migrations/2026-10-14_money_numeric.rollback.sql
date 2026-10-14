@@ -1,7 +1,7 @@
 -- ============================================================
 -- ROLLBACK: numeric(12,2) -> double precision for money fields
 -- Pairs with: 2026-10-14_money_numeric.sql
--- Status:   NOT APPLIED. Run only if the forward migration must be reverted.
+-- Status:   Reversal file. Not run on production. Tested on local rehearsal (PostgreSQL 16).
 -- Note:     Values rounded to 2 dp by the forward migration keep their rounded
 --           value. Sub-cent digits lost in quotes.total_amount are not restored.
 -- ============================================================

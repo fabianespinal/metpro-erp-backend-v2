@@ -1,3 +1,4 @@
+from core.errors import api_error
 from fastapi import HTTPException
 from .models import ExpenseCreate, ExpenseUpdate
 
@@ -16,7 +17,7 @@ def _resolve_client_name(conn, client_id):
         cur.execute("SELECT company_name FROM clients WHERE id = %s", (client_id,))
         row = cur.fetchone()
     if not row:
-        raise HTTPException(status_code=404, detail="Client not found")
+        raise api_error(404, "Client not found", "CLIENT_NOT_FOUND")
     if isinstance(row, dict):
         return row.get("company_name")
     return row[0]
@@ -52,7 +53,7 @@ def create_expense(conn, expense: ExpenseCreate):
         return row["expense_id"]
     if row:
         return row[0]
-    raise HTTPException(status_code=500, detail="Insert failed to return expense_id")
+    raise api_error(500, "Insert failed to return expense_id", "EXPENSE_INSERT_FAILED")
 
 
 def get_expenses(conn):

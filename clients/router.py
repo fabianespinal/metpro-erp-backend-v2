@@ -1,3 +1,4 @@
+from core.errors import api_error
 from fastapi import APIRouter, Depends, File, UploadFile
 from typing import List
 from .models import Client, ClientBase
@@ -61,7 +62,7 @@ async def import_clients_csv(
     """Import clients from CSV"""
     if not file.filename.lower().endswith('.csv'):
         from fastapi import HTTPException
-        raise HTTPException(status_code=400, detail='File must be CSV format')
+        raise api_error(400, 'File must be CSV format', "CSV_FORMAT_INVALID")
     
     content = await file.read()
     return await service.import_clients_from_csv(content, file.filename, skip_duplicates, current_user)

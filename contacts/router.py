@@ -1,3 +1,4 @@
+from core.errors import api_error
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -28,7 +29,7 @@ def list_contacts(company_id: int, db: Session = Depends(get_db), _user: dict = 
 def update_contact_endpoint(contact_id: int, contact_in: ContactUpdate, db: Session = Depends(get_db), _user: dict = Depends(require_auth)):
     updated = update_contact(db, contact_id, contact_in)
     if not updated:
-        raise HTTPException(status_code=404, detail="Contact not found")
+        raise api_error(404, "Contact not found", "CONTACT_NOT_FOUND")
     return updated
 
 
@@ -36,5 +37,5 @@ def update_contact_endpoint(contact_id: int, contact_in: ContactUpdate, db: Sess
 def delete_contact_endpoint(contact_id: int, db: Session = Depends(get_db), _user: dict = Depends(require_auth)):
     deleted = delete_contact(db, contact_id)
     if not deleted:
-        raise HTTPException(status_code=404, detail="Contact not found")
+        raise api_error(404, "Contact not found", "CONTACT_NOT_FOUND")
     return

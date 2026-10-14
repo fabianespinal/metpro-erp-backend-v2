@@ -25,11 +25,12 @@ from main import app  # noqa: E402
 def _fresh_limiter(monkeypatch):
     rl._limiter.reset()
     for name in (
-        "RATE_LIMIT_ENABLED",
         "RATE_LIMIT_LOGIN_MAX", "RATE_LIMIT_LOGIN_WINDOW",
         "RATE_LIMIT_PUBLIC_MAX", "RATE_LIMIT_PUBLIC_WINDOW",
     ):
         monkeypatch.delenv(name, raising=False)
+    # Enforcement tests opt in explicitly. Default is off.
+    monkeypatch.setenv("RATE_LIMIT_ENABLED", "true")
     yield
     rl._limiter.reset()
 
@@ -42,6 +43,11 @@ class _Clock:
 
     def __call__(self):
         return self.now
+
+
+def test_default_is_disabled(monkeypatch):
+    monkeypatch.delenv("RATE_LIMIT_ENABLED", raising=False)
+    assert rl.rate_limit_enabled() is False
 
 
 def test_limiter_allows_up_to_limit_then_blocks():

@@ -11,7 +11,8 @@ set. Leftmost entries are client-supplied and can be spoofed.
 Falls back to the socket peer when the header is absent.
 
 Toggles (env):
-  RATE_LIMIT_ENABLED        default "true". Set "false" to disable all limits.
+  RATE_LIMIT_ENABLED        default "false" (off until client-IP check is verified).
+                            Set "true" to enforce all limits.
   RATE_LIMIT_LOGIN_MAX      default 10 attempts
   RATE_LIMIT_LOGIN_WINDOW   default 60 seconds
   RATE_LIMIT_PUBLIC_MAX     default 60 requests
@@ -39,7 +40,7 @@ def _env_int(name: str, default: int) -> int:
 
 
 def rate_limit_enabled() -> bool:
-    return os.environ.get("RATE_LIMIT_ENABLED", "true").strip().lower() not in ("0", "false", "no", "off")
+    return os.environ.get("RATE_LIMIT_ENABLED", "false").strip().lower() in ("1", "true", "yes", "on")
 
 
 class SlidingWindowLimiter:

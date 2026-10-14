@@ -1,6 +1,7 @@
 -- ============================================================
 -- Migration: drop users_backup, enable RLS on all public tables
 -- Date:      2026-10-13
+-- Status:    APPLIED to production. Date not recorded in this file.
 -- Target:    Production Supabase, public schema
 -- Idempotent: safe to re-run.
 --

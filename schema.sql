@@ -8,10 +8,15 @@
 -- Redactions:
 --   users_backup.password_hash default literal removed (credential); table dropped.
 --
--- Known issues to resolve before go-live of any rebuild:
---   - RLS is NOT enabled on: invoices, invoice_items, invoice_payments,
---     expenses, contacts, projects, users, conduces.
---   - users_backup removed 2026-10-13.
+-- Status of this file (updated 2026-10-13):
+--   - RLS: enabled on invoices, invoice_items, invoice_payments, expenses,
+--     contacts, projects, users, conduces (migration 2026-10-13_security_drop_backup_rls).
+--   - users_backup: dropped (same migration).
+--   - Not yet reflected here: money columns numeric(12,2)
+--     (migration 2026-10-14_money_numeric), quote_items.discount_type and
+--     quotes.status default fixes, public_token columns and indexes.
+--     Regenerate from a live schema-only dump before using this file as a
+--     reference for a rebuild.
 -- ============================================================
 
 --

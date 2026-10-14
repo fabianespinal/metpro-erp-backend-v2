@@ -1,7 +1,8 @@
 -- ============================================================
 -- Money fields: double precision -> numeric(12,2)
 -- Target:   Supabase PostgreSQL (public schema)
--- Status:   NOT APPLIED. Requires explicit approval before running.
+-- Status:   APPLIED to production 2026-10-13 (local), after explicit approval.
+-- Verified: all five columns numeric(12,2); check query 0 and 0.
 -- Option:   A (quotes.total_amount rounded to 2 dp)
 -- Scope:
 --   products.unit_price

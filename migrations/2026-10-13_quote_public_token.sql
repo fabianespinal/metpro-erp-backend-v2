@@ -2,7 +2,7 @@
 -- Module F: unguessable public quote links
 -- Target:   Supabase PostgreSQL (public schema)
 -- Requires: PostgreSQL 13+ (gen_random_uuid() is built in)
--- Status:   NOT APPLIED. Run only after explicit approval.
+-- Status:   APPLIED to production. Date not recorded in this file (verified: token route 200).
 -- Safe to re-run: every step is idempotent.
 -- ============================================================
 

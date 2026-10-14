@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from .service import (
@@ -9,6 +11,8 @@ from .service import (
 )
 from database import get_db_connection
 from psycopg2.extras import RealDictCursor
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -83,8 +87,9 @@ def login(credentials: LoginRequest):
 
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Login failed: {str(e)}")
+    except Exception:
+        logger.exception("Login failed due to an internal error")
+        raise HTTPException(status_code=500, detail="Login failed. Please try again later.")
     finally:
         if conn:
             conn.close()

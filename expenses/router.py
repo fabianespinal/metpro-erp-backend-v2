@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from database import get_db_connection
-from auth.service import verify_token
+from auth.service import require_auth
 from .models import ExpenseCreate, ExpenseUpdate
 from .services import (
     create_expense,
@@ -18,7 +18,7 @@ router = APIRouter(prefix="/expenses", tags=["Expenses"])
 
 @router.post("", response_model=dict)
 @router.post("/", response_model=dict, include_in_schema=False)
-def create_expense_endpoint(expense: ExpenseCreate, _user: dict = Depends(verify_token)):
+def create_expense_endpoint(expense: ExpenseCreate, _user: dict = Depends(require_auth)):
     conn = get_db_connection()
     try:
         expense_id = create_expense(conn, expense)
@@ -30,7 +30,7 @@ def create_expense_endpoint(expense: ExpenseCreate, _user: dict = Depends(verify
 
 @router.get("", response_model=list)
 @router.get("/", response_model=list, include_in_schema=False)
-def list_expenses_endpoint(_user: dict = Depends(verify_token)):
+def list_expenses_endpoint(_user: dict = Depends(require_auth)):
     conn = get_db_connection()
     try:
         return get_expenses(conn)
@@ -39,7 +39,7 @@ def list_expenses_endpoint(_user: dict = Depends(verify_token)):
 
 
 @router.get("/{expense_id}", response_model=dict)
-def get_expense_endpoint(expense_id: int, _user: dict = Depends(verify_token)):
+def get_expense_endpoint(expense_id: int, _user: dict = Depends(require_auth)):
     conn = get_db_connection()
     try:
         exp = get_expense(conn, expense_id)
@@ -51,7 +51,7 @@ def get_expense_endpoint(expense_id: int, _user: dict = Depends(verify_token)):
 
 
 @router.put("/{expense_id}", response_model=dict)
-def update_expense_endpoint(expense_id: int, data: ExpenseUpdate, _user: dict = Depends(verify_token)):
+def update_expense_endpoint(expense_id: int, data: ExpenseUpdate, _user: dict = Depends(require_auth)):
     conn = get_db_connection()
     try:
         updated = update_expense(conn, expense_id, data)
@@ -64,7 +64,7 @@ def update_expense_endpoint(expense_id: int, data: ExpenseUpdate, _user: dict = 
 
 
 @router.delete("/{expense_id}", response_model=dict)
-def delete_expense_endpoint(expense_id: int, _user: dict = Depends(verify_token)):
+def delete_expense_endpoint(expense_id: int, _user: dict = Depends(require_auth)):
     conn = get_db_connection()
     try:
         delete_expense(conn, expense_id)

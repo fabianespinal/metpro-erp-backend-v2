@@ -2,7 +2,7 @@ from typing import Annotated, List
 
 from fastapi import APIRouter, Depends, HTTPException, Path
 
-from auth.service import require_role, verify_token
+from auth.service import require_role, require_auth
 from .models import User, UserCreate, UserUpdate, UserPasswordUpdate
 from . import service
 
@@ -88,7 +88,7 @@ def delete_user(user_id: UserId, _admin: dict = Depends(require_role("admin"))):
 # ============================================================
 
 @router.get('/{user_id}', response_model=User)
-def get_user(user_id: UserId, current_user: dict = Depends(verify_token)):
+def get_user(user_id: UserId, current_user: dict = Depends(require_auth)):
     """Get user by ID. Admin, or the user themselves."""
     _assert_self_or_admin(user_id, current_user)
     result = service.get_user_by_id(user_id)
@@ -99,7 +99,7 @@ def get_user(user_id: UserId, current_user: dict = Depends(verify_token)):
 def update_password(
     user_id: UserId,
     password_update: UserPasswordUpdate,
-    current_user: dict = Depends(verify_token),
+    current_user: dict = Depends(require_auth),
 ):
     """Change password. Admin, or the user themselves (current password still required)."""
     _assert_self_or_admin(user_id, current_user)

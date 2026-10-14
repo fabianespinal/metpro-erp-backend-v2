@@ -1,6 +1,6 @@
 """Item 5: delete routes for clients, products, quotes, and invoices require admin.
 
-Create and update routes keep verify_token. Single-tenant: no ownership checks.
+Create and update routes keep require_auth. Single-tenant: no ownership checks.
 """
 import importlib
 import os
@@ -48,6 +48,18 @@ def _find_route(module, name):
     return matches[0]
 
 
+def _all_dep_names(route):
+    out = []
+
+    def walk(dep):
+        for d in dep.dependencies:
+            out.append(getattr(d.call, "__name__", ""))
+            walk(d)
+
+    walk(route.dependant)
+    return out
+
+
 def _dep_names(route):
     return [d.call.__name__ for d in route.dependant.dependencies if d.call is not None]
 
@@ -74,13 +86,13 @@ def test_delete_routes_use_require_role_admin(module, name, _svc):
     assert route.dependant.dependencies, name
     names = _dep_names(route)
     assert "wrapper" in names, (name, names)
-    assert "verify_token" not in names, (name, names)
+    assert "require_auth" in _all_dep_names(route), (name, _all_dep_names(route))
 
 
 @pytest.mark.parametrize("module, name", CREATE_UPDATE_CASES)
 def test_create_and_update_routes_unchanged(module, name):
     route = _find_route(module, name)
-    assert "verify_token" in _dep_names(route), (name, _dep_names(route))
+    assert "require_auth" in _dep_names(route), (name, _dep_names(route))
 
 
 @pytest.mark.parametrize("module, name, svc_module", DELETE_CASES)

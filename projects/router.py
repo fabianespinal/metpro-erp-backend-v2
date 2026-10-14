@@ -2,13 +2,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Optional
 from .models import Project, ProjectBase, ProjectUpdate
 from . import service
-from auth.service import verify_token
+from auth.service import require_auth
 from core.errors import internal_error
 
 router = APIRouter(prefix='/projects', tags=['projects'])
 
 @router.post('/', response_model=Project)
-def create_project(project: ProjectBase, current_user: dict = Depends(verify_token)):
+def create_project(project: ProjectBase, current_user: dict = Depends(require_auth)):
     """Create new project"""
     try:
         result = service.create_project(
@@ -25,7 +25,7 @@ def create_project(project: ProjectBase, current_user: dict = Depends(verify_tok
 def get_projects(
     client_id: Optional[int] = None,
     status: Optional[str] = None,
-    current_user: dict = Depends(verify_token)
+    current_user: dict = Depends(require_auth)
 ):
     """List projects with optional filters"""
     try:
@@ -35,7 +35,7 @@ def get_projects(
         raise internal_error("Fetch failed", e)
 
 @router.get('/{project_id}', response_model=Project)
-def get_project(project_id: int, current_user: dict = Depends(verify_token)):
+def get_project(project_id: int, current_user: dict = Depends(require_auth)):
     """Get single project"""
     try:
         result = service.get_project_by_id(project_id)
@@ -49,7 +49,7 @@ def get_project(project_id: int, current_user: dict = Depends(verify_token)):
 def update_project(
     project_id: int,
     project: ProjectUpdate,  # FIXED: Use ProjectUpdate for partial updates
-    current_user: dict = Depends(verify_token)
+    current_user: dict = Depends(require_auth)
 ):
     """Update project"""
     try:
@@ -71,7 +71,7 @@ def update_project(
         raise internal_error("Update failed", e)
 
 @router.delete('/{project_id}')
-def delete_project(project_id: int, current_user: dict = Depends(verify_token)):
+def delete_project(project_id: int, current_user: dict = Depends(require_auth)):
     """Delete project"""
     try:
         return service.delete_project(project_id)

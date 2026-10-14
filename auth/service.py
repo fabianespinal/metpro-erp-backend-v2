@@ -2,7 +2,6 @@ import os
 from datetime import datetime, timedelta
 
 from fastapi import Depends, HTTPException, Header
-from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, ExpiredSignatureError, jwt
 from passlib.context import CryptContext
 
@@ -17,9 +16,6 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 # When true, every authenticated request checks users.is_active.
 ENFORCE_ACTIVE_CHECK = os.environ.get("ENFORCE_ACTIVE_CHECK", "true").lower() == "true"
-
-# OAuth2 bearer token (standard FastAPI pattern)
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 # Password hashing setup
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
@@ -54,8 +50,8 @@ def create_access_token(data: dict) -> str:
 # =========================
 # UNIFIED TOKEN VALIDATION
 # =========================
-# Every protected route reaches this function, through verify_token or
-# get_current_user_from_bearer. Keep it the only place a JWT is accepted.
+# Every protected route reaches this function through require_auth.
+# Keep it the only place a JWT is accepted.
 
 _REQUIRED_CLAIMS = {"require_sub": True, "require_exp": True}
 
@@ -122,13 +118,11 @@ def _assert_user_active(username) -> None:
         raise HTTPException(status_code=401, detail="Account disabled")
 
 
-def verify_token(
-    authorization: str = Header(None),
-):
+def require_auth(authorization: str = Header(None)) -> dict:
     """
-    Verify JWT token from the Authorization header (Bearer <token>).
-    Query-string tokens are not accepted.
-    Returns the decoded payload if valid.
+    The single authentication dependency for every protected route.
+    Reads "Authorization: Bearer <token>", then validates it through
+    _validate_access_token. Returns the decoded payload.
     """
     if not authorization:
         raise HTTPException(
@@ -150,20 +144,12 @@ def verify_token(
             detail="Invalid authorization scheme"
         )
 
-    return _validate_access_token(token)
+    if not token:
+        raise HTTPException(
+            status_code=401,
+            detail="Token is empty"
+        )
 
-
-# =========================
-# STANDARD BEARER TOKEN FLOW
-# =========================
-
-def get_current_user_from_bearer(
-    token: str = Depends(oauth2_scheme)
-) -> dict:
-    """
-    Get current user payload from standard Bearer token (Authorization header).
-    Use this in typical protected routes.
-    """
     return _validate_access_token(token)
 
 
@@ -175,7 +161,7 @@ def require_role(required_role: str):
         def admin_only(user = Depends(require_role("admin"))):
             ...
     """
-    def wrapper(user: dict = Depends(get_current_user_from_bearer)):
+    def wrapper(user: dict = Depends(require_auth)):
         role = user.get("role")
         if role != required_role:
             raise HTTPException(

@@ -1,7 +1,7 @@
 """Item 7: unified token validation on every protected route.
 
-Both entry points (verify_token and get_current_user_from_bearer) must
-accept and reject the same tokens the same way. Public routes stay public.
+There is one authentication dependency, require_auth. It must accept and
+reject tokens correctly. Public routes stay public.
 """
 import importlib
 import os
@@ -74,16 +74,12 @@ def _good_claims(**extra):
     return claims
 
 
-# Entry points under test. Each takes a raw token string.
-def _via_bearer(auth, tok):
-    return auth.get_current_user_from_bearer(tok)
+# The single entry point under test. Takes a raw token string.
+def _via(auth, tok):
+    return auth.require_auth(f"Bearer {tok}")
 
 
-def _via_header(auth, tok):
-    return auth.verify_token(f"Bearer {tok}")
-
-
-ENTRY_POINTS = [_via_bearer, _via_header]
+ENTRY_POINTS = [_via]
 
 
 # ---------- accepted ----------
@@ -176,7 +172,7 @@ def test_active_check_toggle_off_skips_db(auth, monkeypatch, entry):
     assert called == []
 
 
-# ---------- header parsing (verify_token only) ----------
+# ---------- header parsing ----------
 
 @pytest.mark.parametrize("header, detail", [
     (None, "Missing authorization token"),
@@ -185,21 +181,24 @@ def test_active_check_toggle_off_skips_db(auth, monkeypatch, entry):
 ])
 def test_header_parsing_errors_unchanged(auth, header, detail):
     with pytest.raises(HTTPException) as e:
-        auth.verify_token(header)
+        auth.require_auth(header)
     assert e.value.status_code == 401
     assert e.value.detail == detail
 
 
 # ---------- parity guard ----------
 
-def test_both_entry_points_share_one_validator(auth):
+def test_legacy_dependency_names_are_gone(auth):
+    assert not hasattr(auth, "verify_token")
+    assert not hasattr(auth, "get_current_user_from_bearer")
+    assert not hasattr(auth, "oauth2_scheme")
+
+
+def test_require_auth_delegates_to_validator(auth):
     import inspect
-    src_bearer = inspect.getsource(auth.get_current_user_from_bearer)
-    src_header = inspect.getsource(auth.verify_token)
-    assert "_validate_access_token(" in src_bearer
-    assert "_validate_access_token(" in src_header
-    assert "jwt.decode" not in src_bearer
-    assert "jwt.decode" not in src_header
+    src = inspect.getsource(auth.require_auth)
+    assert "_validate_access_token(" in src
+    assert "jwt.decode" not in src
 
 
 def test_claims_required_at_decode(auth):
@@ -210,7 +209,7 @@ def test_claims_required_at_decode(auth):
 
 # ---------- route coverage ----------
 
-PROTECTED_DEPS = {"verify_token", "get_current_user_from_bearer", "wrapper"}
+PROTECTED_DEPS = {"require_auth", "wrapper"}
 
 # The only routes allowed without a token. Anything else must require one.
 EXPECTED_PUBLIC = {
@@ -240,6 +239,12 @@ def _api_routes():
 
 def _has_auth(route):
     return bool(PROTECTED_DEPS & set(_dep_names(route.dependant, [])))
+
+
+def test_every_protected_route_uses_require_auth():
+    for r in _api_routes():
+        if _has_auth(r):
+            assert "require_auth" in _dep_names(r.dependant, []), (r.methods, r.path)
 
 
 def test_only_expected_routes_are_public():

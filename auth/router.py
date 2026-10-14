@@ -8,6 +8,7 @@ from .service import (
     require_role
 )
 from database import get_db_connection
+from core.rate_limit import login_rate_limit
 from psycopg2.extras import RealDictCursor
 import logging
 
@@ -52,7 +53,7 @@ def login_options():
 # LOGIN
 # ============================
 
-@router.post("/login", response_model=LoginResponse)
+@router.post("/login", response_model=LoginResponse, dependencies=[Depends(login_rate_limit)])
 def login(credentials: LoginRequest):
     conn = None
     try:

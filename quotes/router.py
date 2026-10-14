@@ -7,6 +7,7 @@ import json
 from .models import QuoteCreate, StatusUpdate, QuoteUpdate
 from . import service
 from auth.service import verify_token, require_role
+from core.rate_limit import public_rate_limit
 from pdf.builder_quote import create_quote_pdf
 
 # Email sending
@@ -50,7 +51,7 @@ PUBLIC_TOKEN_PATTERN = (
 )
 
 
-@router.get("/public/{token}")
+@router.get("/public/{token}", dependencies=[Depends(public_rate_limit)])
 def get_quote_public(token: Annotated[str, Path(pattern=PUBLIC_TOKEN_PATTERN)]):
     """Public quote view. Access is by unguessable token only."""
     quote_id = service.quote_id_for_public_token(token)
@@ -59,7 +60,7 @@ def get_quote_public(token: Annotated[str, Path(pattern=PUBLIC_TOKEN_PATTERN)]):
     return quote
 
 
-@router.get("/public/{token}/pdf")
+@router.get("/public/{token}/pdf", dependencies=[Depends(public_rate_limit)])
 def get_quote_public_pdf(token: Annotated[str, Path(pattern=PUBLIC_TOKEN_PATTERN)]):
     """Public quote PDF. Access is by unguessable token only."""
     quote_id = service.quote_id_for_public_token(token)

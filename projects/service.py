@@ -2,6 +2,7 @@ from typing import List, Optional
 from datetime import date
 from fastapi import HTTPException
 from database import get_db_connection
+from core.errors import internal_error
 from psycopg2.extras import RealDictCursor
 
 # ============================================================
@@ -56,7 +57,7 @@ def create_project(
     except Exception as e:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Create failed: {str(e)}")
+        raise internal_error("Create failed", e)
 
     finally:
         if conn:
@@ -234,7 +235,7 @@ def update_project(
     except Exception as e:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Update failed: {str(e)}")
+        raise internal_error("Update failed", e)
 
     finally:
         if conn:
@@ -262,7 +263,7 @@ def delete_project(project_id: int) -> dict:
     except Exception as e:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
+        raise internal_error("Delete failed", e)
 
     finally:
         if conn:

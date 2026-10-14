@@ -1,3 +1,4 @@
+from core.errors import api_error
 import json
 import io
 from fastapi import HTTPException
@@ -28,13 +29,13 @@ def generate_quote_pdf(quote_id: str) -> StreamingResponse:
         cursor.execute('SELECT * FROM quotes WHERE quote_id = %s', (quote_id,))
         quote = cursor.fetchone()
         if not quote:
-            raise HTTPException(status_code=404, detail='Quote not found')
+            raise api_error(404, 'Quote not found', "QUOTE_NOT_FOUND")
         quote = dict(quote)
 
         cursor.execute('SELECT * FROM clients WHERE id = %s', (quote['client_id'],))
         raw_client = cursor.fetchone()
         if not raw_client:
-            raise HTTPException(status_code=404, detail='Client not found')
+            raise api_error(404, 'Client not found', "CLIENT_NOT_FOUND")
         raw_client = dict(raw_client)
 
         # Fetch the contact selected on this quote — not any company default
@@ -174,13 +175,13 @@ def generate_invoice_pdf(invoice_id: int) -> StreamingResponse:
         cursor.execute('SELECT * FROM invoices WHERE id = %s', (invoice_id,))
         invoice = cursor.fetchone()
         if not invoice:
-            raise HTTPException(status_code=404, detail='Invoice not found')
+            raise api_error(404, 'Invoice not found', "INVOICE_NOT_FOUND")
         invoice = dict(invoice)
 
         cursor.execute('SELECT * FROM clients WHERE id = %s', (invoice['client_id'],))
         raw_client = cursor.fetchone()
         if not raw_client:
-            raise HTTPException(status_code=404, detail='Client not found')
+            raise api_error(404, 'Client not found', "CLIENT_NOT_FOUND")
         raw_client = dict(raw_client)
 
         # Invoice carries the same contact as its source quote (Option A)
@@ -352,13 +353,13 @@ def generate_conduce_pdf(invoice_id: int) -> StreamingResponse:
         cursor.execute('SELECT * FROM invoices WHERE id = %s', (invoice_id,))
         invoice = cursor.fetchone()
         if not invoice:
-            raise HTTPException(status_code=404, detail='Invoice not found')
+            raise api_error(404, 'Invoice not found', "INVOICE_NOT_FOUND")
         invoice = dict(invoice)
 
         cursor.execute('SELECT * FROM clients WHERE id = %s', (invoice['client_id'],))
         raw_client = cursor.fetchone()
         if not raw_client:
-            raise HTTPException(status_code=404, detail='Client not found')
+            raise api_error(404, 'Client not found', "CLIENT_NOT_FOUND")
         raw_client = dict(raw_client)
 
         # Invoice carries the same contact as its source quote (Option A)

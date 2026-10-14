@@ -1,3 +1,4 @@
+from core.errors import api_error
 import os
 from datetime import datetime, timedelta
 
@@ -68,7 +69,7 @@ def _validate_access_token(token: str) -> dict:
       5. The user named in "sub" must exist and be active (see _assert_user_active).
     """
     if not token:
-        raise HTTPException(status_code=401, detail="Token is empty")
+        raise api_error(401, "Token is empty", "TOKEN_EMPTY")
 
     try:
         payload = jwt.decode(
@@ -78,13 +79,13 @@ def _validate_access_token(token: str) -> dict:
             options=_REQUIRED_CLAIMS,
         )
     except ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expired")
+        raise api_error(401, "Token expired", "TOKEN_EXPIRED")
     except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        raise api_error(401, "Invalid token", "TOKEN_INVALID")
 
     sub = payload.get("sub")
     if not isinstance(sub, str) or not sub:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        raise api_error(401, "Invalid token", "TOKEN_INVALID")
 
     _assert_user_active(sub)
     return payload
@@ -102,7 +103,7 @@ def _assert_user_active(username) -> None:
     if not ENFORCE_ACTIVE_CHECK:
         return
     if not username:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        raise api_error(401, "Invalid token", "TOKEN_INVALID")
     from database import get_db_connection
     conn = get_db_connection()
     try:
@@ -112,10 +113,10 @@ def _assert_user_active(username) -> None:
     finally:
         conn.close()
     if row is None:
-        raise HTTPException(status_code=401, detail="User not found")
+        raise api_error(401, "User not found", "USER_NOT_FOUND")
     active = row["is_active"] if isinstance(row, dict) else row[0]
     if not active:
-        raise HTTPException(status_code=401, detail="Account disabled")
+        raise api_error(401, "Account disabled", "ACCOUNT_DISABLED")
 
 
 def require_auth(authorization: str = Header(None)) -> dict:
@@ -125,30 +126,18 @@ def require_auth(authorization: str = Header(None)) -> dict:
     _validate_access_token. Returns the decoded payload.
     """
     if not authorization:
-        raise HTTPException(
-            status_code=401,
-            detail="Missing authorization token"
-        )
+        raise api_error(401, "Missing authorization token", "TOKEN_MISSING")
 
     try:
         scheme, token = authorization.split()
     except ValueError:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid authorization header format"
-        )
+        raise api_error(401, "Invalid authorization header format", "AUTH_HEADER_INVALID")
 
     if scheme.lower() != "bearer":
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid authorization scheme"
-        )
+        raise api_error(401, "Invalid authorization scheme", "AUTH_SCHEME_INVALID")
 
     if not token:
-        raise HTTPException(
-            status_code=401,
-            detail="Token is empty"
-        )
+        raise api_error(401, "Token is empty", "TOKEN_EMPTY")
 
     return _validate_access_token(token)
 
@@ -164,10 +153,7 @@ def require_role(required_role: str):
     def wrapper(user: dict = Depends(require_auth)):
         role = user.get("role")
         if role != required_role:
-            raise HTTPException(
-                status_code=403,
-                detail="Insufficient permissions"
-            )
+            raise api_error(403, "Insufficient permissions", "INSUFFICIENT_PERMISSIONS")
         return user
 
     return wrapper

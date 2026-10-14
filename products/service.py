@@ -1,3 +1,4 @@
+from core.errors import api_error
 from typing import List
 from fastapi import HTTPException
 import csv
@@ -71,7 +72,7 @@ def get_product_by_id(product_id: int) -> dict:
         row = cursor.fetchone()
 
         if not row:
-            raise HTTPException(status_code=404, detail="Product not found")
+            raise api_error(404, "Product not found", "PRODUCT_NOT_FOUND")
 
         return row
 
@@ -92,7 +93,7 @@ def update_product(product_id: int, name: str, description: str, unit_price: flo
 
         cursor.execute("SELECT id FROM products WHERE id = %s", (product_id,))
         if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Product not found")
+            raise api_error(404, "Product not found", "PRODUCT_NOT_FOUND")
 
         cursor.execute("""
             UPDATE products
@@ -132,7 +133,7 @@ def delete_product(product_id: int) -> dict:
 
         cursor.execute("DELETE FROM products WHERE id = %s", (product_id,))
         if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Product not found")
+            raise api_error(404, "Product not found", "PRODUCT_NOT_FOUND")
 
         conn.commit()
         return {"message": "Product deleted successfully"}
@@ -161,19 +162,16 @@ async def import_products_from_csv(file_content: bytes, filename: str) -> dict:
         try:
             csv_text = file_content.decode("utf-8-sig")
         except UnicodeDecodeError:
-            raise HTTPException(status_code=400, detail="File must be UTF-8 encoded")
+            raise api_error(400, "File must be UTF-8 encoded", "FILE_ENCODING_INVALID")
 
         rows = list(csv.DictReader(io.StringIO(csv_text)))
 
         if not rows:
-            raise HTTPException(status_code=400, detail="CSV file is empty")
+            raise api_error(400, "CSV file is empty", "CSV_EMPTY")
 
         required_cols = ["name", "unit_price"]
         if not all(col in rows[0] for col in required_cols):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Missing required columns: {required_cols}"
-            )
+            raise api_error(400, f"Missing required columns: {required_cols}", "CSV_COLUMNS_MISSING")
 
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)

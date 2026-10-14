@@ -1,3 +1,4 @@
+from core.errors import api_error
 from typing import List, Optional
 from datetime import date
 from fastapi import HTTPException
@@ -26,11 +27,11 @@ def create_project(
         # Validate client exists
         cursor.execute("SELECT 1 FROM clients WHERE id = %s", (client_id,))
         if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Client not found")
+            raise api_error(404, "Client not found", "CLIENT_NOT_FOUND")
 
         # Validate date range if both dates provided
         if start_date and end_date and end_date < start_date:
-            raise HTTPException(status_code=400, detail="End date must be after start date")
+            raise api_error(400, "End date must be after start date", "DATE_RANGE_INVALID")
 
         # Insert project
         cursor.execute("""
@@ -110,7 +111,7 @@ def get_project_by_id(project_id: int) -> dict:
         row = cursor.fetchone()
 
         if not row:
-            raise HTTPException(status_code=404, detail="Project not found")
+            raise api_error(404, "Project not found", "PROJECT_NOT_FOUND")
 
         return row
 
@@ -141,7 +142,7 @@ def update_project(
         cursor.execute("SELECT * FROM projects WHERE id = %s", (project_id,))
         current_project = cursor.fetchone()
         if not current_project:
-            raise HTTPException(status_code=404, detail="Project not found")
+            raise api_error(404, "Project not found", "PROJECT_NOT_FOUND")
 
         # -----------------------------
         # Normalization helpers
@@ -185,15 +186,15 @@ def update_project(
         if client_id is not None:
             cursor.execute("SELECT 1 FROM clients WHERE id = %s", (final_client_id,))
             if not cursor.fetchone():
-                raise HTTPException(status_code=404, detail="Client not found")
+                raise api_error(404, "Client not found", "CLIENT_NOT_FOUND")
 
         # Validate date range
         if final_start_date and final_end_date and final_end_date < final_start_date:
-            raise HTTPException(status_code=400, detail="End date must be after start date")
+            raise api_error(400, "End date must be after start date", "DATE_RANGE_INVALID")
 
         # Validate name is not empty
         if final_name is None or final_name.strip() == "":
-            raise HTTPException(status_code=400, detail="Name cannot be empty")
+            raise api_error(400, "Name cannot be empty", "NAME_REQUIRED")
 
         # -----------------------------
         # Perform update
@@ -252,7 +253,7 @@ def delete_project(project_id: int) -> dict:
 
         cursor.execute("DELETE FROM projects WHERE id = %s", (project_id,))
         if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Project not found")
+            raise api_error(404, "Project not found", "PROJECT_NOT_FOUND")
 
         conn.commit()
         return {"message": "Project deleted successfully"}

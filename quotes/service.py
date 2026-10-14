@@ -1,6 +1,7 @@
 # =============================================================================
 # SECTION 1: IMPORTS
 # =============================================================================
+from core.errors import api_error
 from typing import List, Optional
 from fastapi import HTTPException
 import json
@@ -93,7 +94,7 @@ def create_quote(
 
         cursor.execute("SELECT id FROM clients WHERE id = %s", (client_id,))
         if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Client not found")
+            raise api_error(404, "Client not found", "CLIENT_NOT_FOUND")
 
         # Validate that the contact belongs to the selected client
         cursor.execute(
@@ -101,10 +102,7 @@ def create_quote(
             (contact_id, client_id),
         )
         if not cursor.fetchone():
-            raise HTTPException(
-                status_code=400,
-                detail=f"Contact {contact_id} does not belong to client {client_id}",
-            )
+            raise api_error(400, f"Contact {contact_id} does not belong to client {client_id}", "CONTACT_CLIENT_MISMATCH")
 
         quote_id = generate_quote_id()
         totals = calculate_quote_totals(items, included_charges)
@@ -189,7 +187,7 @@ def get_quote_by_id(quote_id: str) -> dict:
         quote = cursor.fetchone()
 
         if not quote:
-            raise HTTPException(status_code=404, detail="Quote not found")
+            raise api_error(404, "Quote not found", "QUOTE_NOT_FOUND")
 
         quote = dict(quote)
 
@@ -214,7 +212,7 @@ def quote_id_for_public_token(token: str) -> str:
     finally:
         conn.close()
     if not row:
-        raise HTTPException(status_code=404, detail="Quote not found")
+        raise api_error(404, "Quote not found", "QUOTE_NOT_FOUND")
     return row["quote_id"]
 
 
@@ -260,7 +258,7 @@ def get_quote_with_contact(quote_id: str) -> dict:
         row = cursor.fetchone()
 
         if not row:
-            raise HTTPException(status_code=404, detail="Quote not found")
+            raise api_error(404, "Quote not found", "QUOTE_NOT_FOUND")
 
         quote = dict(row)
 
@@ -328,13 +326,10 @@ def update_quote(quote_id: str, quote_update) -> dict:
         cursor.execute("SELECT * FROM quotes WHERE quote_id = %s", (quote_id,))
         quote = cursor.fetchone()
         if not quote:
-            raise HTTPException(status_code=404, detail="Quote not found")
+            raise api_error(404, "Quote not found", "QUOTE_NOT_FOUND")
 
         if not ALLOW_EDIT_NON_DRAFT_QUOTES and quote["status"] != "Draft":
-            raise HTTPException(
-                status_code=400,
-                detail="Only Draft quotes can be edited",
-            )
+            raise api_error(400, "Only Draft quotes can be edited", "QUOTE_NOT_DRAFT")
 
         update_dict = quote_update.dict(exclude_unset=True)
 
@@ -456,7 +451,7 @@ def delete_quote(quote_id: str) -> dict:
         cursor.execute("DELETE FROM quotes WHERE quote_id = %s", (quote_id,))
 
         if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Quote not found")
+            raise api_error(404, "Quote not found", "QUOTE_NOT_FOUND")
 
         conn.commit()
         return {"message": "Quote deleted successfully"}
@@ -493,7 +488,7 @@ def duplicate_quote(quote_id: str) -> dict:
         """, (quote_id,))
         original = cursor.fetchone()
         if not original:
-            raise HTTPException(status_code=404, detail="Quote not found")
+            raise api_error(404, "Quote not found", "QUOTE_NOT_FOUND")
 
         original = dict(original)
 
@@ -588,14 +583,11 @@ def update_quote_status(quote_id: str, status: str) -> dict:
 
         cursor.execute("SELECT quote_id FROM quotes WHERE quote_id = %s", (quote_id,))
         if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Quote not found")
+            raise api_error(404, "Quote not found", "QUOTE_NOT_FOUND")
 
         valid_statuses = ["Draft", "Sent", "Approved", "Rejected", "Invoiced"]
         if status not in valid_statuses:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid status. Must be one of: {valid_statuses}"
-            )
+            raise api_error(400, f"Invalid status. Must be one of: {valid_statuses}", "QUOTE_STATUS_INVALID")
 
         cursor.execute(
             "UPDATE quotes SET status = %s WHERE quote_id = %s", (status, quote_id)
@@ -635,23 +627,17 @@ def convert_quote_to_invoice(quote_id: str) -> dict:
         """, (quote_id,))
         quote = cursor.fetchone()
         if not quote:
-            raise HTTPException(status_code=404, detail="Quote not found")
+            raise api_error(404, "Quote not found", "QUOTE_NOT_FOUND")
 
         quote = dict(quote)
 
         if quote["status"] != "Approved":
-            raise HTTPException(
-                status_code=400,
-                detail="Only approved quotes can be converted to invoices",
-            )
+            raise api_error(400, "Only approved quotes can be converted to invoices", "QUOTE_NOT_APPROVED")
 
         # 2. Prevent duplicate invoices
         cursor.execute("SELECT id FROM invoices WHERE quote_id = %s", (quote_id,))
         if cursor.fetchone():
-            raise HTTPException(
-                status_code=400,
-                detail="Invoice already exists for this quote",
-            )
+            raise api_error(400, "Invoice already exists for this quote", "INVOICE_EXISTS")
 
         # 3. Load quote items (deterministic order)
         cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id", (quote_id,))

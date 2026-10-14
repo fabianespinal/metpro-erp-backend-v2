@@ -1,3 +1,4 @@
+from core.errors import api_error
 import json
 import base64
 
@@ -44,7 +45,7 @@ def send_invoice(invoice_id: int, current_user: dict = Depends(require_auth)):
 
     invoice = service.get_invoice_with_contact(invoice_id)
     if not invoice:
-        raise HTTPException(status_code=404, detail="Invoice not found")
+        raise api_error(404, "Invoice not found", "INVOICE_NOT_FOUND")
 
     client = {
         "company_name": invoice["company_name"],
@@ -178,7 +179,7 @@ def _invoice_id_for_public_token(token: str) -> int:
         conn.close()
 
     if not row:
-        raise HTTPException(status_code=404, detail="Invoice not found")
+        raise api_error(404, "Invoice not found", "INVOICE_NOT_FOUND")
     return row["id"]
 
 

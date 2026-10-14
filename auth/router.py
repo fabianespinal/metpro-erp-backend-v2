@@ -1,3 +1,4 @@
+from core.errors import api_error
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from .service import (
@@ -64,13 +65,13 @@ def login(credentials: LoginRequest):
         user = cursor.fetchone()
 
         if not user:
-            raise HTTPException(status_code=401, detail="Invalid username or password")
+            raise api_error(401, "Invalid username or password", "INVALID_CREDENTIALS")
 
         if not user.get("is_active", True):
-            raise HTTPException(status_code=401, detail="Account is disabled")
+            raise api_error(401, "Account is disabled", "ACCOUNT_DISABLED")
 
         if not verify_password(credentials.password, user["password_hash"]):
-            raise HTTPException(status_code=401, detail="Invalid username or password")
+            raise api_error(401, "Invalid username or password", "INVALID_CREDENTIALS")
 
         token_data = {
             "sub": user["username"],
@@ -90,7 +91,7 @@ def login(credentials: LoginRequest):
     except Exception:
         # Full detail goes to server logs only. Never return driver or DSN errors to the client.
         logger.exception("Login failed due to an internal error")
-        raise HTTPException(status_code=500, detail="Login temporarily unavailable")
+        raise api_error(500, "Login temporarily unavailable", "LOGIN_UNAVAILABLE")
     finally:
         if conn:
             conn.close()
@@ -109,11 +110,11 @@ def register(user_data: RegisterRequest, _admin: dict = Depends(require_role("ad
 
         cursor.execute("SELECT id FROM users WHERE username = %s", (user_data.username,))
         if cursor.fetchone():
-            raise HTTPException(status_code=400, detail="Username already exists")
+            raise api_error(400, "Username already exists", "USERNAME_TAKEN")
 
         cursor.execute("SELECT id FROM users WHERE email = %s", (user_data.email,))
         if cursor.fetchone():
-            raise HTTPException(status_code=400, detail="Email already exists")
+            raise api_error(400, "Email already exists", "EMAIL_TAKEN")
 
         password_hash = get_password_hash(user_data.password)
 
@@ -147,7 +148,7 @@ def register(user_data: RegisterRequest, _admin: dict = Depends(require_role("ad
         if conn:
             conn.rollback()
         logger.exception("Registration failed due to an internal error")
-        raise HTTPException(status_code=500, detail="Registration temporarily unavailable")
+        raise api_error(500, "Registration temporarily unavailable", "REGISTRATION_UNAVAILABLE")
     finally:
         if conn:
             conn.close()
@@ -184,10 +185,10 @@ def change_password(
     db_user = cursor.fetchone()
 
     if not db_user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise api_error(404, "User not found", "USER_NOT_FOUND")
 
     if not verify_password(data.old_password, db_user["password_hash"]):
-        raise HTTPException(status_code=401, detail="Old password incorrect")
+        raise api_error(401, "Old password incorrect", "PASSWORD_INCORRECT")
 
     new_hash = get_password_hash(data.new_password)
 

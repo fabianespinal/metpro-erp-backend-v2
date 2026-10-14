@@ -1,3 +1,4 @@
+from core.errors import api_error
 from typing import List, Optional
 from fastapi import HTTPException
 import csv
@@ -79,7 +80,7 @@ def get_client_by_id(client_id: int) -> dict:
         row = cursor.fetchone()
 
         if not row:
-            raise HTTPException(status_code=404, detail="Client not found")
+            raise api_error(404, "Client not found", "CLIENT_NOT_FOUND")
 
         return row
 
@@ -104,11 +105,11 @@ def update_client(client_id: int, company_name: str, contact_name: Optional[str]
         # Check existence
         cursor.execute("SELECT id FROM clients WHERE id = %s", (client_id,))
         if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail=f"Client with ID {client_id} not found")
+            raise api_error(404, f"Client with ID {client_id} not found", "CLIENT_NOT_FOUND")
 
         # Validate email
         if email and "@" not in email:
-            raise HTTPException(status_code=400, detail="Invalid email format")
+            raise api_error(400, "Invalid email format", "EMAIL_INVALID")
 
         # Duplicate email
         if email:
@@ -117,10 +118,7 @@ def update_client(client_id: int, company_name: str, contact_name: Optional[str]
                 (email, client_id)
             )
             if cursor.fetchone():
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Email {email} is already in use by another client"
-                )
+                raise api_error(400, f"Email {email} is already in use by another client", "CLIENT_EMAIL_TAKEN")
 
         # Duplicate tax_id
         if tax_id:
@@ -129,10 +127,7 @@ def update_client(client_id: int, company_name: str, contact_name: Optional[str]
                 (tax_id, client_id)
             )
             if cursor.fetchone():
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Tax ID {tax_id} is already in use by another client"
-                )
+                raise api_error(400, f"Tax ID {tax_id} is already in use by another client", "CLIENT_TAX_ID_TAKEN")
 
         # Update
         cursor.execute("""
@@ -181,7 +176,7 @@ def delete_client(client_id: int) -> dict:
 
         cursor.execute("DELETE FROM clients WHERE id = %s", (client_id,))
         if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Client not found")
+            raise api_error(404, "Client not found", "CLIENT_NOT_FOUND")
 
         conn.commit()
         return {"message": "Client deleted successfully"}
@@ -212,15 +207,15 @@ async def import_clients_from_csv(file_content: bytes, filename: str, skip_dupli
         try:
             csv_text = file_content.decode("utf-8-sig")
         except UnicodeDecodeError:
-            raise HTTPException(status_code=400, detail="File must be UTF-8 encoded")
+            raise api_error(400, "File must be UTF-8 encoded", "FILE_ENCODING_INVALID")
 
         rows = list(csv.DictReader(io.StringIO(csv_text)))
 
         if not rows:
-            raise HTTPException(status_code=400, detail="CSV file is empty")
+            raise api_error(400, "CSV file is empty", "CSV_EMPTY")
 
         if "company_name" not in rows[0]:
-            raise HTTPException(status_code=400, detail="Missing required column: company_name")
+            raise api_error(400, "Missing required column: company_name", "CSV_COLUMN_MISSING")
 
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)

@@ -1,3 +1,4 @@
+from core.errors import api_error
 from fastapi import APIRouter, Depends, HTTPException
 from database import get_db_connection
 from auth.service import require_auth
@@ -44,7 +45,7 @@ def get_expense_endpoint(expense_id: int, _user: dict = Depends(require_auth)):
     try:
         exp = get_expense(conn, expense_id)
         if not exp:
-            raise HTTPException(status_code=404, detail="Expense not found")
+            raise api_error(404, "Expense not found", "EXPENSE_NOT_FOUND")
         return exp
     finally:
         conn.close()
@@ -56,7 +57,7 @@ def update_expense_endpoint(expense_id: int, data: ExpenseUpdate, _user: dict = 
     try:
         updated = update_expense(conn, expense_id, data)
         if not updated:
-            raise HTTPException(status_code=400, detail="Nothing to update")
+            raise api_error(400, "Nothing to update", "NOTHING_TO_UPDATE")
         conn.commit()
         return {"status": "updated"}
     finally:

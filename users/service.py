@@ -1,3 +1,4 @@
+from core.errors import api_error
 from typing import List, Optional
 from fastapi import HTTPException
 from database import get_db_connection
@@ -47,7 +48,7 @@ def get_user_by_id(user_id: str) -> dict:
 
         user = cursor.fetchone()
         if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+            raise api_error(404, "User not found", "USER_NOT_FOUND")
 
         return user
 
@@ -74,7 +75,7 @@ def get_user_by_username(username: str) -> dict:
 
         user = cursor.fetchone()
         if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+            raise api_error(404, "User not found", "USER_NOT_FOUND")
 
         return user
 
@@ -96,12 +97,12 @@ def create_user(username: str, password: str, email: str, full_name: str, role: 
         # Check username
         cursor.execute("SELECT id FROM users WHERE username = %s", (username,))
         if cursor.fetchone():
-            raise HTTPException(status_code=400, detail="Username already exists")
+            raise api_error(400, "Username already exists", "USERNAME_TAKEN")
 
         # Check email
         cursor.execute("SELECT id FROM users WHERE email = %s", (email,))
         if cursor.fetchone():
-            raise HTTPException(status_code=400, detail="Email already exists")
+            raise api_error(400, "Email already exists", "EMAIL_TAKEN")
 
         password_hash = get_password_hash(password)
 
@@ -152,7 +153,7 @@ def update_user(user_id: str, email: Optional[str], full_name: Optional[str],
         # Ensure user exists
         cursor.execute("SELECT id FROM users WHERE id = %s", (user_id,))
         if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="User not found")
+            raise api_error(404, "User not found", "USER_NOT_FOUND")
 
         updates = []
         params = []
@@ -160,7 +161,7 @@ def update_user(user_id: str, email: Optional[str], full_name: Optional[str],
         if email is not None:
             cursor.execute("SELECT id FROM users WHERE email = %s AND id != %s", (email, user_id))
             if cursor.fetchone():
-                raise HTTPException(status_code=400, detail="Email already exists")
+                raise api_error(400, "Email already exists", "EMAIL_TAKEN")
             updates.append("email = %s")
             params.append(email)
 
@@ -177,7 +178,7 @@ def update_user(user_id: str, email: Optional[str], full_name: Optional[str],
             params.append(is_active)
 
         if not updates:
-            raise HTTPException(status_code=400, detail="No fields to update")
+            raise api_error(400, "No fields to update", "NO_FIELDS_TO_UPDATE")
 
         updates.append("updated_at = CURRENT_TIMESTAMP")
         params.append(user_id)
@@ -224,10 +225,10 @@ def update_user_password(user_id: str, current_password: str, new_password: str)
         user = cursor.fetchone()
 
         if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+            raise api_error(404, "User not found", "USER_NOT_FOUND")
 
         if not verify_password(current_password, user["password_hash"]):
-            raise HTTPException(status_code=400, detail="Current password is incorrect")
+            raise api_error(400, "Current password is incorrect", "PASSWORD_INCORRECT")
 
         new_hash = get_password_hash(new_password)
 
@@ -269,7 +270,7 @@ def delete_user(user_id: str) -> dict:
         cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
 
         if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="User not found")
+            raise api_error(404, "User not found", "USER_NOT_FOUND")
 
         conn.commit()
         return {"message": "User deleted successfully"}

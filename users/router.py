@@ -1,3 +1,4 @@
+from core.errors import api_error
 from typing import Annotated, List
 
 from fastapi import APIRouter, Depends, HTTPException, Path
@@ -24,9 +25,9 @@ def _assert_self_or_admin(user_id: str, current_user: dict) -> None:
     try:
         target = service.get_user_by_id(user_id)
     except HTTPException:
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
+        raise api_error(403, "Insufficient permissions", "INSUFFICIENT_PERMISSIONS")
     if target.get("username") != current_user.get("sub"):
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
+        raise api_error(403, "Insufficient permissions", "INSUFFICIENT_PERMISSIONS")
 
 
 # ============================================================

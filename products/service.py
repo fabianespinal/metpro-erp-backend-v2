@@ -3,6 +3,7 @@ from fastapi import HTTPException
 import csv
 import io
 from database import get_db_connection
+from core.errors import internal_error
 from psycopg2.extras import RealDictCursor
 
 
@@ -31,7 +32,7 @@ def create_product(name: str, description: str, unit_price: float) -> dict:
     except Exception as e:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise internal_error("Failed to create product", e)
 
     finally:
         if conn:
@@ -112,7 +113,7 @@ def update_product(product_id: int, name: str, description: str, unit_price: flo
     except Exception as e:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to update product: {str(e)}")
+        raise internal_error("Failed to update product", e)
 
     finally:
         if conn:
@@ -142,7 +143,7 @@ def delete_product(product_id: int) -> dict:
     except Exception as e:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
+        raise internal_error("Delete failed", e)
 
     finally:
         if conn:
@@ -228,7 +229,7 @@ async def import_products_from_csv(file_content: bytes, filename: str) -> dict:
     except Exception as e:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
+        raise internal_error("Import failed", e)
 
     finally:
         if conn:

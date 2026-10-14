@@ -14,7 +14,9 @@ SECRET_KEY = os.environ.get("SECRET_KEY")
 if not SECRET_KEY:
     raise RuntimeError("SECRET_KEY environment variable is required")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
+# When true, every authenticated request checks users.is_active.
+ENFORCE_ACTIVE_CHECK = os.environ.get("ENFORCE_ACTIVE_CHECK", "true").lower() == "true"
 
 # OAuth2 bearer token (standard FastAPI pattern)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
@@ -53,6 +55,30 @@ def create_access_token(data: dict) -> str:
 # TOKEN VERIFICATION (HEADER OR QUERY)
 # =========================
 
+def _assert_user_active(username) -> None:
+    """
+    Reject tokens whose user was deactivated or deleted after the token was issued.
+    Runs on every authenticated request when ENFORCE_ACTIVE_CHECK is true.
+    """
+    if not ENFORCE_ACTIVE_CHECK:
+        return
+    if not username:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    from database import get_db_connection
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT is_active FROM users WHERE username = %s", (username,))
+            row = cur.fetchone()
+    finally:
+        conn.close()
+    if row is None:
+        raise HTTPException(status_code=401, detail="User not found")
+    active = row["is_active"] if isinstance(row, dict) else row[0]
+    if not active:
+        raise HTTPException(status_code=401, detail="Account disabled")
+
+
 def verify_token(
     authorization: str = Header(None),
 ):
@@ -90,7 +116,6 @@ def verify_token(
     # Decode and validate JWT
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
     except ExpiredSignatureError:
         raise HTTPException(
             status_code=401,
@@ -101,6 +126,8 @@ def verify_token(
             status_code=401,
             detail="Invalid token"
         )
+    _assert_user_active(payload.get("sub"))
+    return payload
 
 
 # =========================
@@ -116,7 +143,6 @@ def get_current_user_from_bearer(
     """
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
     except ExpiredSignatureError:
         raise HTTPException(
             status_code=401,
@@ -127,6 +153,8 @@ def get_current_user_from_bearer(
             status_code=401,
             detail="Invalid token"
         )
+    _assert_user_active(payload.get("sub"))
+    return payload
 
 
 def require_role(required_role: str):

@@ -9,6 +9,9 @@ from .service import (
 )
 from database import get_db_connection
 from psycopg2.extras import RealDictCursor
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -83,8 +86,10 @@ def login(credentials: LoginRequest):
 
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Login failed: {str(e)}")
+    except Exception:
+        # Full detail goes to server logs only. Never return driver or DSN errors to the client.
+        logger.exception("Login failed due to an internal error")
+        raise HTTPException(status_code=500, detail="Login temporarily unavailable")
     finally:
         if conn:
             conn.close()
@@ -137,10 +142,11 @@ def register(user_data: RegisterRequest, _admin: dict = Depends(require_role("ad
         if conn:
             conn.rollback()
         raise
-    except Exception as e:
+    except Exception:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
+        logger.exception("Registration failed due to an internal error")
+        raise HTTPException(status_code=500, detail="Registration temporarily unavailable")
     finally:
         if conn:
             conn.close()

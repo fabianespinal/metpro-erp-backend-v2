@@ -1,4 +1,5 @@
 from core.errors import api_error
+from core.rate_limit import enforce_user_limit
 import os
 from datetime import datetime, timedelta
 
@@ -139,7 +140,9 @@ def require_auth(authorization: str = Header(None)) -> dict:
     if not token:
         raise api_error(401, "Token is empty", "TOKEN_EMPTY")
 
-    return _validate_access_token(token)
+    payload = _validate_access_token(token)
+    enforce_user_limit(payload["sub"])
+    return payload
 
 
 def require_role(required_role: str):

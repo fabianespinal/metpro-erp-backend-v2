@@ -17,6 +17,8 @@ Toggles (env):
   RATE_LIMIT_LOGIN_WINDOW   default 60 seconds
   RATE_LIMIT_PUBLIC_MAX     default 60 requests
   RATE_LIMIT_PUBLIC_WINDOW  default 60 seconds
+  RATE_LIMIT_AUTH_MAX       default 300 requests per user (authenticated routes)
+  RATE_LIMIT_AUTH_WINDOW    default 60 seconds
 """
 import os
 import threading
@@ -128,3 +130,27 @@ login_rate_limit = rate_limit(
 public_rate_limit = rate_limit(
     "public", "RATE_LIMIT_PUBLIC_MAX", "RATE_LIMIT_PUBLIC_WINDOW", default_limit=60, default_window=60
 )
+
+
+# ============================================================
+# PER-USER LIMIT FOR AUTHENTICATED ROUTES (item 11)
+# ============================================================
+# Called by auth.service.require_auth after the token is validated.
+# Keyed by the token subject, so it does not depend on client IP.
+# Login and public routes do not call require_auth and are not counted here.
+# Gated by the same RATE_LIMIT_ENABLED toggle.
+
+def enforce_user_limit(sub: str) -> None:
+    """Count one request for ``sub``. Raise 429 when the user is over the limit."""
+    if not rate_limit_enabled():
+        return None
+    from core.errors import api_error  # local import keeps module import order simple
+
+    limit = _env_int("RATE_LIMIT_AUTH_MAX", 300)
+    window = _env_int("RATE_LIMIT_AUTH_WINDOW", 60)
+    retry_after = _limiter.hit(f"user:{sub}", limit, window)
+    if retry_after > 0:
+        exc = api_error(429, "Too many requests", "RATE_LIMITED")
+        exc.headers = {"Retry-After": str(int(retry_after) + 1)}
+        raise exc
+    return None

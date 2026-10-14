@@ -10,6 +10,10 @@ from pdf.builder_quote import create_quote_pdf
 from pdf.builder_invoice import create_invoice_pdf
 from pdf.builder_conduce import create_conduce_pdf
 from pdf.utils.layout_utils import build_quote_invoice_pdf   # ✅ ADD THIS
+from core.errors import internal_error
+import logging
+
+logger = logging.getLogger("metpro.pdf")
 
 
 # ============================================================
@@ -151,10 +155,8 @@ def generate_quote_pdf(quote_id: str) -> StreamingResponse:
     except HTTPException:
         raise
     except Exception as e:
-        print(f"PDF GENERATION ERROR for quote {quote_id}: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Quote PDF generation failed: {str(e)}")
+        logger.error("PDF generation failed for quote %s", quote_id)
+        raise internal_error("Quote PDF generation failed", e)
     finally:
         if conn:
             conn.close()
@@ -331,10 +333,8 @@ def generate_invoice_pdf(invoice_id: int) -> StreamingResponse:
     except HTTPException:
         raise
     except Exception as e:
-        print(f"PDF GENERATION ERROR for invoice {invoice_id}: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Invoice PDF generation failed: {str(e)}")
+        logger.error("PDF generation failed for invoice %s", invoice_id)
+        raise internal_error("Invoice PDF generation failed", e)
     finally:
         if conn:
             conn.close()
@@ -416,10 +416,8 @@ def generate_conduce_pdf(invoice_id: int) -> StreamingResponse:
     except HTTPException:
         raise
     except Exception as e:
-        print(f"CONDUCE GENERATION ERROR for invoice {invoice_id}: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Conduce generation failed: {str(e)}")
+        logger.error("Conduce generation failed for invoice %s", invoice_id)
+        raise internal_error("Conduce generation failed", e)
     finally:
         if conn:
             conn.close()

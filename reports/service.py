@@ -2,6 +2,7 @@ from typing import Optional
 from fastapi import HTTPException
 from database import get_db_connection
 from psycopg2.extras import RealDictCursor
+from core.errors import internal_error
 
 
 # ============================================================
@@ -152,7 +153,7 @@ def get_revenue_report(start_date: Optional[str], end_date: Optional[str],
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Revenue report failed: {str(e)[:100]}")
+        raise internal_error("Revenue report failed", e)
 
     finally:
         if conn:

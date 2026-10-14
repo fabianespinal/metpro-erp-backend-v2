@@ -1,3 +1,4 @@
+import logging
 from typing import List
 from fastapi import HTTPException
 import csv
@@ -9,6 +10,8 @@ from psycopg2.extras import RealDictCursor
 # ============================================================
 # CREATE PRODUCT
 # ============================================================
+
+logger = logging.getLogger(__name__)
 
 def create_product(name: str, description: str, unit_price: float) -> dict:
     conn = None
@@ -28,10 +31,11 @@ def create_product(name: str, description: str, unit_price: float) -> dict:
         cursor.execute("SELECT * FROM products WHERE id = %s", (new_id,))
         return cursor.fetchone()
 
-    except Exception as e:
+    except Exception:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Unhandled error in service")
+        raise HTTPException(status_code=500, detail="Request failed. Please try again later.")
 
     finally:
         if conn:
@@ -109,10 +113,11 @@ def update_product(product_id: int, name: str, description: str, unit_price: flo
             conn.rollback()
         raise
 
-    except Exception as e:
+    except Exception:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to update product: {str(e)}")
+        logger.exception("Failed to update product")
+        raise HTTPException(status_code=500, detail="Failed to update product. Please try again later.")
 
     finally:
         if conn:
@@ -139,10 +144,11 @@ def delete_product(product_id: int) -> dict:
     except HTTPException:
         raise
 
-    except Exception as e:
+    except Exception:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
+        logger.exception("Delete failed")
+        raise HTTPException(status_code=500, detail="Delete failed. Please try again later.")
 
     finally:
         if conn:
@@ -225,10 +231,11 @@ async def import_products_from_csv(file_content: bytes, filename: str) -> dict:
     except HTTPException:
         raise
 
-    except Exception as e:
+    except Exception:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
+        logger.exception("Import failed")
+        raise HTTPException(status_code=500, detail="Import failed. Please try again later.")
 
     finally:
         if conn:

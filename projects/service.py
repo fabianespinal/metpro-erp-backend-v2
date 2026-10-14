@@ -1,3 +1,4 @@
+import logging
 from typing import List, Optional
 from datetime import date
 from fastapi import HTTPException
@@ -7,6 +8,8 @@ from psycopg2.extras import RealDictCursor
 # ============================================================
 # CREATE PROJECT
 # ============================================================
+logger = logging.getLogger(__name__)
+
 def create_project(
     client_id: int,
     name: str,
@@ -53,10 +56,11 @@ def create_project(
             conn.rollback()
         raise
 
-    except Exception as e:
+    except Exception:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Create failed: {str(e)}")
+        logger.exception("Create failed")
+        raise HTTPException(status_code=500, detail="Create failed. Please try again later.")
 
     finally:
         if conn:
@@ -231,10 +235,11 @@ def update_project(
             conn.rollback()
         raise
 
-    except Exception as e:
+    except Exception:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Update failed: {str(e)}")
+        logger.exception("Update failed")
+        raise HTTPException(status_code=500, detail="Update failed. Please try again later.")
 
     finally:
         if conn:
@@ -259,10 +264,11 @@ def delete_project(project_id: int) -> dict:
     except HTTPException:
         raise
 
-    except Exception as e:
+    except Exception:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
+        logger.exception("Delete failed")
+        raise HTTPException(status_code=500, detail="Delete failed. Please try again later.")
 
     finally:
         if conn:

@@ -1,8 +1,11 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Optional
 from .models import Project, ProjectBase, ProjectUpdate
 from . import service
 from auth.service import verify_token
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix='/projects', tags=['projects'])
 
@@ -17,8 +20,9 @@ def create_project(project: ProjectBase, current_user: dict = Depends(verify_tok
         return Project(**result)
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Create failed: {str(e)}")
+    except Exception:
+        logger.exception("Create failed")
+        raise HTTPException(status_code=500, detail="Create failed. Please try again later.")
 
 @router.get('/', response_model=List[Project])
 def get_projects(
@@ -30,8 +34,9 @@ def get_projects(
     try:
         projects = service.get_all_projects(client_id, status)
         return [Project(**p) for p in projects]
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Fetch failed: {str(e)}")
+    except Exception:
+        logger.exception("Fetch failed")
+        raise HTTPException(status_code=500, detail="Fetch failed. Please try again later.")
 
 @router.get('/{project_id}', response_model=Project)
 def get_project(project_id: int, current_user: dict = Depends(verify_token)):
@@ -41,8 +46,9 @@ def get_project(project_id: int, current_user: dict = Depends(verify_token)):
         return Project(**result)
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Fetch failed: {str(e)}")
+    except Exception:
+        logger.exception("Fetch failed")
+        raise HTTPException(status_code=500, detail="Fetch failed. Please try again later.")
 
 @router.put('/{project_id}', response_model=Project)
 def update_project(
@@ -66,8 +72,9 @@ def update_project(
         return Project(**result)
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Update failed: {str(e)}")
+    except Exception:
+        logger.exception("Update failed")
+        raise HTTPException(status_code=500, detail="Update failed. Please try again later.")
 
 @router.delete('/{project_id}')
 def delete_project(project_id: int, current_user: dict = Depends(verify_token)):
@@ -76,5 +83,6 @@ def delete_project(project_id: int, current_user: dict = Depends(verify_token)):
         return service.delete_project(project_id)
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
+    except Exception:
+        logger.exception("Delete failed")
+        raise HTTPException(status_code=500, detail="Delete failed. Please try again later.")

@@ -142,10 +142,11 @@ def register(user_data: RegisterRequest, _admin: dict = Depends(require_role("ad
         if conn:
             conn.rollback()
         raise
-    except Exception as e:
+    except Exception:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
+        logger.exception("Registration failed")
+        raise HTTPException(status_code=500, detail="Registration failed. Please try again later.")
     finally:
         if conn:
             conn.close()

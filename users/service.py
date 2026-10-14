@@ -1,3 +1,4 @@
+import logging
 from typing import List, Optional
 from fastapi import HTTPException
 from database import get_db_connection
@@ -8,6 +9,8 @@ from psycopg2.extras import RealDictCursor
 # ============================================================
 # GET ALL USERS
 # ============================================================
+
+logger = logging.getLogger(__name__)
 
 def get_all_users() -> List[dict]:
     conn = None
@@ -126,10 +129,11 @@ def create_user(username: str, password: str, email: str, full_name: str, role: 
             conn.rollback()
         raise
 
-    except Exception as e:
+    except Exception:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to create user: {str(e)}")
+        logger.exception("Failed to create user")
+        raise HTTPException(status_code=500, detail="Failed to create user. Please try again later.")
 
     finally:
         if conn:
@@ -199,10 +203,11 @@ def update_user(user_id: str, email: Optional[str], full_name: Optional[str],
             conn.rollback()
         raise
 
-    except Exception as e:
+    except Exception:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to update user: {str(e)}")
+        logger.exception("Failed to update user")
+        raise HTTPException(status_code=500, detail="Failed to update user. Please try again later.")
 
     finally:
         if conn:
@@ -245,10 +250,11 @@ def update_user_password(user_id: str, current_password: str, new_password: str)
             conn.rollback()
         raise
 
-    except Exception as e:
+    except Exception:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to update password: {str(e)}")
+        logger.exception("Failed to update password")
+        raise HTTPException(status_code=500, detail="Failed to update password. Please try again later.")
 
     finally:
         if conn:
@@ -278,10 +284,11 @@ def delete_user(user_id: str) -> dict:
             conn.rollback()
         raise
 
-    except Exception as e:
+    except Exception:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to delete user: {str(e)}")
+        logger.exception("Failed to delete user")
+        raise HTTPException(status_code=500, detail="Failed to delete user. Please try again later.")
 
     finally:
         if conn:

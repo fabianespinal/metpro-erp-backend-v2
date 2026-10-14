@@ -1,3 +1,4 @@
+import logging
 import json
 from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
@@ -11,6 +12,8 @@ from pdf.utils.layout_utils import build_quote_invoice_pdf   # ✅ ADD THIS
 # ============================================================
 # QUOTE PDF GENERATION
 # ============================================================
+logger = logging.getLogger(__name__)
+
 def generate_quote_pdf(quote_id: str) -> StreamingResponse:
     conn = None
     try:
@@ -150,7 +153,8 @@ def generate_quote_pdf(quote_id: str) -> StreamingResponse:
         print(f"PDF GENERATION ERROR for quote {quote_id}: {str(e)}")
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Quote PDF generation failed: {str(e)}")
+        logger.exception("Quote PDF generation failed")
+        raise HTTPException(status_code=500, detail="Quote PDF generation failed. Please try again later.")
     finally:
         if conn:
             conn.close()
@@ -330,7 +334,8 @@ def generate_invoice_pdf(invoice_id: int) -> StreamingResponse:
         print(f"PDF GENERATION ERROR for invoice {invoice_id}: {str(e)}")
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Invoice PDF generation failed: {str(e)}")
+        logger.exception("Invoice PDF generation failed")
+        raise HTTPException(status_code=500, detail="Invoice PDF generation failed. Please try again later.")
     finally:
         if conn:
             conn.close()
@@ -415,7 +420,8 @@ def generate_conduce_pdf(invoice_id: int) -> StreamingResponse:
         print(f"CONDUCE GENERATION ERROR for invoice {invoice_id}: {str(e)}")
         import traceback
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Conduce generation failed: {str(e)}")
+        logger.exception("Conduce generation failed")
+        raise HTTPException(status_code=500, detail="Conduce generation failed. Please try again later.")
     finally:
         if conn:
             conn.close()

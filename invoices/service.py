@@ -1,3 +1,4 @@
+import logging
 from typing import List, Optional
 from fastapi import HTTPException
 from datetime import datetime
@@ -5,6 +6,8 @@ import json
 from database import get_db_connection
 from psycopg2.extras import RealDictCursor
 
+
+logger = logging.getLogger(__name__)
 
 def generate_invoice_number() -> str:
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
@@ -142,10 +145,11 @@ def create_invoice_from_quote(quote_id: str, notes: Optional[str] = None) -> dic
         if conn:
             conn.rollback()
         raise
-    except Exception as e:
+    except Exception:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to create invoice: {str(e)}")
+        logger.exception("Failed to create invoice")
+        raise HTTPException(status_code=500, detail="Failed to create invoice. Please try again later.")
     finally:
         if conn:
             conn.close()
@@ -285,10 +289,11 @@ def update_invoice_status(invoice_id: int, status: str) -> dict:
         if conn:
             conn.rollback()
         raise
-    except Exception as e:
+    except Exception:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Update failed: {str(e)}")
+        logger.exception("Update failed")
+        raise HTTPException(status_code=500, detail="Update failed. Please try again later.")
     finally:
         if conn:
             conn.close()
@@ -318,10 +323,11 @@ def delete_invoice(invoice_id: int) -> dict:
         if conn:
             conn.rollback()
         raise
-    except Exception as e:
+    except Exception:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
+        logger.exception("Delete failed")
+        raise HTTPException(status_code=500, detail="Delete failed. Please try again later.")
     finally:
         if conn:
             conn.close()

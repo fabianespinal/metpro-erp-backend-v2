@@ -1,3 +1,4 @@
+import logging
 from typing import Optional
 from fastapi import HTTPException
 from database import get_db_connection
@@ -7,6 +8,8 @@ from psycopg2.extras import RealDictCursor
 # ============================================================
 # QUOTES SUMMARY REPORT
 # ============================================================
+
+logger = logging.getLogger(__name__)
 
 def get_quotes_summary(start_date: Optional[str], end_date: Optional[str],
                        client_id: Optional[int]) -> dict:
@@ -151,8 +154,9 @@ def get_revenue_report(start_date: Optional[str], end_date: Optional[str],
             "grand_total": total_revenue
         }
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Revenue report failed: {str(e)[:100]}")
+    except Exception:
+        logger.exception("Revenue report failed")
+        raise HTTPException(status_code=500, detail="Revenue report failed. Please try again later.")
 
     finally:
         if conn:

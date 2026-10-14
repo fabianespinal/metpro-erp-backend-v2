@@ -1,3 +1,4 @@
+import logging
 from typing import List, Optional
 from fastapi import HTTPException
 import csv
@@ -10,6 +11,8 @@ from psycopg2.extras import RealDictCursor
 # ============================================================
 # CREATE CLIENT
 # ============================================================
+
+logger = logging.getLogger(__name__)
 
 def create_client(company_name: str, contact_name: Optional[str], email: Optional[str],
                   phone: Optional[str], address: Optional[str], tax_id: Optional[str],
@@ -33,10 +36,11 @@ def create_client(company_name: str, contact_name: Optional[str], email: Optiona
         cursor.execute("SELECT * FROM clients WHERE id = %s", (new_id,))
         return cursor.fetchone()
 
-    except Exception as e:
+    except Exception:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Unhandled error in service")
+        raise HTTPException(status_code=500, detail="Request failed. Please try again later.")
 
     finally:
         if conn:
@@ -155,10 +159,11 @@ def update_client(client_id: int, company_name: str, contact_name: Optional[str]
             conn.rollback()
         raise
 
-    except Exception as e:
+    except Exception:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to update client: {str(e)}")
+        logger.exception("Failed to update client")
+        raise HTTPException(status_code=500, detail="Failed to update client. Please try again later.")
 
     finally:
         if conn:
@@ -185,10 +190,11 @@ def delete_client(client_id: int) -> dict:
     except HTTPException:
         raise
 
-    except Exception as e:
+    except Exception:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
+        logger.exception("Delete failed")
+        raise HTTPException(status_code=500, detail="Delete failed. Please try again later.")
 
     finally:
         if conn:
@@ -288,8 +294,9 @@ async def import_clients_from_csv(file_content: bytes, filename: str, skip_dupli
                 ))
                 inserted += 1
 
-            except Exception as e:
-                errors.append(f"Row {idx} ({company}): {str(e)[:80]}")
+            except Exception:
+                logger.exception(f"Client import row {idx} failed")
+                errors.append(f"Row {idx} ({company}): could not be imported")
                 skipped += 1
 
         conn.commit()
@@ -316,11 +323,12 @@ async def import_clients_from_csv(file_content: bytes, filename: str, skip_dupli
     except HTTPException:
         raise
 
-    except Exception as e:
+    except Exception:
         if conn:
             conn.rollback()
-        errors.append(f"System error: {str(e)[:100]}")
-        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)[:100]}")
+        errors.append("System error: import could not be completed")
+        logger.exception("Import failed")
+        raise HTTPException(status_code=500, detail="Import failed. Please try again later.")
 
     finally:
         if conn:

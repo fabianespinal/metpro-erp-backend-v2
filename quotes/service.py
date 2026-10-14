@@ -1,3 +1,4 @@
+import logging
 # =============================================================================
 # SECTION 1: IMPORTS
 # =============================================================================
@@ -15,6 +16,8 @@ INS_SQL = "INSERT INTO quote_items (quote_id, product_name, quantity, unit_price
 # =============================================================================
 # SECTION 2: HELPER FUNCTIONS
 # =============================================================================
+logger = logging.getLogger(__name__)
+
 def calculate_quote_totals(items: List[dict], charges: dict) -> dict:
     items_total = sum(float(item['quantity'] or 0) * float(item['unit_price'] or 0) for item in items)
     total_discounts = 0
@@ -162,10 +165,11 @@ def create_quote(
             conn.rollback()
         raise
 
-    except Exception as e:
+    except Exception:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to create quote: {str(e)}")
+        logger.exception("Failed to create quote")
+        raise HTTPException(status_code=500, detail="Failed to create quote. Please try again later.")
 
     finally:
         if conn:
@@ -435,10 +439,11 @@ def update_quote(quote_id: str, quote_update) -> dict:
             conn.rollback()
         raise
 
-    except Exception as e:
+    except Exception:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to update quote: {str(e)}")
+        logger.exception("Failed to update quote")
+        raise HTTPException(status_code=500, detail="Failed to update quote. Please try again later.")
 
     finally:
         if conn:
@@ -463,10 +468,11 @@ def delete_quote(quote_id: str) -> dict:
     except HTTPException:
         raise
 
-    except Exception as e:
+    except Exception:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
+        logger.exception("Delete failed")
+        raise HTTPException(status_code=500, detail="Delete failed. Please try again later.")
 
     finally:
         if conn:
@@ -569,10 +575,11 @@ def duplicate_quote(quote_id: str) -> dict:
             conn.rollback()
         raise
 
-    except Exception as e:
+    except Exception:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to duplicate quote: {str(e)}")
+        logger.exception("Failed to duplicate quote")
+        raise HTTPException(status_code=500, detail="Failed to duplicate quote. Please try again later.")
 
     finally:
         if conn:
@@ -608,10 +615,11 @@ def update_quote_status(quote_id: str, status: str) -> dict:
             conn.rollback()
         raise
 
-    except Exception as e:
+    except Exception:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to update status: {str(e)}")
+        logger.exception("Failed to update status")
+        raise HTTPException(status_code=500, detail="Failed to update status. Please try again later.")
 
     finally:
         if conn:
@@ -759,10 +767,11 @@ def convert_quote_to_invoice(quote_id: str) -> dict:
             conn.rollback()
         raise
 
-    except Exception as e:
+    except Exception:
         if conn:
             conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to convert quote to invoice: {str(e)}")
+        logger.exception("Failed to convert quote to invoice")
+        raise HTTPException(status_code=500, detail="Failed to convert quote to invoice. Please try again later.")
 
     finally:
         if conn:

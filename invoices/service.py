@@ -1,3 +1,4 @@
+from core.errors import api_error
 from typing import List, Optional
 from fastapi import HTTPException
 from datetime import datetime
@@ -64,22 +65,16 @@ def create_invoice_from_quote(quote_id: str, notes: Optional[str] = None) -> dic
         cursor.execute("SELECT * FROM quotes WHERE quote_id = %s", (quote_id,))
         quote = cursor.fetchone()
         if not quote:
-            raise HTTPException(status_code=404, detail="Quote not found")
+            raise api_error(404, "Quote not found", "QUOTE_NOT_FOUND")
 
         quote = dict(quote)
 
         if quote["status"] != "Approved":
-            raise HTTPException(
-                status_code=400,
-                detail="Only approved quotes can be converted to invoices",
-            )
+            raise api_error(400, "Only approved quotes can be converted to invoices", "QUOTE_NOT_APPROVED")
 
         cursor.execute("SELECT id FROM invoices WHERE quote_id = %s", (quote_id,))
         if cursor.fetchone():
-            raise HTTPException(
-                status_code=400,
-                detail="Invoice already exists for this quote",
-            )
+            raise api_error(400, "Invoice already exists for this quote", "INVOICE_EXISTS")
 
         cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id", (quote_id,))
         items = [dict(row) for row in cursor.fetchall()]
@@ -204,7 +199,7 @@ def get_invoice_by_id(invoice_id: int) -> dict:
         cursor.execute("SELECT * FROM invoices WHERE id = %s", (invoice_id,))
         invoice = cursor.fetchone()
         if not invoice:
-            raise HTTPException(status_code=404, detail="Invoice not found")
+            raise api_error(404, "Invoice not found", "INVOICE_NOT_FOUND")
 
         invoice = dict(invoice)
 
@@ -247,7 +242,7 @@ def get_invoice_by_number(invoice_number: str) -> dict:
         cursor.execute("SELECT * FROM invoices WHERE invoice_number = %s", (invoice_number,))
         invoice = cursor.fetchone()
         if not invoice:
-            raise HTTPException(status_code=404, detail="Invoice not found")
+            raise api_error(404, "Invoice not found", "INVOICE_NOT_FOUND")
 
         return dict(invoice)
 
@@ -264,10 +259,7 @@ def update_invoice_status(invoice_id: int, status: str) -> dict:
 
         valid_statuses = ["Pending", "Paid", "Cancelled", "Overdue"]
         if status not in valid_statuses:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid status. Must be one of: {valid_statuses}",
-            )
+            raise api_error(400, f"Invalid status. Must be one of: {valid_statuses}", "INVOICE_STATUS_INVALID")
 
         cursor.execute("""
             UPDATE invoices
@@ -277,7 +269,7 @@ def update_invoice_status(invoice_id: int, status: str) -> dict:
         """, (status, invoice_id))
 
         if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Invoice not found")
+            raise api_error(404, "Invoice not found", "INVOICE_NOT_FOUND")
 
         conn.commit()
         return dict(cursor.fetchone())
@@ -304,7 +296,7 @@ def delete_invoice(invoice_id: int) -> dict:
         cursor.execute("SELECT quote_id FROM invoices WHERE id = %s", (invoice_id,))
         invoice = cursor.fetchone()
         if not invoice:
-            raise HTTPException(status_code=404, detail="Invoice not found")
+            raise api_error(404, "Invoice not found", "INVOICE_NOT_FOUND")
 
         quote_id = invoice["quote_id"]
 
@@ -369,7 +361,7 @@ def get_invoice_with_contact(invoice_id: int) -> dict:
 
         row = cursor.fetchone()
         if not row:
-            raise HTTPException(status_code=404, detail="Invoice not found")
+            raise api_error(404, "Invoice not found", "INVOICE_NOT_FOUND")
 
         invoice = dict(row)
 

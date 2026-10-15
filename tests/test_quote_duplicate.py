@@ -202,3 +202,15 @@ def test_original_quote_not_found_raises_404(monkeypatch):
         assert conn.rolled_back is True
     else:
         raise AssertionError("expected HTTPException 404")
+
+
+def test_duplicate_copies_all_totals_columns(monkeypatch):
+    original = dict(ORIGINAL, subtotal=100.0, discount_total=5.0, tax_amount=18.0, grand_total=118.0)
+    cursor = FakeCursor(original, ORIGINAL_ITEMS, NEW_QUOTE_ROW, [])
+    monkeypatch.setattr(svc, "get_db_connection", lambda: FakeConn(cursor))
+    monkeypatch.setattr(svc, "generate_quote_id", lambda: NEW_ID)
+    monkeypatch.setattr(svc, "execute_values", lambda *a, **k: None)
+    svc.duplicate_quote("orig-1")
+    sql, params = _insert_quote_call(cursor)
+    assert params[10:14] == (100.0, 5.0, 18.0, 118.0)
+    assert sql.endswith("NULL)")

@@ -592,7 +592,8 @@ def duplicate_quote(quote_id: str) -> dict:
         # 1. Fetch original quote
         cursor.execute("""
             SELECT quote_id, client_id, contact_id, project_name, notes, status,
-                   included_charges, total_amount, payment_terms, valid_until, terms
+                   included_charges, total_amount, payment_terms, valid_until, terms,
+                   subtotal, discount_total, tax_amount, grand_total
             FROM quotes
             WHERE quote_id = %s
         """, (quote_id,))
@@ -624,8 +625,8 @@ def duplicate_quote(quote_id: str) -> dict:
             INSERT INTO quotes
                 (quote_id, client_id, contact_id, project_name, notes, status,
                  included_charges, total_amount, payment_terms, terms,
-                 valid_until, public_token)
-            VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, NULL)
+                 valid_until, subtotal, discount_total, tax_amount, grand_total, public_token)
+            VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s, %s, %s, %s, NULL)
         """, (
             new_quote_id,
             original["client_id"],
@@ -638,6 +639,10 @@ def duplicate_quote(quote_id: str) -> dict:
             original.get("payment_terms"),
             original.get("terms"),
             valid_until,
+            original.get("subtotal"),
+            original.get("discount_total"),
+            original.get("tax_amount"),
+            original.get("grand_total"),
         ))
 
         # 7. Duplicate quote items (product_id, item_type, description kept)

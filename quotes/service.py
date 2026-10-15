@@ -12,6 +12,12 @@ from core.errors import internal_error
 from psycopg2.extras import RealDictCursor, execute_values
 
 INS_SQL = "INSERT INTO quote_items (quote_id, product_name, quantity, unit_price, discount_type, discount_value) VALUES %s"
+# Create and update paths. Requires quoting_v1 migration (item_type, description).
+INS_ITEMS_SQL = (
+    "INSERT INTO quote_items (quote_id, product_name, quantity, unit_price, discount_type, "
+    "discount_value, item_type, description) VALUES %s"
+)
+QUOTE_STATUS_FINAL = "Final"
 # Duplicate path only. Requires quoting_v1 migration (item_type, description).
 INS_DUP_SQL = (
     "INSERT INTO quote_items (quote_id, product_id, product_name, quantity, unit_price, "
@@ -79,6 +85,37 @@ def _serialize_date(d) -> Optional[str]:
     return d  # already a string — let Postgres handle it
 
 
+def _compute_quote_totals(items: List[dict], charges: dict) -> dict:
+    """Totals via quotes.totals.compute_totals (quoting v1).
+
+    Lazy import: quotes.totals imports calculate_quote_totals from this module.
+    """
+    from quotes.totals import compute_totals
+    return compute_totals(items, charges)
+
+
+def _totals_columns(totals: dict) -> tuple:
+    """Values for subtotal, discount_total, tax_amount, grand_total, total_amount."""
+    return (
+        totals["subtotal_general"],
+        totals["total_discounts"],
+        totals["tax_amount"],
+        totals["grand_total"],
+        totals["grand_total"],  # total_amount kept equal to grand_total (legacy readers)
+    )
+
+
+TOTALS_UPDATE_SQL = """
+    UPDATE quotes
+    SET subtotal = %s,
+        discount_total = %s,
+        tax_amount = %s,
+        grand_total = %s,
+        total_amount = %s
+    WHERE quote_id = %s
+"""
+
+
 # =============================================================================
 # SECTION 3: QUOTE CRUD OPERATIONS
 # =============================================================================
@@ -110,14 +147,16 @@ def create_quote(
             raise api_error(400, f"Contact {contact_id} does not belong to client {client_id}", "CONTACT_CLIENT_MISMATCH")
 
         quote_id = generate_quote_id()
-        totals = calculate_quote_totals(items, included_charges)
+        totals = _compute_quote_totals(items, included_charges)
 
+        # public_token is not set here. It stays NULL until finalize.
         cursor.execute("""
             INSERT INTO quotes
                 (quote_id, client_id, contact_id, project_name, notes, status,
-                 included_charges, total_amount, payment_terms, valid_until)
+                 included_charges, total_amount, payment_terms, valid_until,
+                 subtotal, discount_total, tax_amount, grand_total)
             VALUES
-                (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s)
+                (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s, %s, %s)
         """, (
             quote_id,
             client_id,
@@ -129,6 +168,10 @@ def create_quote(
             totals["grand_total"],
             payment_terms,
             _serialize_date(valid_until),
+            totals["subtotal_general"],
+            totals["total_discounts"],
+            totals["tax_amount"],
+            totals["grand_total"],
         ))
 
         rows = [
@@ -139,17 +182,20 @@ def create_quote(
                 item["unit_price"],
                 item.get("discount_type", "none"),
                 item.get("discount_value", 0.0),
+                item.get("item_type") or "product",
+                item.get("description"),
             )
             for item in items
         ]
         if rows:
-            execute_values(cursor, INS_SQL, rows)
+            execute_values(cursor, INS_ITEMS_SQL, rows)
 
         conn.commit()
 
         cursor.execute("""
             SELECT quote_id, client_id, contact_id, project_name, notes, status,
                    included_charges, total_amount, payment_terms, valid_until,
+                   subtotal, discount_total, tax_amount, grand_total,
                    created_at, updated_at
             FROM quotes
             WHERE quote_id = %s
@@ -333,6 +379,10 @@ def update_quote(quote_id: str, quote_update) -> dict:
         if not quote:
             raise api_error(404, "Quote not found", "QUOTE_NOT_FOUND")
 
+        # Finalized quotes are locked regardless of ALLOW_EDIT_NON_DRAFT_QUOTES.
+        if quote["status"] == QUOTE_STATUS_FINAL:
+            raise api_error(400, "Finalized quotes cannot be edited", "QUOTE_FINALIZED")
+
         if not ALLOW_EDIT_NON_DRAFT_QUOTES and quote["status"] != "Draft":
             raise api_error(400, "Only Draft quotes can be edited", "QUOTE_NOT_DRAFT")
 
@@ -376,11 +426,13 @@ def update_quote(quote_id: str, quote_update) -> dict:
                     item.get("unit_price", 0),
                     item.get("discount_type", "none"),
                     item.get("discount_value", 0.0),
+                    item.get("item_type") or "product",
+                    item.get("description"),
                 )
                 for item in normalized
             ]
             if rows:
-                execute_values(cursor, INS_SQL, rows)
+                execute_values(cursor, INS_ITEMS_SQL, rows)
 
         # Recalculate totals if items or charges changed
         if included_charges is not None or items is not None:
@@ -405,15 +457,15 @@ def update_quote(quote_id: str, quote_update) -> dict:
                 else:
                     charges = raw or {}
 
-            totals = calculate_quote_totals(current_items, charges)
+            totals = _compute_quote_totals(current_items, charges)
 
             cursor.execute("""
                 UPDATE quotes
                 SET included_charges = %s::jsonb,
-                    total_amount = %s,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE quote_id = %s
-            """, (json.dumps(charges), totals["grand_total"], quote_id))
+            """, (json.dumps(charges), quote_id))
+            cursor.execute(TOTALS_UPDATE_SQL, _totals_columns(totals) + (quote_id,))
 
         conn.commit()
 
@@ -595,19 +647,101 @@ def duplicate_quote(quote_id: str) -> dict:
             conn.close()
 
 
+def finalize_quote(quote_id: str) -> dict:
+    """Draft -> Final. Persists totals, sets finalized_at, generates public_token.
+
+    public_token is generated only if NULL, so an existing link keeps working
+    if a finalized quote is ever re-finalized (not reachable today: Final is locked).
+    Requires quoting_v1 migration.
+    """
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+        cursor.execute(
+            "SELECT quote_id, status, included_charges FROM quotes WHERE quote_id = %s FOR UPDATE",
+            (quote_id,),
+        )
+        quote = cursor.fetchone()
+        if not quote:
+            raise api_error(404, "Quote not found", "QUOTE_NOT_FOUND")
+        if quote["status"] != "Draft":
+            raise api_error(400, "Only Draft quotes can be finalized", "QUOTE_NOT_DRAFT")
+
+        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id", (quote_id,))
+        current_items = [dict(row) for row in cursor.fetchall()]
+
+        raw = quote.get("included_charges") or {}
+        if isinstance(raw, str):
+            raw = json.loads(raw) if raw else {}
+        totals = _compute_quote_totals(current_items, raw)
+
+        cursor.execute(
+            """
+            UPDATE quotes
+            SET status = %s,
+                finalized_at = CURRENT_TIMESTAMP,
+                public_token = COALESCE(public_token, %s),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE quote_id = %s
+            """,
+            (QUOTE_STATUS_FINAL, str(uuid.uuid4()), quote_id),
+        )
+        cursor.execute(TOTALS_UPDATE_SQL, _totals_columns(totals) + (quote_id,))
+        conn.commit()
+
+        cursor.execute("""
+            SELECT quote_id, client_id, contact_id, project_name, notes, status,
+                   included_charges, total_amount, payment_terms, valid_until,
+                   subtotal, discount_total, tax_amount, grand_total,
+                   finalized_at, created_at, updated_at
+            FROM quotes
+            WHERE quote_id = %s
+        """, (quote_id,))
+        result = dict(cursor.fetchone())
+
+        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id", (quote_id,))
+        result["items"] = cursor.fetchall()
+        return result
+
+    except HTTPException:
+        if conn:
+            conn.rollback()
+        raise
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        raise internal_error("Failed to finalize quote", e)
+
+    finally:
+        if conn:
+            conn.close()
+
+
 def update_quote_status(quote_id: str, status: str) -> dict:
     conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        cursor.execute("SELECT quote_id FROM quotes WHERE quote_id = %s", (quote_id,))
-        if not cursor.fetchone():
+        cursor.execute("SELECT quote_id, status FROM quotes WHERE quote_id = %s", (quote_id,))
+        current = cursor.fetchone()
+        if not current:
             raise api_error(404, "Quote not found", "QUOTE_NOT_FOUND")
 
-        valid_statuses = ["Draft", "Sent", "Approved", "Rejected", "Invoiced"]
+        valid_statuses = ["Draft", "Sent", "Approved", "Rejected", "Invoiced", QUOTE_STATUS_FINAL]
         if status not in valid_statuses:
             raise api_error(400, f"Invalid status. Must be one of: {valid_statuses}", "QUOTE_STATUS_INVALID")
+
+        # Final is set only by finalize (it generates public_token and totals).
+        if status == QUOTE_STATUS_FINAL:
+            raise api_error(400, "Use the finalize endpoint to set Final", "QUOTE_USE_FINALIZE")
+
+        # A finalized quote cannot be moved back to another status.
+        if current["status"] == QUOTE_STATUS_FINAL:
+            raise api_error(400, "Finalized quotes cannot change status", "QUOTE_FINALIZED")
 
         cursor.execute(
             "UPDATE quotes SET status = %s WHERE quote_id = %s", (status, quote_id)

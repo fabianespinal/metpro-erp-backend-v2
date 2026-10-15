@@ -7,6 +7,7 @@ import json
 from .models import QuoteCreate, StatusUpdate, QuoteUpdate
 from . import service
 from auth.service import require_auth, require_role
+from core.errors import api_error
 from core.rate_limit import public_rate_limit
 from pdf.builder_quote import create_quote_pdf
 
@@ -122,6 +123,10 @@ def send_quote(quote_id: str, current_user: dict = Depends(require_auth)):
     """Send quote PDF to client via email"""
 
     quote = service.get_quote_with_contact(quote_id)
+
+    # Drafts have no public_token. Never build a link from NULL.
+    if not quote.get("public_token"):
+        raise api_error(400, "Quote must be finalized before sending", "QUOTE_NOT_FINALIZED")
 
     client = {
         "company_name": quote["company_name"],
@@ -245,6 +250,18 @@ def get_quote_pdf(quote_id: str, current_user: dict = Depends(require_auth)):
         media_type="application/pdf",
         headers={"Content-Disposition": f"inline; filename=quote_{quote_id}.pdf"},
     )
+
+
+@router.post("/draft")
+def create_draft_quote(quote: QuoteCreate, current_user: dict = Depends(require_auth)):
+    """Create a Draft quote. Alias of POST /quotes/ (same code path). public_token stays NULL."""
+    return create_quote(quote, current_user)
+
+
+@router.post("/{quote_id}/finalize")
+def finalize_quote(quote_id: str, current_user: dict = Depends(require_auth)):
+    """Draft -> Final. Persists totals and generates the public_token."""
+    return service.finalize_quote(quote_id)
 
 
 @router.put("/{quote_id}")

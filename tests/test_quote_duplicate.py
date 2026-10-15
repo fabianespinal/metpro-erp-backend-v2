@@ -73,7 +73,7 @@ ORIGINAL = {
 ORIGINAL_ITEMS = [
     {
         "id": 1, "quote_id": "orig-1", "product_id": 42, "product_name": "IPE 200",
-        "quantity": 4.0, "unit_price": 100.0, "discount_type": "percent",
+        "quantity": 4.0, "unit_price": 100.0, "discount_type": "percentage",
         "discount_value": 5.0, "item_type": "product", "description": None,
     },
     {
@@ -159,7 +159,7 @@ def test_duplicate_items_keep_product_id_type_description(monkeypatch):
     assert len(rows) == 2
     # (quote_id, product_id, product_name, quantity, unit_price,
     #  discount_type, discount_value, item_type, description)
-    assert rows[0] == (NEW_ID, 42, "IPE 200", 4.0, 100.0, "percent", 5.0, "product", None)
+    assert rows[0] == (NEW_ID, 42, "IPE 200", 4.0, 100.0, "percentage", 5.0, "product", None)
     assert rows[1] == (NEW_ID, None, "Site survey", 1.0, 250.0, "none", 0.0, "service", "On-site walk")
 
 

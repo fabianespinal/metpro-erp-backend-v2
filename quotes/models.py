@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Literal, Optional
 from datetime import datetime, date
 
 
@@ -32,6 +32,10 @@ class QuoteItemBase(BaseModel):
     unit_price: float
     discount_type: str = "none"
     discount_value: float = 0.0
+    # Quoting v1. Accepted and validated now; persisted only after the
+    # 2026-10-14_quoting_v1 migration is applied (Phase 5).
+    item_type: Literal["product", "service", "custom"] = "product"
+    description: Optional[str] = None
 
 
 # -----------------------------

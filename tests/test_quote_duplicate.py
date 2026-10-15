@@ -212,5 +212,5 @@ def test_duplicate_copies_all_totals_columns(monkeypatch):
     monkeypatch.setattr(svc, "execute_values", lambda *a, **k: None)
     svc.duplicate_quote("orig-1")
     sql, params = _insert_quote_call(cursor)
-    assert params[10:14] == (100.0, 5.0, 18.0, 118.0)
+    assert params[11:15] == (100.0, 5.0, 18.0, 118.0)
     assert sql.endswith("NULL)")

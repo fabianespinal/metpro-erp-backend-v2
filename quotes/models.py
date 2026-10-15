@@ -36,6 +36,9 @@ class QuoteItemBase(BaseModel):
     # 2026-10-14_quoting_v1 migration is applied (Phase 5).
     item_type: Literal["product", "service", "custom"] = "product"
     description: Optional[str] = None
+    # Optional link to products.id. Not required (existing clients send none).
+    # Persisted on create and update from quoting v1 (Phase 6 prerequisite).
+    product_id: Optional[int] = None
 
 
 # -----------------------------

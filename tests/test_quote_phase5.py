@@ -128,8 +128,8 @@ def test_create_insert_leaves_public_token_out(monkeypatch):
     assert "public_token" not in insert_sql
     assert "subtotal" in insert_sql and "grand_total" in insert_sql
     assert "item_type" in captured["sql"] and "description" in captured["sql"]
-    assert captured["rows"][0][6:] == ("product", None)
-    assert captured["rows"][1][6:] == ("service", "On-site walk")
+    assert captured["rows"][0][6:] == ("product", None, None)
+    assert captured["rows"][1][6:] == ("service", "On-site walk", None)
 
 
 # ---------- finalize ----------
@@ -316,3 +316,50 @@ def test_finalize_rejects_empty_quote(monkeypatch):
     assert conn.committed is False
     assert conn.rolled_back is True
     assert not any(sql.startswith("UPDATE quotes") for sql, _ in cursor.executed)
+
+
+# ---------- product_id persisted and validated (Phase 6 prerequisite) ----------
+
+def test_create_persists_product_id_and_validates_existence(monkeypatch):
+    items = [dict(ITEMS[0], product_id=42), dict(ITEMS[1])]
+    cursor = FakeCursor(
+        fetchone_rows=[{"id": 1}, {"id": 2}, {"quote_id": FIXED_ID, "status": "Draft"}],
+        fetchall_rows=[[{"id": 42}], []],
+    )
+    _patch_db(monkeypatch, cursor)
+    monkeypatch.setattr(svc, "generate_quote_id", lambda: FIXED_ID)
+    captured = {}
+    monkeypatch.setattr(svc, "execute_values", lambda cur, sql, rows: captured.update(rows=rows))
+    svc.create_quote(1, 2, "P", None, items, CHARGES)
+    assert captured["rows"][0][8] == 42
+    assert captured["rows"][1][8] is None
+
+
+def test_create_rejects_unknown_product_id(monkeypatch):
+    items = [dict(ITEMS[0], product_id=999)]
+    cursor = FakeCursor(
+        fetchone_rows=[{"id": 1}, {"id": 2}],
+        fetchall_rows=[[]],
+    )
+    conn = _patch_db(monkeypatch, cursor)
+    with pytest.raises(HTTPException) as exc:
+        svc.create_quote(1, 2, "P", None, items, CHARGES)
+    assert exc.value.code == "PRODUCT_NOT_FOUND"
+    assert conn.committed is False
+
+
+def test_update_rejects_unknown_product_id_before_delete(monkeypatch):
+    cursor = FakeCursor(
+        fetchone_rows=[{"quote_id": FIXED_ID, "status": "Draft"}],
+        fetchall_rows=[[]],
+    )
+    _patch_db(monkeypatch, cursor)
+
+    class _Upd:
+        def dict(self, exclude_unset=True):
+            return {"items": [dict(ITEMS[0], product_id=999)]}
+
+    with pytest.raises(HTTPException) as exc:
+        svc.update_quote(FIXED_ID, _Upd())
+    assert exc.value.code == "PRODUCT_NOT_FOUND"
+    assert not any(sql.startswith("DELETE FROM quote_items") for sql, _ in cursor.executed)

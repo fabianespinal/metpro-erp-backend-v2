@@ -15,7 +15,7 @@ INS_SQL = "INSERT INTO quote_items (quote_id, product_name, quantity, unit_price
 # Create and update paths. Requires quoting_v1 migration (item_type, description).
 INS_ITEMS_SQL = (
     "INSERT INTO quote_items (quote_id, product_name, quantity, unit_price, discount_type, "
-    "discount_value, item_type, description) VALUES %s"
+    "discount_value, item_type, description, product_id) VALUES %s"
 )
 QUOTE_STATUS_FINAL = "Final"
 FINAL_ALLOWED_NEXT = ("Approved", "Invoiced", "Rejected")
@@ -95,6 +95,25 @@ def _compute_quote_totals(items: List[dict], charges: dict) -> dict:
     return compute_totals(items, charges)
 
 
+def _item_as_dict(item) -> dict:
+    if hasattr(item, "dict"):
+        return item.dict()
+    if isinstance(item, str):
+        return json.loads(item)
+    return item
+
+
+def _validate_product_ids(cursor, items: List[dict]) -> None:
+    """Every supplied product_id must exist in products. None is allowed (service/custom)."""
+    ids = {i.get("product_id") for i in items if i.get("product_id") is not None}
+    if not ids:
+        return
+    cursor.execute("SELECT id FROM products WHERE id = ANY(%s)", (list(ids),))
+    found = {r["id"] for r in cursor.fetchall()}
+    if ids - found:
+        raise api_error(400, "Product not found", "PRODUCT_NOT_FOUND")
+
+
 def _totals_columns(totals: dict) -> tuple:
     """Values for subtotal, discount_total, tax_amount, grand_total, total_amount."""
     return (
@@ -147,6 +166,7 @@ def create_quote(
         if not cursor.fetchone():
             raise api_error(400, f"Contact {contact_id} does not belong to client {client_id}", "CONTACT_CLIENT_MISMATCH")
 
+        _validate_product_ids(cursor, items)
         quote_id = generate_quote_id()
         totals = _compute_quote_totals(items, included_charges)
 
@@ -185,6 +205,7 @@ def create_quote(
                 item.get("discount_value", 0.0),
                 item.get("item_type") or "product",
                 item.get("description"),
+                item.get("product_id"),
             )
             for item in items
         ]
@@ -408,6 +429,7 @@ def update_quote(quote_id: str, quote_update) -> dict:
 
         # Re-insert items if provided
         if items is not None:
+            _validate_product_ids(cursor, [_item_as_dict(i) for i in items])
             cursor.execute("DELETE FROM quote_items WHERE quote_id = %s", (quote_id,))
 
             normalized = []
@@ -429,6 +451,7 @@ def update_quote(quote_id: str, quote_update) -> dict:
                     item.get("discount_value", 0.0),
                     item.get("item_type") or "product",
                     item.get("description"),
+                    item.get("product_id"),
                 )
                 for item in normalized
             ]

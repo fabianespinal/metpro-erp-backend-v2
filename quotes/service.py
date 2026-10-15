@@ -12,6 +12,11 @@ from core.errors import internal_error
 from psycopg2.extras import RealDictCursor, execute_values
 
 INS_SQL = "INSERT INTO quote_items (quote_id, product_name, quantity, unit_price, discount_type, discount_value) VALUES %s"
+# Duplicate path only. Requires quoting_v1 migration (item_type, description).
+INS_DUP_SQL = (
+    "INSERT INTO quote_items (quote_id, product_id, product_name, quantity, unit_price, "
+    "discount_type, discount_value, item_type, description) VALUES %s"
+)
 
 
 # =============================================================================
@@ -473,7 +478,17 @@ def delete_quote(quote_id: str) -> dict:
 # SECTION 4: QUOTE BUSINESS LOGIC
 # =============================================================================
 def duplicate_quote(quote_id: str) -> dict:
-    """Duplicate an existing quote with a new ID. Copies payment_terms and valid_until."""
+    """Duplicate an existing quote into a new Draft.
+
+    Copies: client, contact, project, notes (exact), included_charges,
+    total_amount, payment_terms, terms, valid_until, and every item
+    (product_id, product_name, quantity, unit_price, discount, item_type,
+    description). Resets: status = Draft, public_token = NULL, finalized_at
+    not copied.
+
+    Requires quoting_v1 migration (terms, item_type, description,
+    public_token nullable). Do not deploy this code before that migration.
+    """
     conn = None
     try:
         conn = get_db_connection()
@@ -482,7 +497,7 @@ def duplicate_quote(quote_id: str) -> dict:
         # 1. Fetch original quote
         cursor.execute("""
             SELECT quote_id, client_id, contact_id, project_name, notes, status,
-                   included_charges, total_amount, payment_terms, valid_until
+                   included_charges, total_amount, payment_terms, valid_until, terms
             FROM quotes
             WHERE quote_id = %s
         """, (quote_id,))
@@ -513,35 +528,40 @@ def duplicate_quote(quote_id: str) -> dict:
         cursor.execute("""
             INSERT INTO quotes
                 (quote_id, client_id, contact_id, project_name, notes, status,
-                 included_charges, total_amount, payment_terms, valid_until)
-            VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s)
+                 included_charges, total_amount, payment_terms, terms,
+                 valid_until, public_token)
+            VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, NULL)
         """, (
             new_quote_id,
             original["client_id"],
             original["contact_id"],
             original.get("project_name"),
-            f"[DUPLICATE] {original.get('notes', '')}" if original.get("notes") else None,
+            original.get("notes"),
             "Draft",
             included_charges,
             original["total_amount"],
             original.get("payment_terms"),
+            original.get("terms"),
             valid_until,
         ))
 
-        # 7. Duplicate quote items
+        # 7. Duplicate quote items (product_id, item_type, description kept)
         rows = [
             (
                 new_quote_id,
+                item.get("product_id"),
                 item["product_name"],
                 item["quantity"],
                 item["unit_price"],
                 item.get("discount_type") or "none",
                 item.get("discount_value") or 0.0,
+                item.get("item_type") or "product",
+                item.get("description"),
             )
             for item in original_items
         ]
         if rows:
-            execute_values(cursor, INS_SQL, rows)
+            execute_values(cursor, INS_DUP_SQL, rows)
 
         conn.commit()
 

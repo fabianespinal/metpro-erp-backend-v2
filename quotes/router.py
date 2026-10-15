@@ -4,7 +4,7 @@ from fastapi.responses import StreamingResponse
 from typing import Optional
 import json
 
-from .models import QuoteCreate, StatusUpdate, QuoteUpdate
+from .models import QuoteCreate, StatusUpdate, QuoteUpdate, TotalsPreviewIn
 from . import service
 from auth.service import require_auth, require_role
 from core.errors import api_error
@@ -250,6 +250,14 @@ def get_quote_pdf(quote_id: str, current_user: dict = Depends(require_auth)):
         media_type="application/pdf",
         headers={"Content-Disposition": f"inline; filename=quote_{quote_id}.pdf"},
     )
+
+
+@router.post("/totals/preview")
+def preview_quote_totals(body: TotalsPreviewIn, current_user: dict = Depends(require_auth)):
+    """Totals for a draft selection. Stateless. Same math as save and finalize."""
+    items = [item.dict() for item in body.items]
+    charges = body.included_charges.dict()
+    return service.preview_totals(items, charges)
 
 
 @router.post("/draft")

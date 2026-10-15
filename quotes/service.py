@@ -114,6 +114,25 @@ def _validate_product_ids(cursor, items: List[dict]) -> None:
         raise api_error(400, "Product not found", "PRODUCT_NOT_FOUND")
 
 
+def preview_totals(items: List[dict], charges: dict) -> dict:
+    """Stateless totals for the take-off screen. No DB access, no writes."""
+    t = _compute_quote_totals(items, charges)
+    return {
+        "items_total": t["items_total"],
+        "total_discounts": t["total_discounts"],
+        "items_after_discount": t["items_after_discount"],
+        "supervision": t["supervision"],
+        "admin": t["admin"],
+        "insurance": t["insurance"],
+        "transport": t["transport"],
+        "contingency": t["contingency"],
+        "subtotal": t["subtotal_general"],
+        "tax_rate": t["tax_rate"],
+        "tax_amount": t["tax_amount"],
+        "grand_total": t["grand_total"],
+    }
+
+
 def _totals_columns(totals: dict) -> tuple:
     """Values for subtotal, discount_total, tax_amount, grand_total, total_amount."""
     return (

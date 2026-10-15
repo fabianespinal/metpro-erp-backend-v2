@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Literal, Optional
 from datetime import datetime, date
 
@@ -112,3 +112,21 @@ class QuoteResponse(BaseModel):
 
     class Config:
         orm_mode = True
+
+
+# -----------------------------
+# Totals preview (stateless, no DB writes)
+# -----------------------------
+class TotalsItemIn(BaseModel):
+    product_name: str = ""
+    quantity: float = Field(default=0, ge=0)
+    unit_price: float = Field(default=0, ge=0)
+    discount_type: Literal["none", "percentage", "fixed"] = "none"
+    discount_value: float = Field(default=0, ge=0)
+    item_type: Literal["product", "service", "custom"] = "product"
+    description: Optional[str] = None
+
+
+class TotalsPreviewIn(BaseModel):
+    items: List[TotalsItemIn] = []
+    included_charges: IncludedCharges = IncludedCharges()

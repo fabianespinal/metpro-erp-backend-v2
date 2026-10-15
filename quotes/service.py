@@ -18,6 +18,7 @@ INS_ITEMS_SQL = (
     "discount_value, item_type, description) VALUES %s"
 )
 QUOTE_STATUS_FINAL = "Final"
+FINAL_ALLOWED_NEXT = ("Approved", "Invoiced", "Rejected")
 # Duplicate path only. Requires quoting_v1 migration (item_type, description).
 INS_DUP_SQL = (
     "INSERT INTO quote_items (quote_id, product_id, product_name, quantity, unit_price, "
@@ -671,6 +672,8 @@ def finalize_quote(quote_id: str) -> dict:
 
         cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id", (quote_id,))
         current_items = [dict(row) for row in cursor.fetchall()]
+        if not current_items:
+            raise api_error(400, "Quote must have at least one item to finalize", "QUOTE_EMPTY")
 
         raw = quote.get("included_charges") or {}
         if isinstance(raw, str):
@@ -739,9 +742,10 @@ def update_quote_status(quote_id: str, status: str) -> dict:
         if status == QUOTE_STATUS_FINAL:
             raise api_error(400, "Use the finalize endpoint to set Final", "QUOTE_USE_FINALIZE")
 
-        # A finalized quote cannot be moved back to another status.
-        if current["status"] == QUOTE_STATUS_FINAL:
-            raise api_error(400, "Finalized quotes cannot change status", "QUOTE_FINALIZED")
+        # Final may move forward (Approved, Invoiced) or to Rejected only.
+        # Final -> Draft / Sent is blocked. Content edits stay locked (update_quote).
+        if current["status"] == QUOTE_STATUS_FINAL and status not in FINAL_ALLOWED_NEXT:
+            raise api_error(400, "Finalized quotes can only move to Approved, Rejected or Invoiced", "QUOTE_FINALIZED")
 
         cursor.execute(
             "UPDATE quotes SET status = %s WHERE quote_id = %s", (status, quote_id)

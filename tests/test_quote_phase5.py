@@ -169,7 +169,7 @@ def test_finalize_keeps_existing_token(monkeypatch):
     # COALESCE in SQL keeps an existing token. The Python value is only used when NULL.
     cursor = FakeCursor(
         fetchone_rows=[_draft_row(public_token="keep-me"), {"quote_id": FIXED_ID, "status": "Final"}],
-        fetchall_rows=[[], []],
+        fetchall_rows=[[dict(ITEMS[0], quote_id=FIXED_ID)], []],
     )
     _patch_db(monkeypatch, cursor)
     svc.finalize_quote(FIXED_ID)
@@ -283,3 +283,36 @@ def test_draft_endpoint_delegates_to_create(monkeypatch):
     assert result["status"] == "Draft"
     assert calls["client_id"] == 1
     assert calls["items"][0]["item_type"] == "product"
+
+
+# ---------- decisions: Final transitions, finalize guards ----------
+
+@pytest.mark.parametrize("target", ["Approved", "Invoiced", "Rejected"])
+def test_final_can_move_forward(monkeypatch, target):
+    cursor = FakeCursor(fetchone_rows=[{"quote_id": FIXED_ID, "status": "Final"}])
+    conn = _patch_db(monkeypatch, cursor)
+    result = svc.update_quote_status(FIXED_ID, target)
+    assert result["status"] == target
+    assert conn.committed is True
+
+
+@pytest.mark.parametrize("target", ["Draft", "Sent"])
+def test_final_cannot_move_back(monkeypatch, target):
+    cursor = FakeCursor(fetchone_rows=[{"quote_id": FIXED_ID, "status": "Final"}])
+    _patch_db(monkeypatch, cursor)
+    with pytest.raises(HTTPException) as exc:
+        svc.update_quote_status(FIXED_ID, target)
+    assert exc.value.status_code == 400
+    assert exc.value.code == "QUOTE_FINALIZED"
+
+
+def test_finalize_rejects_empty_quote(monkeypatch):
+    cursor = FakeCursor(fetchone_rows=[_draft_row()], fetchall_rows=[[]])
+    conn = _patch_db(monkeypatch, cursor)
+    with pytest.raises(HTTPException) as exc:
+        svc.finalize_quote(FIXED_ID)
+    assert exc.value.status_code == 400
+    assert exc.value.code == "QUOTE_EMPTY"
+    assert conn.committed is False
+    assert conn.rolled_back is True
+    assert not any(sql.startswith("UPDATE quotes") for sql, _ in cursor.executed)

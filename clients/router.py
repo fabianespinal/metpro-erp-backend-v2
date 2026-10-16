@@ -1,5 +1,5 @@
 from core.errors import api_error
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import Form, APIRouter, Depends, File, UploadFile
 from typing import List
 from .models import Client, ClientBase
 from . import service
@@ -56,7 +56,8 @@ def delete_client(client_id: int, _admin: dict = Depends(require_role("admin")))
 @router.post('/bulk-import')
 async def import_clients_csv(
     file: UploadFile = File(...),
-    skip_duplicates: bool = True,
+    # Sent by the import modal as a multipart form field, not a query parameter.
+    skip_duplicates: bool = Form(True),
     current_user: dict = Depends(require_auth)
 ):
     """Import clients from CSV"""

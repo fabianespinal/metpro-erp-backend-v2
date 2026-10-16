@@ -76,7 +76,8 @@ def login(credentials: LoginRequest):
         token_data = {
             "sub": user["username"],
             "user_id": user["id"],
-            "role": user.get("role", "user")
+            "role": user.get("role", "user"),
+            "name": user.get("full_name"),  # may be None; frontend falls back to username
         }
 
         access_token = create_access_token(token_data)
@@ -163,7 +164,8 @@ def get_current_user(user = Depends(require_auth)):
     return {
         "username": user.get("sub"),
         "user_id": user.get("user_id"),
-        "role": user.get("role")
+        "role": user.get("role"),
+        "name": user.get("name"),
     }
 
 

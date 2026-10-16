@@ -149,7 +149,7 @@ def test_under_limit_success_payload_unchanged(monkeypatch):
     resp = client.get("/auth/me", headers=_hdr("alice"))
     assert resp.status_code == 200
     assert resp.json() == {
-        "data": {"username": "alice", "user_id": 1, "role": "user"},
+        "data": {"username": "alice", "user_id": 1, "role": "user", "name": None},
         "success": True,
     }
 

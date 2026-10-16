@@ -8,6 +8,7 @@ from psycopg2.extras import RealDictCursor
 from datetime import datetime
 from pdf.utils.date_utils import format_date
 from pdf.builder_quote import create_quote_pdf
+from invoices.service import invoice_lines_and_totals
 from pdf.builder_invoice import create_invoice_pdf
 from pdf.builder_conduce import create_conduce_pdf
 from pdf.utils.layout_utils import build_quote_invoice_pdf   # ✅ ADD THIS
@@ -120,7 +121,7 @@ def generate_quote_pdf(quote_id: str) -> StreamingResponse:
 
         pdf_stream = build_quote_invoice_pdf(
             doc_type='COTIZACION',
-            doc_id=quote['quote_id'],
+            doc_id=str(quote['quote_number']),
             doc_date=doc_date,
             client=client,
             project_name=quote.get('project_name'),
@@ -150,7 +151,7 @@ def generate_quote_pdf(quote_id: str) -> StreamingResponse:
         return StreamingResponse(
             pdf_stream,
             media_type='application/pdf',
-            headers={'Content-Disposition': f'attachment; filename={quote_id}_cotizacion.pdf'}
+            headers={'Content-Disposition': f'attachment; filename={quote["quote_number"]}_cotizacion.pdf'}
         )
 
     except HTTPException:
@@ -213,9 +214,6 @@ def generate_invoice_pdf(invoice_id: int) -> StreamingResponse:
             'phone':        contact.get('phone', ''),
         }
 
-        cursor.execute('SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id', (invoice['quote_id'],))
-        items = [dict(row) for row in cursor.fetchall()]
-
         cursor.execute(
             'SELECT included_charges, project_name, payment_terms, valid_until '
             'FROM quotes WHERE quote_id = %s',
@@ -255,25 +253,17 @@ def generate_invoice_pdf(invoice_id: int) -> StreamingResponse:
         )
         payments = [dict(row) for row in cursor.fetchall()]
 
-        amount_paid = float(invoice.get('amount_paid') or 0)
-        amount_due = float(invoice.get('amount_due') or 0)
+        # F2: lines from invoice_items; grand total = billed invoices.total_amount.
+        items, t = invoice_lines_and_totals(dict(invoice), charges)
+        grand_total = t['grand_total']
 
-        # If amount_paid/amount_due not stored on invoice, calculate from payments
-        if amount_paid == 0 and payments:
-            amount_paid = sum(float(p.get('amount') or 0) for p in payments)
-            amount_due = float(invoice.get('total_amount') or 0) - amount_paid
+        # Balance from payments recorded for THIS invoice (filtered by invoice_id above).
+        amount_paid = sum(float(p.get('amount') or 0) for p in payments)
+        amount_due = round(grand_total - amount_paid, 2)
 
-        items_total = sum(float(item.get('quantity') or 0) * float(item.get('unit_price') or 0) for item in items)
-
-        total_discounts = 0
-        for item in items:
-            subtotal = float(item.get('quantity') or 0) * float(item.get('unit_price') or 0)
-            if item.get('discount_type') == 'percentage':
-                total_discounts += subtotal * (float(item.get('discount_value', 0)) / 100)
-            elif item.get('discount_type') == 'fixed':
-                total_discounts += float(item.get('discount_value', 0))
-
-        items_after_discount = items_total - total_discounts
+        items_total = t['items_total']
+        total_discounts = t['total_discounts']
+        items_after_discount = t['items_after_discount']
 
         supervision_pct = float(charges.get('supervision_percentage', 10.0))
         admin_pct = float(charges.get('admin_percentage', 4.0))
@@ -281,15 +271,14 @@ def generate_invoice_pdf(invoice_id: int) -> StreamingResponse:
         transport_pct = float(charges.get('transport_percentage', 3.0))
         contingency_pct = float(charges.get('contingency_percentage', 3.0))
 
-        supervision = items_after_discount * (supervision_pct / 100) if charges.get('supervision') else 0
-        admin = items_after_discount * (admin_pct / 100) if charges.get('admin') else 0
-        insurance = items_after_discount * (insurance_pct / 100) if charges.get('insurance') else 0
-        transport = items_after_discount * (transport_pct / 100) if charges.get('transport') else 0
-        contingency = items_after_discount * (contingency_pct / 100) if charges.get('contingency') else 0
+        supervision = t['supervision']
+        admin = t['admin']
+        insurance = t['insurance']
+        transport = t['transport']
+        contingency = t['contingency']
 
-        subtotal_general = items_after_discount + supervision + admin + insurance + transport + contingency
-        itbis = subtotal_general * 0.18
-        grand_total = subtotal_general + itbis
+        subtotal_general = t['subtotal_general']
+        itbis = t['itbis']
 
         doc_date = format_date(invoice['invoice_date'])
 
@@ -390,8 +379,7 @@ def generate_conduce_pdf(invoice_id: int) -> StreamingResponse:
             'phone':        contact.get('phone', ''),
         }
 
-        cursor.execute('SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id', (invoice['quote_id'],))
-        items = [dict(row) for row in cursor.fetchall()]
+        items, _ = invoice_lines_and_totals(dict(invoice), {})
 
         cursor.execute('SELECT project_name FROM quotes WHERE quote_id = %s', (invoice['quote_id'],))
         quote_data = cursor.fetchone()

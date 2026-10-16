@@ -192,7 +192,7 @@ def send_quote(quote_id: str, current_user: dict = Depends(require_auth)):
         contact_name=quote["contact_name"],
         company_name=quote["company_name"],
         project_name=quote.get("project_name", ""),
-        quote_id=quote_id,
+        quote_id=str(quote["quote_number"]),  # printed number, never the UUID
         public_token=str(quote["public_token"]),
         pdf_bytes=pdf_bytes,
     )

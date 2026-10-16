@@ -59,8 +59,8 @@ def send_invoice(invoice_id: int, current_user: dict = Depends(require_auth)):
     if isinstance(raw_charges, str):
         raw_charges = json.loads(raw_charges)
 
-    items = invoice.get("items", [])
-    totals = calculate_invoice_totals(items, raw_charges)
+    # F2: lines from invoice_items; grand total = billed invoices.total_amount.
+    items, totals = service.invoice_lines_and_totals(invoice, raw_charges)
 
     # ---- NEW: fetch payments for this invoice so Historial de Pagos is populated ----
     conn = get_db_connection()
@@ -102,8 +102,8 @@ def send_invoice(invoice_id: int, current_user: dict = Depends(require_auth)):
         grand_total=totals["grand_total"],
         payment_terms=None,
         valid_until=None,
-        amount_paid=invoice.get("amount_paid", 0),
-        amount_due=invoice.get("amount_due", 0),
+        amount_paid=sum(float(pm.get("amount") or 0) for pm in payments),
+        amount_due=round(float(totals["grand_total"]) - sum(float(pm.get("amount") or 0) for pm in payments), 2),
         payments=payments,  # ✅ now the PDF has the full payment history
     )
 
@@ -199,8 +199,8 @@ def _render_public_invoice_pdf(invoice_id: int) -> Response:
     if isinstance(raw_charges, str):
         raw_charges = json.loads(raw_charges)
 
-    items = invoice.get("items", [])
-    totals = calculate_invoice_totals(items, raw_charges)
+    # F2: lines from invoice_items; grand total = billed invoices.total_amount.
+    items, totals = service.invoice_lines_and_totals(invoice, raw_charges)
 
     # Payment history so the public PDF matches the internal download.
     conn = get_db_connection()
@@ -247,8 +247,8 @@ def _render_public_invoice_pdf(invoice_id: int) -> Response:
         grand_total=totals["grand_total"],
         payment_terms=None,
         valid_until=None,
-        amount_paid=invoice.get("amount_paid", 0),
-        amount_due=invoice.get("amount_due", 0),
+        amount_paid=sum(float(pm.get("amount") or 0) for pm in payments),
+        amount_due=round(float(totals["grand_total"]) - sum(float(pm.get("amount") or 0) for pm in payments), 2),
         payments=payments,
     )
 

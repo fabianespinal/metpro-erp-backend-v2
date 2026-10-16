@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Any, Dict, List, Optional
 from datetime import datetime
 
 
@@ -24,6 +24,9 @@ class Invoice(BaseModel):
     updated_at: datetime
     client_name: Optional[str] = None
     created_by_name: Optional[str] = None
+    # Detail view only (GET /invoices/{id}). Lists omit them.
+    items: Optional[List[Dict[str, Any]]] = None
+    totals: Optional[Dict[str, Any]] = None
 
     class Config:
         from_attributes = True

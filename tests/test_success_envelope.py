@@ -219,4 +219,4 @@ def test_authenticated_success_wrapped(monkeypatch):
     tok = jwt.encode({"sub": "alice", "role": "admin", "exp": int(time.time()) + 600},
                      "test-secret-key", algorithm="HS256")
     resp = TestClient(app).get("/auth/me", headers={"Authorization": f"Bearer {tok}"})
-    assert resp.json() == {"data": {"username": "alice", "user_id": None, "role": "admin"}, "success": True}
+    assert resp.json() == {"data": {"username": "alice", "user_id": None, "role": "admin", "name": None}, "success": True}

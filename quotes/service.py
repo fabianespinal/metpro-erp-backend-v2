@@ -19,6 +19,26 @@ INS_ITEMS_SQL = (
 )
 QUOTE_STATUS_FINAL = "Final"
 FINAL_ALLOWED_NEXT = ("Approved", "Invoiced", "Rejected")
+
+# Strict quote lifecycle. Manual PATCH /quotes/{id}/status may only follow this map.
+#   Draft    -> Final      only via POST /quotes/{id}/finalize
+#   Final    -> Sent       only via POST /quotes/{id}/send
+#   Approved -> Invoiced   only via POST /quotes/{id}/convert-to-invoice
+#   Invoiced -> Approved   only by deleting the invoice
+# No status returns to Draft. Rework a quote with Duplicate.
+QUOTE_STATUSES = ("Draft", "Final", "Sent", "Approved", "Rejected", "Invoiced")
+MANUAL_QUOTE_TRANSITIONS = {
+    "Draft": set(),
+    "Final": {"Approved", "Rejected"},
+    "Sent": {"Approved", "Rejected"},
+    "Approved": {"Rejected"},
+    "Rejected": set(),
+    "Invoiced": set(),
+}
+# Statuses that may be emailed to the client. Only Final moves to Sent.
+SENDABLE_STATUSES = ("Final", "Sent", "Approved")
+# Statuses that may be deleted. Anything finalized is kept for the record.
+DELETABLE_STATUSES = ("Draft", "Rejected")
 # Duplicate path only. Requires quoting_v1 migration (item_type, description).
 INS_DUP_SQL = (
     "INSERT INTO quote_items (quote_id, product_id, product_name, quantity, unit_price, "
@@ -101,6 +121,18 @@ def _item_as_dict(item) -> dict:
     if isinstance(item, str):
         return json.loads(item)
     return item
+
+
+def _validate_item_discounts(items: List[dict]) -> None:
+    """percentage discounts are 0-100; fixed discounts may not exceed the line amount."""
+    for item in items:
+        dtype = item.get("discount_type") or "none"
+        value = float(item.get("discount_value") or 0)
+        line = float(item.get("quantity") or 0) * float(item.get("unit_price") or 0)
+        if dtype == "percentage" and value > 100:
+            raise api_error(400, "Percentage discount cannot exceed 100", "QUOTE_DISCOUNT_INVALID")
+        if dtype == "fixed" and value > line + 0.005:
+            raise api_error(400, "Fixed discount cannot exceed the line amount", "QUOTE_DISCOUNT_INVALID")
 
 
 def _validate_product_ids(cursor, items: List[dict]) -> None:
@@ -187,6 +219,7 @@ def create_quote(
             raise api_error(400, f"Contact {contact_id} does not belong to client {client_id}", "CONTACT_CLIENT_MISMATCH")
 
         _validate_product_ids(cursor, items)
+        _validate_item_discounts(items)
         quote_id = generate_quote_id()
         totals = _compute_quote_totals(items, included_charges)
 
@@ -352,8 +385,8 @@ def get_quote_with_contact(quote_id: str) -> dict:
                 (SELECT COALESCE(u.full_name, u.username) FROM users u WHERE u.id = q.created_by_user_id) AS created_by_name
 
             FROM quotes q
-            JOIN clients  c  ON q.client_id  = c.id
-            JOIN contacts ct ON q.contact_id = ct.id AND ct.company_id = q.client_id
+            LEFT JOIN clients  c  ON q.client_id  = c.id
+            LEFT JOIN contacts ct ON q.contact_id = ct.id AND ct.company_id = q.client_id
             WHERE q.quote_id = %s
         """, (quote_id,))
         row = cursor.fetchone()
@@ -389,7 +422,7 @@ def get_all_quotes(
                    c.company_name AS client_name,
                    (SELECT COALESCE(u.full_name, u.username) FROM users u WHERE u.id = q.created_by_user_id) AS created_by_name
             FROM quotes q
-            JOIN clients c ON q.client_id = c.id
+            LEFT JOIN clients c ON q.client_id = c.id
             WHERE 1=1
         """
         params = []
@@ -459,6 +492,7 @@ def update_quote(quote_id: str, quote_update) -> dict:
         # Re-insert items if provided
         if items is not None:
             _validate_product_ids(cursor, [_item_as_dict(i) for i in items])
+            _validate_item_discounts([_item_as_dict(i) for i in items])
             cursor.execute("DELETE FROM quote_items WHERE quote_id = %s", (quote_id,))
 
             normalized = []
@@ -552,21 +586,31 @@ def update_quote(quote_id: str, quote_update) -> dict:
 
 
 def delete_quote(quote_id: str) -> dict:
+    """Delete a Draft or Rejected quote and its items. Finalized or invoiced quotes are kept."""
     conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
 
+        cursor.execute("SELECT status FROM quotes WHERE quote_id = %s FOR UPDATE", (quote_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise api_error(404, "Quote not found", "QUOTE_NOT_FOUND")
+        if row["status"] not in DELETABLE_STATUSES:
+            raise api_error(400, "Only Draft or Rejected quotes can be deleted", "QUOTE_DELETE_BLOCKED")
+
+        cursor.execute("SELECT id FROM invoices WHERE quote_id = %s", (quote_id,))
+        if cursor.fetchone():
+            raise api_error(400, "Quote has an invoice and cannot be deleted", "QUOTE_DELETE_BLOCKED")
+
         cursor.execute("DELETE FROM quote_items WHERE quote_id = %s", (quote_id,))
         cursor.execute("DELETE FROM quotes WHERE quote_id = %s", (quote_id,))
-
-        if cursor.rowcount == 0:
-            raise api_error(404, "Quote not found", "QUOTE_NOT_FOUND")
-
         conn.commit()
         return {"message": "Quote deleted successfully"}
 
     except HTTPException:
+        if conn:
+            conn.rollback()
         raise
 
     except Exception as e:
@@ -782,6 +826,7 @@ def finalize_quote(quote_id: str) -> dict:
 
 
 def update_quote_status(quote_id: str, status: str) -> dict:
+    """Manual status change. Follows MANUAL_QUOTE_TRANSITIONS strictly."""
     conn = None
     try:
         conn = get_db_connection()
@@ -793,28 +838,28 @@ def update_quote_status(quote_id: str, status: str) -> dict:
         if not current:
             raise api_error(404, "Quote not found", "QUOTE_NOT_FOUND")
 
-        valid_statuses = ["Draft", "Sent", "Approved", "Rejected", "Invoiced", QUOTE_STATUS_FINAL]
-        if status not in valid_statuses:
-            raise api_error(400, f"Invalid status. Must be one of: {valid_statuses}", "QUOTE_STATUS_INVALID")
+        if status not in QUOTE_STATUSES:
+            raise api_error(400, f"Invalid status. Must be one of: {list(QUOTE_STATUSES)}", "QUOTE_STATUS_INVALID")
 
-        # Final is set only by finalize (it generates public_token and totals).
+        # Statuses owned by dedicated endpoints.
         if status == QUOTE_STATUS_FINAL:
             raise api_error(400, "Use the finalize endpoint to set Final", "QUOTE_USE_FINALIZE")
+        if status == "Sent":
+            raise api_error(400, "Use the send endpoint to mark a quote as Sent", "QUOTE_USE_SEND")
+        if status == "Invoiced":
+            raise api_error(400, "Use convert-to-invoice to invoice a quote", "QUOTE_USE_CONVERT")
+        if status == "Draft":
+            raise api_error(400, "Quotes cannot return to Draft. Duplicate the quote to rework it", "QUOTE_REOPEN_BLOCKED")
 
-        # Final may move forward (Approved, Invoiced) or to Rejected only.
-        # Final -> Draft / Sent is blocked. Content edits stay locked (update_quote).
-        if current["status"] == QUOTE_STATUS_FINAL and status not in FINAL_ALLOWED_NEXT:
-            raise api_error(400, "Finalized quotes can only move to Approved, Rejected or Invoiced", "QUOTE_FINALIZED")
+        if status == current["status"]:
+            return {"message": "Status unchanged", "quote_id": quote_id, "status": status}
 
-        # Approval and invoicing require a finalized quote. A Draft cannot jump
-        # to Approved or Invoiced: it would have no public_token and no totals lock.
-        if status == "Approved" and current["status"] != QUOTE_STATUS_FINAL:
-            raise api_error(400, "Quote must be finalized before it can be approved", "QUOTE_NOT_FINALIZED")
-        if status == "Invoiced" and current["status"] not in (QUOTE_STATUS_FINAL, "Approved"):
-            raise api_error(400, "Quote must be finalized before it can be invoiced", "QUOTE_NOT_FINALIZED")
+        allowed = MANUAL_QUOTE_TRANSITIONS.get(current["status"], set())
+        if status not in allowed:
+            raise api_error(400, f"Cannot change quote from {current['status']} to {status}", "QUOTE_TRANSITION_INVALID")
 
         cursor.execute(
-            "UPDATE quotes SET status = %s WHERE quote_id = %s", (status, quote_id)
+            "UPDATE quotes SET status = %s, updated_at = CURRENT_TIMESTAMP WHERE quote_id = %s", (status, quote_id)
         )
         conn.commit()
 
@@ -830,6 +875,37 @@ def update_quote_status(quote_id: str, status: str) -> dict:
             conn.rollback()
         raise internal_error("Failed to update status", e)
 
+    finally:
+        if conn:
+            conn.close()
+
+
+def assert_quote_sendable(quote: dict) -> None:
+    """Called by the send route BEFORE building the PDF or emailing anything."""
+    if quote.get("status") not in SENDABLE_STATUSES or not quote.get("public_token"):
+        raise api_error(400, "Only finalized quotes can be sent", "QUOTE_NOT_FINALIZED")
+    if not quote.get("contact_email"):
+        raise api_error(400, "Quote contact has no email address", "QUOTE_NO_CONTACT_EMAIL")
+
+
+def mark_quote_sent(quote_id: str) -> str:
+    """After a successful send: Final -> Sent. Sent and Approved keep their status."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE quotes SET status = 'Sent', updated_at = CURRENT_TIMESTAMP WHERE quote_id = %s AND status = %s",
+            (quote_id, QUOTE_STATUS_FINAL),
+        )
+        conn.commit()
+        cursor.execute("SELECT status FROM quotes WHERE quote_id = %s", (quote_id,))
+        row = cursor.fetchone()
+        return row["status"] if row else "Sent"
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        raise internal_error("Quote was emailed but its status could not be updated", e)
     finally:
         if conn:
             conn.close()

@@ -8,19 +8,19 @@ from datetime import datetime, date
 # -----------------------------
 class IncludedCharges(BaseModel):
     supervision: bool = True
-    supervision_percentage: float = 10.0
+    supervision_percentage: float = Field(default=10.0, ge=0, le=100)
 
     admin: bool = True
-    admin_percentage: float = 4.0
+    admin_percentage: float = Field(default=4.0, ge=0, le=100)
 
     insurance: bool = True
-    insurance_percentage: float = 1.0
+    insurance_percentage: float = Field(default=1.0, ge=0, le=100)
 
     transport: bool = True
-    transport_percentage: float = 3.0
+    transport_percentage: float = Field(default=3.0, ge=0, le=100)
 
     contingency: bool = True
-    contingency_percentage: float = 3.0
+    contingency_percentage: float = Field(default=3.0, ge=0, le=100)
 
 
 # -----------------------------
@@ -28,10 +28,12 @@ class IncludedCharges(BaseModel):
 # -----------------------------
 class QuoteItemBase(BaseModel):
     product_name: str
-    quantity: float
-    unit_price: float
-    discount_type: str = "none"
-    discount_value: float = 0.0
+    quantity: float = Field(ge=0)
+    unit_price: float = Field(ge=0)
+    discount_type: Literal["none", "percentage", "fixed"] = "none"
+    # percentage: 0-100 of the line. fixed: currency amount for the whole line,
+    # at most quantity * unit_price (checked in quotes.service).
+    discount_value: float = Field(default=0.0, ge=0)
     # Quoting v1. Accepted and validated now; persisted only after the
     # 2026-10-14_quoting_v1 migration is applied (Phase 5).
     item_type: Literal["product", "service", "custom"] = "product"

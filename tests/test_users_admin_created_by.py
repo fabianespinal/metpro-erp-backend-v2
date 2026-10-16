@@ -329,3 +329,19 @@ def test_update_user_sql_has_no_updated_at(monkeypatch):
 def test_invoice_model_exposes_client_name():
     from invoices.models import Invoice
     assert "client_name" in Invoice.model_fields
+
+
+def test_invoice_detail_query_returns_created_by_name(monkeypatch):
+    import invoices.service as isvc2
+    cur = Scripted([
+        R("FROM invoices i WHERE i.id", one={
+            "id": 3, "quote_id": "q1", "client_id": 7, "total_amount": 100.0,
+            "created_by_name": "Ana Test",
+        }),
+        R("SELECT included_charges FROM quotes", one=None),
+    ])
+    _patch_db(monkeypatch, isvc2, cur)
+    out = isvc2.get_invoice_by_id(3)
+    assert out["created_by_name"] == "Ana Test"
+    sql, _ = cur.sql_with("FROM invoices i WHERE i.id")[0]
+    assert "u.id = i.created_by_user_id" in sql

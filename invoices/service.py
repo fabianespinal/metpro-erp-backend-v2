@@ -198,7 +198,12 @@ def get_invoice_by_id(invoice_id: int) -> dict:
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        cursor.execute("SELECT * FROM invoices WHERE id = %s", (invoice_id,))
+        cursor.execute("""
+            SELECT i.*,
+                   (SELECT COALESCE(u.full_name, u.username) FROM users u WHERE u.id = i.created_by_user_id) AS created_by_name
+            FROM invoices i
+            WHERE i.id = %s
+        """, (invoice_id,))
         invoice = cursor.fetchone()
         if not invoice:
             raise api_error(404, "Invoice not found", "INVOICE_NOT_FOUND")

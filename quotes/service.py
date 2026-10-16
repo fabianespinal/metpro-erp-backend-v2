@@ -272,7 +272,7 @@ def get_quote_by_id(quote_id: str) -> dict:
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
         cursor.execute("""
-            SELECT quote_id, client_id, contact_id, project_name, notes, status,
+            SELECT quote_id, quote_number, client_id, contact_id, project_name, notes, status,
                    included_charges, total_amount, subtotal, discount_total,
                    tax_amount, grand_total, terms, payment_terms, valid_until,
                    finalized_at, public_token, created_at, updated_at,
@@ -326,6 +326,7 @@ def get_quote_with_contact(quote_id: str) -> dict:
         cursor.execute("""
             SELECT
                 q.quote_id,
+                q.quote_number,
                 q.public_token,
                 q.client_id,
                 q.contact_id,

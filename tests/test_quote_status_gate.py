@@ -58,7 +58,7 @@ def test_draft_cannot_jump_to_approved(monkeypatch):
     cursor, conn, call = _run(monkeypatch, "Draft", "Approved")
     with pytest.raises(Exception) as exc:
         call()
-    assert exc.value.code == "QUOTE_NOT_FINALIZED"
+    assert exc.value.code == "QUOTE_TRANSITION_INVALID"
     assert conn.rolled_back is True
     assert not any(sql.startswith("UPDATE quotes SET status") for sql, _ in cursor.executed)
 
@@ -67,7 +67,7 @@ def test_draft_cannot_jump_to_invoiced(monkeypatch):
     cursor, conn, call = _run(monkeypatch, "Draft", "Invoiced")
     with pytest.raises(Exception) as exc:
         call()
-    assert exc.value.code == "QUOTE_NOT_FINALIZED"
+    assert exc.value.code == "QUOTE_USE_CONVERT"
     assert not any(sql.startswith("UPDATE quotes SET status") for sql, _ in cursor.executed)
 
 
@@ -78,15 +78,17 @@ def test_final_can_be_approved(monkeypatch):
     assert conn.committed is True
 
 
-def test_approved_can_be_invoiced(monkeypatch):
+def test_approved_cannot_be_invoiced_by_patch(monkeypatch):
+    # Invoiced is reached only by convert-to-invoice, which creates the invoice.
     cursor, conn, call = _run(monkeypatch, "Approved", "Invoiced")
-    result = call()
-    assert result["status"] == "Invoiced"
-    assert conn.committed is True
+    with pytest.raises(Exception) as exc:
+        call()
+    assert exc.value.code == "QUOTE_USE_CONVERT"
+    assert not any(sql.startswith("UPDATE quotes SET status") for sql, _ in cursor.executed)
 
 
 def test_final_cannot_go_back_to_draft(monkeypatch):
     cursor, conn, call = _run(monkeypatch, "Final", "Draft")
     with pytest.raises(Exception) as exc:
         call()
-    assert exc.value.code == "QUOTE_FINALIZED"
+    assert exc.value.code == "QUOTE_REOPEN_BLOCKED"

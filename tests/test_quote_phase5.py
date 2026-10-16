@@ -226,7 +226,7 @@ def test_patch_status_away_from_final_is_rejected(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         svc.update_quote_status(FIXED_ID, "Sent")
     assert exc.value.status_code == 400
-    assert exc.value.code == "QUOTE_FINALIZED"
+    assert exc.value.code == "QUOTE_USE_SEND"
 
 
 def test_final_is_in_valid_status_list_for_error_message(monkeypatch):
@@ -287,7 +287,7 @@ def test_draft_endpoint_delegates_to_create(monkeypatch):
 
 # ---------- decisions: Final transitions, finalize guards ----------
 
-@pytest.mark.parametrize("target", ["Approved", "Invoiced", "Rejected"])
+@pytest.mark.parametrize("target", ["Approved", "Rejected"])
 def test_final_can_move_forward(monkeypatch, target):
     cursor = FakeCursor(fetchone_rows=[{"quote_id": FIXED_ID, "status": "Final"}])
     conn = _patch_db(monkeypatch, cursor)
@@ -296,14 +296,18 @@ def test_final_can_move_forward(monkeypatch, target):
     assert conn.committed is True
 
 
-@pytest.mark.parametrize("target", ["Draft", "Sent"])
-def test_final_cannot_move_back(monkeypatch, target):
+@pytest.mark.parametrize("target,code", [
+    ("Draft", "QUOTE_REOPEN_BLOCKED"),
+    ("Sent", "QUOTE_USE_SEND"),
+    ("Invoiced", "QUOTE_USE_CONVERT"),
+])
+def test_final_cannot_move_back(monkeypatch, target, code):
     cursor = FakeCursor(fetchone_rows=[{"quote_id": FIXED_ID, "status": "Final"}])
     _patch_db(monkeypatch, cursor)
     with pytest.raises(HTTPException) as exc:
         svc.update_quote_status(FIXED_ID, target)
     assert exc.value.status_code == 400
-    assert exc.value.code == "QUOTE_FINALIZED"
+    assert exc.value.code == code
 
 
 def test_finalize_rejects_empty_quote(monkeypatch):

@@ -137,9 +137,9 @@ def send_quote(quote_id: str, current_user: dict = Depends(require_auth)):
 
     quote = service.get_quote_with_contact(quote_id)
 
+    # Validate everything BEFORE building the PDF or emailing: status, token, contact email.
     # Drafts have no public_token. Never build a link from NULL.
-    if not quote.get("public_token"):
-        raise api_error(400, "Quote must be finalized before sending", "QUOTE_NOT_FINALIZED")
+    service.assert_quote_sendable(quote)
 
     client = {
         "company_name": quote["company_name"],
@@ -197,9 +197,10 @@ def send_quote(quote_id: str, current_user: dict = Depends(require_auth)):
         pdf_bytes=pdf_bytes,
     )
 
-    service.update_quote_status(quote_id, "Sent")
+    # Final -> Sent. Sent and Approved keep their status. Cannot fail on transition rules.
+    new_status = service.mark_quote_sent(quote_id)
 
-    return {"message": "Cotización enviada exitosamente", "quote_id": quote_id}
+    return {"message": "Cotización enviada exitosamente", "quote_id": quote_id, "status": new_status}
 
 
 @router.get("/{quote_id}")

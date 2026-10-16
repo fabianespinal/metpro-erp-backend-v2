@@ -9,6 +9,7 @@ from datetime import datetime
 from pdf.utils.date_utils import format_date
 from pdf.builder_quote import create_quote_pdf
 from invoices.service import invoice_lines_and_totals
+from quotes.dynamic_charges import dynamic_charges_total
 from pdf.builder_invoice import create_invoice_pdf
 from pdf.builder_conduce import create_conduce_pdf
 from pdf.utils.layout_utils import build_quote_invoice_pdf   # ✅ ADD THIS
@@ -109,7 +110,10 @@ def generate_quote_pdf(quote_id: str) -> StreamingResponse:
         transport = items_after_discount * (transport_pct / 100) if charges.get('transport') else 0
         contingency = items_after_discount * (contingency_pct / 100) if charges.get('contingency') else 0
 
-        subtotal_general = items_after_discount + supervision + admin + insurance + transport + contingency
+        subtotal_general = (
+            items_after_discount + supervision + admin + insurance + transport + contingency
+            + dynamic_charges_total(charges, items_after_discount)
+        )
         itbis = subtotal_general * 0.18
         grand_total = subtotal_general + itbis
 

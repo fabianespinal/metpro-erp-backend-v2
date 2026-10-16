@@ -2,6 +2,7 @@ import io
 import os
 from fpdf import FPDF
 from pdf.utils.text_utils import sanitize_text
+from quotes.dynamic_charges import dynamic_charge_lines
 import logging
 
 logger = logging.getLogger(__name__)
@@ -301,6 +302,15 @@ def build_quote_invoice_pdf(
         pdf.cell(45, 4, f'Contingencia ({contingency_pct:.1f}%):', 0, 0, 'L')
         pdf.set_text_color(60, 60, 60)
         pdf.cell(25, 4, f'${contingency:,.2f}', 0, 1, 'R')
+
+    # User-defined charges (none for legacy quotes). Same base and rule as totals.
+    for dc in dynamic_charge_lines(charges, items_after_discount):
+        pdf.set_x(summary_x)
+        pdf.set_text_color(100, 100, 100)
+        label = sanitize_text(f"{dc['name'][:22]} ({dc['percentage']:.1f}%):")
+        pdf.cell(45, 4, label, 0, 0, 'L')
+        pdf.set_text_color(60, 60, 60)
+        pdf.cell(25, 4, f"${dc['amount']:,.2f}", 0, 1, 'R')
 
     pdf.ln(2)
     pdf.set_draw_color(220, 220, 220)

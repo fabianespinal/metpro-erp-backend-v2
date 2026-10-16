@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Literal, Optional
 from datetime import datetime, date
 
@@ -6,6 +6,20 @@ from datetime import datetime, date
 # -----------------------------
 # Included Charges
 # -----------------------------
+class DynamicCharge(BaseModel):
+    """User-defined charge, percentage of items_after_discount (like the static five)."""
+    id: Optional[str] = None
+    name: str = Field(default="", max_length=60)
+    enabled: bool = True
+    percentage: float = Field(default=0.0, ge=0, le=100)
+
+    @field_validator("name")
+    @classmethod
+    def _default_blank_name(cls, v: str) -> str:
+        # The UI creates a charge with a blank name; label it instead of rejecting the save.
+        return v.strip() or "Cargo adicional"
+
+
 class IncludedCharges(BaseModel):
     supervision: bool = True
     supervision_percentage: float = Field(default=10.0, ge=0, le=100)
@@ -21,6 +35,9 @@ class IncludedCharges(BaseModel):
 
     contingency: bool = True
     contingency_percentage: float = Field(default=3.0, ge=0, le=100)
+
+    # Up to 3 user-defined charges. Optional: legacy payloads and rows omit it.
+    dynamic_charges: List[DynamicCharge] = Field(default_factory=list, max_length=3)
 
 
 # -----------------------------

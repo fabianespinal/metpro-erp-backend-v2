@@ -9,6 +9,7 @@ import uuid
 from datetime import datetime, date
 from database import get_db_connection
 from core.errors import internal_error
+from quotes.dynamic_charges import dynamic_charges_total
 from psycopg2.extras import RealDictCursor, execute_values
 
 INS_SQL = "INSERT INTO quote_items (quote_id, product_name, quantity, unit_price, discount_type, discount_value) VALUES %s"
@@ -73,7 +74,13 @@ def calculate_quote_totals(items: List[dict], charges: dict) -> dict:
     transport = items_after_discount * (transport_pct / 100) if charges.get('transport') else 0
     contingency = items_after_discount * (contingency_pct / 100) if charges.get('contingency') else 0
 
-    subtotal_general = items_after_discount + supervision + admin + insurance + transport + contingency
+    # Dynamic charges (0 when absent, so legacy quotes are unchanged)
+    dynamic_total = dynamic_charges_total(charges, items_after_discount)
+
+    subtotal_general = (
+        items_after_discount + supervision + admin + insurance + transport + contingency
+        + dynamic_total
+    )
     itbis = subtotal_general * 0.18
     grand_total = subtotal_general + itbis
 

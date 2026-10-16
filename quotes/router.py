@@ -80,7 +80,19 @@ def get_quote_public_pdf(token: Annotated[str, Path(pattern=PUBLIC_TOKEN_PATTERN
         raw_charges = json.loads(raw_charges)
 
     items = quote.get("items", [])
-    totals = calculate_quote_totals(items, raw_charges)
+    # Stored totals (set at finalize) are the source of truth for the PDF summary.
+    # Per-charge lines are derived from items and match the stored totals.
+    # Legacy rows with no stored totals fall back to recomputation.
+    breakdown = calculate_quote_totals(items, raw_charges)
+    if all(quote.get(k) is not None for k in ("subtotal", "discount_total", "tax_amount", "grand_total")):
+        totals = dict(breakdown)
+        totals["total_discounts"] = float(quote["discount_total"])
+        totals["items_after_discount"] = breakdown["items_total"] - float(quote["discount_total"])
+        totals["subtotal_general"] = float(quote["subtotal"])
+        totals["itbis"] = float(quote["tax_amount"])
+        totals["grand_total"] = float(quote["grand_total"])
+    else:
+        totals = breakdown
 
     pdf_stream = create_quote_pdf(
         doc_type="COTIZACION",

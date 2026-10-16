@@ -167,6 +167,7 @@ def create_quote(
     included_charges: dict,
     payment_terms: Optional[str] = None,
     valid_until: Optional[date] = None,
+    created_by_user_id: Optional[str] = None,
 ) -> dict:
     conn = None
     try:
@@ -194,9 +195,9 @@ def create_quote(
             INSERT INTO quotes
                 (quote_id, client_id, contact_id, project_name, notes, status,
                  included_charges, total_amount, payment_terms, valid_until,
-                 subtotal, discount_total, tax_amount, grand_total)
+                 subtotal, discount_total, tax_amount, grand_total, created_by_user_id)
             VALUES
-                (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s, %s, %s)
+                (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             quote_id,
             client_id,
@@ -212,6 +213,7 @@ def create_quote(
             totals["total_discounts"],
             totals["tax_amount"],
             totals["grand_total"],
+            created_by_user_id,
         ))
 
         rows = [
@@ -273,7 +275,8 @@ def get_quote_by_id(quote_id: str) -> dict:
             SELECT quote_id, client_id, contact_id, project_name, notes, status,
                    included_charges, total_amount, subtotal, discount_total,
                    tax_amount, grand_total, terms, payment_terms, valid_until,
-                   finalized_at, public_token, created_at, updated_at
+                   finalized_at, public_token, created_at, updated_at,
+                   (SELECT COALESCE(u.full_name, u.username) FROM users u WHERE u.id = quotes.created_by_user_id) AS created_by_name
             FROM quotes
             WHERE quote_id = %s
         """, (quote_id,))
@@ -345,7 +348,8 @@ def get_quote_with_contact(quote_id: str) -> dict:
 
                 ct.name          AS contact_name,
                 ct.email         AS contact_email,
-                ct.phone         AS contact_phone
+                ct.phone         AS contact_phone,
+                (SELECT COALESCE(u.full_name, u.username) FROM users u WHERE u.id = q.created_by_user_id) AS created_by_name
 
             FROM quotes q
             JOIN clients  c  ON q.client_id  = c.id
@@ -382,7 +386,8 @@ def get_all_quotes(
             SELECT q.quote_id, q.client_id, q.project_name, q.notes, q.status,
                    q.included_charges, q.total_amount, q.payment_terms, q.valid_until,
                    q.created_at, q.updated_at,
-                   c.company_name AS client_name
+                   c.company_name AS client_name,
+                   (SELECT COALESCE(u.full_name, u.username) FROM users u WHERE u.id = q.created_by_user_id) AS created_by_name
             FROM quotes q
             JOIN clients c ON q.client_id = c.id
             WHERE 1=1
@@ -577,7 +582,7 @@ def delete_quote(quote_id: str) -> dict:
 # =============================================================================
 # SECTION 4: QUOTE BUSINESS LOGIC
 # =============================================================================
-def duplicate_quote(quote_id: str) -> dict:
+def duplicate_quote(quote_id: str, created_by_user_id: Optional[str] = None) -> dict:
     """Duplicate an existing quote into a new Draft.
 
     Copies: client, contact, project, notes (exact), included_charges,
@@ -630,8 +635,8 @@ def duplicate_quote(quote_id: str) -> dict:
             INSERT INTO quotes
                 (quote_id, client_id, contact_id, project_name, notes, status,
                  included_charges, total_amount, payment_terms, terms,
-                 valid_until, subtotal, discount_total, tax_amount, grand_total, public_token)
-            VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s, %s, %s, %s, NULL)
+                 valid_until, subtotal, discount_total, tax_amount, grand_total, created_by_user_id, public_token)
+            VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s, %s, %s, %s, %s, NULL)
         """, (
             new_quote_id,
             original["client_id"],
@@ -648,6 +653,7 @@ def duplicate_quote(quote_id: str) -> dict:
             original.get("discount_total"),
             original.get("tax_amount"),
             original.get("grand_total"),
+            created_by_user_id,
         ))
 
         # 7. Duplicate quote items (product_id, item_type, description kept)
@@ -829,7 +835,7 @@ def update_quote_status(quote_id: str, status: str) -> dict:
             conn.close()
 
 
-def convert_quote_to_invoice(quote_id: str) -> dict:
+def convert_quote_to_invoice(quote_id: str, created_by_user_id: Optional[str] = None) -> dict:
     """Convert an approved quote to an invoice."""
     conn = None
     try:
@@ -879,8 +885,8 @@ def convert_quote_to_invoice(quote_id: str) -> dict:
         cursor.execute("""
             INSERT INTO invoices
                 (quote_id, invoice_number, invoice_date, client_id, contact_id,
-                 total_amount, status, notes, payment_terms, valid_until)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 total_amount, status, notes, payment_terms, valid_until, created_by_user_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
             quote_id,
@@ -893,6 +899,7 @@ def convert_quote_to_invoice(quote_id: str) -> dict:
             quote.get("notes"),
             quote.get("payment_terms"),
             _serialize_date(quote.get("valid_until")),
+            created_by_user_id,
         ))
 
         invoice_id = cursor.fetchone()["id"]   # FIXED

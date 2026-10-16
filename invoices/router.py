@@ -25,7 +25,7 @@ router = APIRouter(prefix="/invoices", tags=["invoices"])
 
 @router.post("/", response_model=Invoice)
 def create_invoice(invoice: InvoiceCreate, current_user: dict = Depends(require_auth)):
-    result = service.create_invoice_from_quote(invoice.quote_id, invoice.notes)
+    result = service.create_invoice_from_quote(invoice.quote_id, invoice.notes, current_user.get("user_id"))
     return Invoice(**result)
 
 

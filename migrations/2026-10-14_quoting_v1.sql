@@ -2,7 +2,9 @@
 -- Quoting v1 (Phase 1): template packs, item types, draft/final, totals fields
 -- Target:   Supabase PostgreSQL (public schema)
 -- Requires: PostgreSQL 13+
--- Status:   NOT APPLIED. Run only after explicit approval and DB verification.
+-- Status:   APPLIED to production 2026-10-15, approx. 21:36 EDT, run via
+--           Supabase connector with quote writes unfrozen (accepted risk).
+--           Schema verified by read-only checks afterward.
 -- Safe to re-run: every step is idempotent.
 -- Additive only. No column type changes. No data rewrites.
 -- Tax: tax_amount added, default 0. No tax rate or rule is enforced here.

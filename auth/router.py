@@ -77,7 +77,8 @@ def login(credentials: LoginRequest):
         token_data = {
             "sub": user["username"],
             "user_id": user["id"],
-            "role": user.get("role", "user")
+            "role": user.get("role", "user"),
+            "name": user.get("full_name"),  # may be None; frontend falls back to username
         }
 
         access_token = create_access_token(token_data)
@@ -162,10 +163,30 @@ def register(user_data: RegisterRequest, _admin: dict = Depends(require_role("ad
 
 @router.get("/me")
 def get_current_user(user = Depends(require_auth)):
+    """
+    Current user: username, user_id, role, name.
+    role is the DB role (require_auth). name is read from users.full_name so an
+    edited name shows without a new login; it falls back to the token claim.
+    """
+    name = user.get("name")
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SELECT full_name FROM users WHERE username = %s", (user.get("sub"),))
+        row = cursor.fetchone()
+        if row and row.get("full_name"):
+            name = row["full_name"]
+    except Exception:
+        logger.exception("auth/me: full_name lookup failed; using token claim")
+    finally:
+        if conn:
+            conn.close()
     return {
         "username": user.get("sub"),
         "user_id": user.get("user_id"),
-        "role": user.get("role")
+        "role": user.get("role"),
+        "name": name,
     }
 
 

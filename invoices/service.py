@@ -211,7 +211,8 @@ def get_invoice_by_id(invoice_id: int) -> dict:
 
         cursor.execute("""
             SELECT i.*,
-                   (SELECT COALESCE(u.full_name, u.username) FROM users u WHERE u.id = i.created_by_user_id) AS created_by_name
+                   (SELECT COALESCE(u.full_name, u.username) FROM users u WHERE u.id = i.created_by_user_id) AS created_by_name,
+                   (SELECT c.company_name FROM clients c WHERE c.id = i.client_id) AS client_name
             FROM invoices i
             WHERE i.id = %s
         """, (invoice_id,))
@@ -221,12 +222,35 @@ def get_invoice_by_id(invoice_id: int) -> dict:
 
         invoice = dict(invoice)
 
-        # Ensure safe defaults
+        # Balances. amount_due = 0 means fully paid; only NULL falls back to total - paid.
         invoice["amount_paid"] = float(invoice.get("amount_paid") or 0)
-        invoice["amount_due"] = float(invoice.get("amount_due") or invoice.get("total_amount") or 0)
+        if invoice.get("amount_due") is None:
+            invoice["amount_due"] = round(float(invoice.get("total_amount") or 0) - invoice["amount_paid"], 2)
+        else:
+            invoice["amount_due"] = float(invoice["amount_due"])
 
-        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id", (invoice["quote_id"],))
-        items = [dict(row) for row in cursor.fetchall()]
+        # Lines: invoice_items (written at conversion). Legacy fallback: quote_items.
+        cursor.execute(
+            "SELECT description, quantity, unit_price, discount, total FROM invoice_items "
+            "WHERE invoice_id = %s ORDER BY ctid",
+            (invoice_id,),
+        )
+        rows = cursor.fetchall()
+        if rows:
+            items = [
+                {
+                    "product_name": r["description"] or "",
+                    "quantity": float(r["quantity"] or 0),
+                    "unit_price": float(r["unit_price"] or 0),
+                    "discount_type": "fixed" if float(r["discount"] or 0) > 0 else "none",
+                    "discount_value": float(r["discount"] or 0),
+                    "total": float(r["total"] or 0),
+                }
+                for r in rows
+            ]
+        else:
+            cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id", (invoice["quote_id"],))
+            items = [dict(row) for row in cursor.fetchall()]
         invoice["items"] = items
 
         cursor.execute("SELECT included_charges FROM quotes WHERE quote_id = %s", (invoice["quote_id"],))

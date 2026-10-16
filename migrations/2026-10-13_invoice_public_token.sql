@@ -2,7 +2,9 @@
 -- Module B: unguessable public invoice links
 -- Target:   Supabase PostgreSQL (public schema)
 -- Requires: PostgreSQL 13+ (gen_random_uuid() is built in)
--- Status:   NOT APPLIED. Run only after explicit approval.
+-- Status:   APPLIED to production. Effects verified 2026-10-15 by read-only
+--           schema and ACL checks. Apply timestamp unknown; migration history
+--           not recoverable.
 -- Safe to re-run: every step is idempotent.
 -- ============================================================
 

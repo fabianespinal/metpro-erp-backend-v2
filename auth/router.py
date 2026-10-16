@@ -12,6 +12,7 @@ from database import get_db_connection
 from core.rate_limit import login_rate_limit
 from psycopg2.extras import RealDictCursor
 import logging
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -108,21 +109,22 @@ def register(user_data: RegisterRequest, _admin: dict = Depends(require_role("ad
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        cursor.execute("SELECT id FROM users WHERE username = %s", (user_data.username,))
+        cursor.execute("SELECT id FROM users WHERE lower(username) = lower(%s)", (user_data.username,))
         if cursor.fetchone():
             raise api_error(400, "Username already exists", "USERNAME_TAKEN")
 
-        cursor.execute("SELECT id FROM users WHERE email = %s", (user_data.email,))
+        cursor.execute("SELECT id FROM users WHERE lower(email) = lower(%s)", (user_data.email,))
         if cursor.fetchone():
             raise api_error(400, "Email already exists", "EMAIL_TAKEN")
 
         password_hash = get_password_hash(user_data.password)
 
         cursor.execute("""
-            INSERT INTO users (username, password_hash, email, full_name, role, is_active)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO users (id, username, password_hash, email, full_name, role, is_active)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
+            str(uuid.uuid4()),
             user_data.username,
             password_hash,
             user_data.email,

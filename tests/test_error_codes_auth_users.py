@@ -40,6 +40,8 @@ EXPECTED = {
     ("No fields to update", "NO_FIELDS_TO_UPDATE"),
     ("Cannot delete your own account", "CANNOT_DELETE_SELF"),
     ("Cannot remove the last active superadmin", "LAST_SUPERADMIN"),
+    ("Username or email already exists", "USER_EXISTS"),
+    ("Only a superadmin can manage superadmin accounts", "SUPERADMIN_REQUIRED"),
 }
 
 

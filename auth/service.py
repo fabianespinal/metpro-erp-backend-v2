@@ -89,7 +89,10 @@ def _validate_access_token(token: str) -> dict:
     if not isinstance(sub, str) or not sub:
         raise api_error(401, "Invalid token", "TOKEN_INVALID")
 
-    _assert_user_active(sub)
+    # The DB role wins over the token role, so demotions apply on the next request.
+    db_role = _assert_user_active(sub)
+    if isinstance(db_role, str) and db_role:
+        payload["role"] = db_role
     return payload
 
 
@@ -97,28 +100,33 @@ def _validate_access_token(token: str) -> dict:
 # TOKEN VERIFICATION (HEADER OR QUERY)
 # =========================
 
-def _assert_user_active(username) -> None:
+def _assert_user_active(username):
     """
     Reject tokens whose user was deactivated or deleted after the token was issued.
     Runs on every authenticated request when ENFORCE_ACTIVE_CHECK is true.
+    Returns the user's current role from the DB (or None when the check is off).
     """
     if not ENFORCE_ACTIVE_CHECK:
-        return
+        return None
     if not username:
         raise api_error(401, "Invalid token", "TOKEN_INVALID")
     from database import get_db_connection
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT is_active FROM users WHERE username = %s", (username,))
+            cur.execute("SELECT is_active, role FROM users WHERE username = %s", (username,))
             row = cur.fetchone()
     finally:
         conn.close()
     if row is None:
         raise api_error(401, "User not found", "USER_NOT_FOUND")
-    active = row["is_active"] if isinstance(row, dict) else row[0]
+    if isinstance(row, dict):
+        active, role = row["is_active"], row.get("role")
+    else:
+        active, role = row[0], (row[1] if len(row) > 1 else None)
     if not active:
         raise api_error(401, "Account disabled", "ACCOUNT_DISABLED")
+    return role
 
 
 def require_auth(authorization: str = Header(None)) -> dict:

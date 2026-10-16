@@ -112,7 +112,7 @@ def test_reset_password_unknown_user_404(monkeypatch, hasher):
 
 def test_reset_password_writes_hash_only(monkeypatch, hasher):
     cur = Scripted([
-        R("SELECT id FROM users WHERE id", one={"id": UID}),
+        R("SELECT id, role FROM users WHERE id", one={"id": UID, "role": "user"}),
         R("UPDATE users SET password_hash", rowcount=1),
     ])
     conn = _patch_db(monkeypatch, usvc, cur)
@@ -129,7 +129,7 @@ def test_reset_password_writes_hash_only(monkeypatch, hasher):
 def test_reset_route_passes_through_to_service(monkeypatch):
     seen = {}
 
-    def fake_reset(user_id, new_password):
+    def fake_reset(user_id, new_password, actor_role=None):
         seen["args"] = (user_id, new_password)
         return {"message": "Password reset successfully"}
 
@@ -154,7 +154,7 @@ def test_update_demote_last_superadmin_blocked(monkeypatch):
     ])
     _patch_db(monkeypatch, usvc, cur)
     with pytest.raises(HTTPException) as exc:
-        usvc.update_user(UID, None, None, "user", None)
+        usvc.update_user(UID, None, None, "user", None, actor_role="superadmin")
     assert exc.value.code == "LAST_SUPERADMIN"
     assert not cur.executed("UPDATE users SET")
 
@@ -166,7 +166,7 @@ def test_update_deactivate_last_superadmin_blocked(monkeypatch):
     ])
     _patch_db(monkeypatch, usvc, cur)
     with pytest.raises(HTTPException) as exc:
-        usvc.update_user(UID, None, None, None, False)
+        usvc.update_user(UID, None, None, None, False, actor_role="superadmin")
     assert exc.value.code == "LAST_SUPERADMIN"
     assert not cur.executed("UPDATE users SET")
 
@@ -179,7 +179,7 @@ def test_update_demote_allowed_when_other_active_superadmin(monkeypatch):
         R("SELECT id, username, email, full_name, role, is_active, created_at", one=UPDATED_ROW),
     ])
     conn = _patch_db(monkeypatch, usvc, cur)
-    out = usvc.update_user(UID, None, None, "user", None)
+    out = usvc.update_user(UID, None, None, "user", None, actor_role="superadmin")
     assert cur.executed("UPDATE users SET")
     assert conn.committed is True
     assert out == UPDATED_ROW
@@ -208,7 +208,7 @@ def test_delete_last_superadmin_blocked(monkeypatch):
     ])
     _patch_db(monkeypatch, usvc, cur)
     with pytest.raises(HTTPException) as exc:
-        usvc.delete_user(UID)
+        usvc.delete_user(UID, actor_role="superadmin")
     assert exc.value.code == "LAST_SUPERADMIN"
     assert not cur.executed("DELETE FROM users WHERE id")
 

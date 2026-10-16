@@ -305,7 +305,7 @@ def get_quote_by_id(quote_id: str) -> dict:
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
         cursor.execute("""
-            SELECT quote_id, client_id, contact_id, project_name, notes, status,
+            SELECT quote_id, quote_number, client_id, contact_id, project_name, notes, status,
                    included_charges, total_amount, subtotal, discount_total,
                    tax_amount, grand_total, terms, payment_terms, valid_until,
                    finalized_at, public_token, created_at, updated_at,
@@ -359,6 +359,7 @@ def get_quote_with_contact(quote_id: str) -> dict:
         cursor.execute("""
             SELECT
                 q.quote_id,
+                q.quote_number,
                 q.public_token,
                 q.client_id,
                 q.contact_id,
@@ -416,7 +417,7 @@ def get_all_quotes(
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
         query = """
-            SELECT q.quote_id, q.client_id, q.project_name, q.notes, q.status,
+            SELECT q.quote_id, q.quote_number, q.grand_total, q.client_id, q.project_name, q.notes, q.status,
                    q.included_charges, q.total_amount, q.payment_terms, q.valid_until,
                    q.created_at, q.updated_at,
                    c.company_name AS client_name,
@@ -911,6 +912,27 @@ def mark_quote_sent(quote_id: str) -> str:
             conn.close()
 
 
+def _invoice_line_amounts(item: dict) -> tuple:
+    """
+    (quantity, unit_price, discount_amount, line_total) for one invoice line.
+    discount_amount is always currency: percentage discounts are converted,
+    fixed discounts are taken as-is. Same rule as calculate_quote_totals.
+    """
+    qty = float(item.get("quantity") or 0)
+    price = float(item.get("unit_price") or 0)
+    gross = qty * price
+    value = float(item.get("discount_value") or 0)
+    dtype = item.get("discount_type") or "none"
+    if dtype == "percentage":
+        discount = gross * value / 100
+    elif dtype == "fixed":
+        discount = value
+    else:
+        discount = 0.0
+    discount = round(discount, 2)
+    return qty, price, discount, round(gross - discount, 2)
+
+
 def convert_quote_to_invoice(quote_id: str, created_by_user_id: Optional[str] = None) -> dict:
     """Convert an approved quote to an invoice."""
     conn = None
@@ -998,15 +1020,7 @@ def convert_quote_to_invoice(quote_id: str, created_by_user_id: Optional[str] = 
 
         # 5. Insert invoice items
         invoice_item_rows = [
-            (
-                invoice_id,
-                item["product_id"],
-                item["product_name"],
-                item["quantity"],
-                item["unit_price"],
-                item.get("discount_value", 0),
-                (item["quantity"] * item["unit_price"]) - item.get("discount_value", 0),
-            )
+            (invoice_id, item["product_id"], item["product_name"], *_invoice_line_amounts(item))
             for item in items
         ]
         if invoice_item_rows:

@@ -97,7 +97,7 @@ def get_quote_public_pdf(token: Annotated[str, Path(pattern=PUBLIC_TOKEN_PATTERN
 
     pdf_stream = create_quote_pdf(
         doc_type="COTIZACION",
-        doc_id=quote["quote_id"],
+        doc_id=str(quote["quote_number"]),
         doc_date=str(quote["created_at"])[:10] if quote.get("created_at") else "",
         client=client,
         project_name=quote.get("project_name", ""),
@@ -158,7 +158,7 @@ def send_quote(quote_id: str, current_user: dict = Depends(require_auth)):
 
     pdf_stream = create_quote_pdf(
         doc_type="COTIZACION",
-        doc_id=quote["quote_id"],
+        doc_id=str(quote["quote_number"]),
         doc_date=str(quote["created_at"])[:10] if quote.get("created_at") else "",
         client=client,
         project_name=quote.get("project_name", ""),
@@ -192,7 +192,7 @@ def send_quote(quote_id: str, current_user: dict = Depends(require_auth)):
         contact_name=quote["contact_name"],
         company_name=quote["company_name"],
         project_name=quote.get("project_name", ""),
-        quote_id=quote_id,
+        quote_id=str(quote["quote_number"]),  # printed number, never the UUID
         public_token=str(quote["public_token"]),
         pdf_bytes=pdf_bytes,
     )
@@ -232,7 +232,7 @@ def get_quote_pdf(quote_id: str, current_user: dict = Depends(require_auth)):
 
     pdf_stream = create_quote_pdf(
         doc_type="COTIZACION",
-        doc_id=quote["quote_id"],
+        doc_id=str(quote["quote_number"]),
         doc_date=str(quote["created_at"])[:10] if quote.get("created_at") else "",
         client=client,
         project_name=quote.get("project_name", ""),

@@ -6,6 +6,9 @@ import json
 from database import get_db_connection
 from core.errors import internal_error
 from psycopg2.extras import RealDictCursor
+import logging
+
+logger = logging.getLogger("metpro.invoices")
 
 
 def generate_invoice_number() -> str:
@@ -54,6 +57,73 @@ def calculate_invoice_totals(items: List[dict], charges: dict) -> dict:
         "itbis": itbis,
         "grand_total": grand_total,
     }
+
+
+# ============================================================
+# INVOICE LINES + TOTALS FOR PDFs (F2)
+# ============================================================
+
+def _invoice_lines(cursor, invoice: dict):
+    """
+    Lines for an invoice document.
+    Source of truth: invoice_items (written at conversion).
+    Legacy fallback: quote_items, only when the invoice has no items.
+    invoice_items has no line-order column; ctid keeps insertion order because
+    these rows are never updated. A line_no column is prepared in migrations.
+    """
+    cursor.execute(
+        "SELECT description, quantity, unit_price, discount, total, product_id "
+        "FROM invoice_items WHERE invoice_id = %s ORDER BY ctid",
+        (invoice["id"],),
+    )
+    rows = cursor.fetchall()
+    if rows:
+        return [
+            {
+                "product_name": r["description"] or "",
+                "description": None,
+                "quantity": float(r["quantity"] or 0),
+                "unit_price": float(r["unit_price"] or 0),
+                # invoice_items.discount is a currency amount for the whole line.
+                "discount_type": "fixed" if float(r["discount"] or 0) > 0 else "none",
+                "discount_value": float(r["discount"] or 0),
+                "product_id": r.get("product_id"),
+            }
+            for r in rows
+        ], "invoice_items"
+
+    if invoice.get("quote_id"):
+        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id", (invoice["quote_id"],))
+        return [dict(r) for r in cursor.fetchall()], "quote_items"
+    return [], "none"
+
+
+def invoice_lines_and_totals(invoice: dict, charges: dict):
+    """
+    (items, totals) for any invoice PDF: download, email, public link, conduce.
+    The grand total shown is always the billed amount, invoices.total_amount.
+    The charge breakdown is computed from the same lines; a mismatch over one
+    cent is logged so it can be investigated, never silently re-priced.
+    """
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        items, source = _invoice_lines(cursor, invoice)
+    finally:
+        conn.close()
+
+    totals = calculate_invoice_totals(items, charges or {})
+    billed = invoice.get("total_amount")
+    if billed is not None:
+        billed = float(billed)
+        if abs(billed - totals["grand_total"]) > 0.01:
+            logger.warning(
+                "Invoice %s: billed total %.2f differs from line-derived total %.2f (lines from %s)",
+                invoice.get("id"), billed, totals["grand_total"], source,
+            )
+        totals["grand_total"] = billed
+    totals["lines_source"] = source
+    return items, totals
 
 
 def create_invoice_from_quote(quote_id: str, notes: Optional[str] = None, created_by_user_id: Optional[str] = None) -> dict:

@@ -212,7 +212,7 @@ def _pdf_capture(monkeypatch):
 
 def _public_quote(**overrides):
     base = {
-        "quote_id": "q-1", "public_token": TOKEN, "status": "Final",
+        "quote_id": "q-1", "quote_number": 10001, "public_token": TOKEN, "status": "Final",
         "company_name": "ACME", "company_address": "", "contact_name": "", "contact_email": "",
         "contact_phone": "", "project_name": "P", "notes": "", "payment_terms": None,
         "valid_until": None, "created_at": None,
@@ -235,6 +235,7 @@ def test_public_pdf_uses_stored_totals(monkeypatch):
 
     router_mod.get_quote_public_pdf(TOKEN)
 
+    assert captured["doc_id"] == "10001"  # printed number is the sequence, not the UUID
     assert captured["grand_total"] == 259.6
     assert captured["itbis"] == 39.6
     assert captured["subtotal_general"] == 220.0

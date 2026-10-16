@@ -56,7 +56,7 @@ def calculate_invoice_totals(items: List[dict], charges: dict) -> dict:
     }
 
 
-def create_invoice_from_quote(quote_id: str, notes: Optional[str] = None) -> dict:
+def create_invoice_from_quote(quote_id: str, notes: Optional[str] = None, created_by_user_id: Optional[str] = None) -> dict:
     conn = None
     try:
         conn = get_db_connection()
@@ -103,8 +103,8 @@ def create_invoice_from_quote(quote_id: str, notes: Optional[str] = None) -> dic
         cursor.execute("""
             INSERT INTO invoices
                 (quote_id, invoice_number, invoice_date, client_id,
-                 total_amount, amount_paid, amount_due, status, notes)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 total_amount, amount_paid, amount_due, status, notes, created_by_user_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id, invoice_number, quote_id, client_id, total_amount,
                       amount_paid, amount_due, status, invoice_date, notes,
                       created_at, updated_at
@@ -118,6 +118,7 @@ def create_invoice_from_quote(quote_id: str, notes: Optional[str] = None) -> dic
             grand_total,
             "Pending",
             notes,
+            created_by_user_id,
         ))
 
         invoice = dict(cursor.fetchone())
@@ -167,7 +168,8 @@ def get_all_invoices(client_id: Optional[int] = None, status: Optional[str] = No
                 i.status,
                 i.notes,
                 i.created_at,
-                i.updated_at
+                i.updated_at,
+                (SELECT COALESCE(u.full_name, u.username) FROM users u WHERE u.id = i.created_by_user_id) AS created_by_name
             FROM invoices i
             JOIN clients c ON i.client_id = c.id
             WHERE 1=1
@@ -343,6 +345,7 @@ def get_invoice_with_contact(invoice_id: int) -> dict:
                 i.notes,
                 i.created_at,
                 i.updated_at,
+                (SELECT COALESCE(u.full_name, u.username) FROM users u WHERE u.id = i.created_by_user_id) AS created_by_name,
                 i.public_token,
 
                 c.company_name,

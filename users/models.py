@@ -28,3 +28,6 @@ class User(UserBase):
 class UserPasswordUpdate(BaseModel):
     current_password: str
     new_password: str
+
+class UserPasswordReset(BaseModel):
+    new_password: str

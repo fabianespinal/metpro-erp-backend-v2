@@ -33,6 +33,7 @@ def create_quote(quote: QuoteCreate, current_user: dict = Depends(require_auth))
         included_charges=charges,
         payment_terms=quote.payment_terms,
         valid_until=quote.valid_until,
+        created_by_user_id=current_user.get("user_id"),
     )
     return result
 
@@ -307,13 +308,13 @@ def update_quote_status(
 @router.post("/{quote_id}/duplicate")
 def duplicate_quote(quote_id: str, current_user: dict = Depends(require_auth)):
     """Duplicate an existing quote"""
-    return service.duplicate_quote(quote_id)
+    return service.duplicate_quote(quote_id, current_user.get("user_id"))
 
 
 @router.post("/{quote_id}/convert-to-invoice")
 def convert_to_invoice(quote_id: str, current_user: dict = Depends(require_auth)):
     """Convert approved quote to invoice"""
-    invoice = service.convert_quote_to_invoice(quote_id)
+    invoice = service.convert_quote_to_invoice(quote_id, current_user.get("user_id"))
     return {
         "invoice_id": invoice["id"],
         "invoice_number": invoice["invoice_number"],

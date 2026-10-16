@@ -142,6 +142,16 @@ def create_user(username: str, password: str, email: str, full_name: str, role: 
 # UPDATE USER
 # ============================================================
 
+def _assert_other_active_superadmin(cursor, exclude_user_id: str) -> None:
+    """Raise 400 unless another active superadmin exists besides exclude_user_id."""
+    cursor.execute(
+        "SELECT count(*) AS n FROM users WHERE role = 'superadmin' AND is_active AND id <> %s",
+        (exclude_user_id,),
+    )
+    if cursor.fetchone()["n"] == 0:
+        raise api_error(400, "Cannot remove the last active superadmin", "LAST_SUPERADMIN")
+
+
 def update_user(user_id: str, email: Optional[str], full_name: Optional[str],
                 role: Optional[str], is_active: Optional[bool]) -> dict:
 
@@ -151,9 +161,17 @@ def update_user(user_id: str, email: Optional[str], full_name: Optional[str],
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
         # Ensure user exists
-        cursor.execute("SELECT id FROM users WHERE id = %s", (user_id,))
-        if not cursor.fetchone():
+        cursor.execute("SELECT id, role, is_active FROM users WHERE id = %s", (user_id,))
+        target = cursor.fetchone()
+        if not target:
             raise api_error(404, "User not found", "USER_NOT_FOUND")
+
+        # Last-superadmin guard: deactivating or demoting the only active superadmin is refused.
+        is_target_active_superadmin = target["role"] == "superadmin" and target["is_active"]
+        demotes = role is not None and role != "superadmin"
+        deactivates = is_active is False
+        if is_target_active_superadmin and (demotes or deactivates):
+            _assert_other_active_superadmin(cursor, user_id)
 
         updates = []
         params = []
@@ -261,11 +279,50 @@ def update_user_password(user_id: str, current_password: str, new_password: str)
 # DELETE USER
 # ============================================================
 
+def reset_user_password(user_id: str, new_password: str) -> dict:
+    """Admin reset. Sets a new password without the current one. Writes password_hash only."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+        cursor.execute("SELECT id FROM users WHERE id = %s", (user_id,))
+        if not cursor.fetchone():
+            raise api_error(404, "User not found", "USER_NOT_FOUND")
+
+        cursor.execute(
+            "UPDATE users SET password_hash = %s WHERE id = %s",
+            (get_password_hash(new_password), user_id),
+        )
+        conn.commit()
+        return {"message": "Password reset successfully"}
+
+    except HTTPException:
+        if conn:
+            conn.rollback()
+        raise
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        raise internal_error("Failed to reset password", e)
+
+    finally:
+        if conn:
+            conn.close()
+
+
 def delete_user(user_id: str) -> dict:
     conn = None
     try:
         conn = get_db_connection()
-        cursor = conn.cursor()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+        cursor.execute("SELECT role, is_active FROM users WHERE id = %s", (user_id,))
+        target = cursor.fetchone()
+        # Last-superadmin guard: deleting the only active superadmin is refused.
+        if target and target["role"] == "superadmin" and target["is_active"]:
+            _assert_other_active_superadmin(cursor, user_id)
 
         cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
 

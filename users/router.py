@@ -4,7 +4,7 @@ from typing import Annotated, List
 from fastapi import APIRouter, Depends, HTTPException, Path
 
 from auth.service import require_role, require_auth
-from .models import User, UserCreate, UserUpdate, UserPasswordUpdate
+from .models import User, UserCreate, UserUpdate, UserPasswordUpdate, UserPasswordReset
 from . import service
 
 router = APIRouter(prefix='/users', tags=['users'])
@@ -79,9 +79,21 @@ def update_user(
 
 
 @router.delete('/{user_id}')
-def delete_user(user_id: UserId, _admin: dict = Depends(require_role("admin"))):
-    """Delete user. Admin only."""
+def delete_user(user_id: UserId, current_user: dict = Depends(require_role("admin"))):
+    """Delete user. Admin only. Cannot delete yourself."""
+    if str(current_user.get("user_id")) == str(user_id):
+        raise api_error(400, "Cannot delete your own account", "CANNOT_DELETE_SELF")
     return service.delete_user(user_id)
+
+
+@router.patch('/{user_id}/reset-password')
+def reset_password(
+    user_id: UserId,
+    password_reset: UserPasswordReset,
+    _admin: dict = Depends(require_role("admin")),
+):
+    """Admin reset of another user's password. No current password required."""
+    return service.reset_user_password(user_id, password_reset.new_password)
 
 
 # ============================================================

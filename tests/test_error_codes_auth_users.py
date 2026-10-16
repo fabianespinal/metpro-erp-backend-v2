@@ -38,6 +38,8 @@ EXPECTED = {
     ("Invalid authorization scheme", "AUTH_SCHEME_INVALID"),
     ("Insufficient permissions", "INSUFFICIENT_PERMISSIONS"),
     ("No fields to update", "NO_FIELDS_TO_UPDATE"),
+    ("Cannot delete your own account", "CANNOT_DELETE_SELF"),
+    ("Cannot remove the last active superadmin", "LAST_SUPERADMIN"),
 }
 
 

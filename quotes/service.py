@@ -271,8 +271,9 @@ def get_quote_by_id(quote_id: str) -> dict:
 
         cursor.execute("""
             SELECT quote_id, client_id, contact_id, project_name, notes, status,
-                   included_charges, total_amount, payment_terms, valid_until,
-                   created_at, updated_at
+                   included_charges, total_amount, subtotal, discount_total,
+                   tax_amount, grand_total, terms, payment_terms, valid_until,
+                   finalized_at, public_token, created_at, updated_at
             FROM quotes
             WHERE quote_id = %s
         """, (quote_id,))
@@ -330,6 +331,10 @@ def get_quote_with_contact(quote_id: str) -> dict:
                 q.status,
                 q.included_charges,
                 q.total_amount,
+                q.subtotal,
+                q.discount_total,
+                q.tax_amount,
+                q.grand_total,
                 q.payment_terms,
                 q.valid_until,
                 q.created_at,
@@ -405,7 +410,7 @@ def get_all_quotes(
 # Edit policy toggle.
 #   True  -> quotes can be edited in any status (current main/production behavior).
 #   False -> only Draft quotes can be edited (dev behavior, PR-era rule).
-ALLOW_EDIT_NON_DRAFT_QUOTES = True
+ALLOW_EDIT_NON_DRAFT_QUOTES = False  # Business rule: only Draft quotes are editable.
 
 
 def update_quote(quote_id: str, quote_update) -> dict:
@@ -776,7 +781,8 @@ def update_quote_status(quote_id: str, status: str) -> dict:
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        cursor.execute("SELECT quote_id, status FROM quotes WHERE quote_id = %s", (quote_id,))
+        # Row lock: serializes concurrent status changes (approve vs finalize, convert).
+        cursor.execute("SELECT quote_id, status FROM quotes WHERE quote_id = %s FOR UPDATE", (quote_id,))
         current = cursor.fetchone()
         if not current:
             raise api_error(404, "Quote not found", "QUOTE_NOT_FOUND")
@@ -833,7 +839,7 @@ def convert_quote_to_invoice(quote_id: str) -> dict:
         # 1. Load quote
         cursor.execute("""
             SELECT quote_id, client_id, contact_id, project_name, notes, status,
-                   included_charges, total_amount, payment_terms, valid_until
+                   included_charges, total_amount, grand_total, payment_terms, valid_until
             FROM quotes
             WHERE quote_id = %s
         """, (quote_id,))
@@ -858,7 +864,12 @@ def convert_quote_to_invoice(quote_id: str) -> dict:
         raw_charges = quote.get("included_charges")
         charges = json.loads(raw_charges) if isinstance(raw_charges, str) else (raw_charges or {})
 
-        totals = calculate_quote_totals(items, charges)
+        # Invoice total is the stored grand_total set at finalize/save.
+        # Recompute only for legacy rows that have no stored total.
+        if quote.get("grand_total") is not None:
+            invoice_total = float(quote["grand_total"])
+        else:
+            invoice_total = calculate_quote_totals(items, charges)["grand_total"]
 
         # 4. Create invoice
         timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
@@ -877,7 +888,7 @@ def convert_quote_to_invoice(quote_id: str) -> dict:
             invoice_date,
             quote["client_id"],
             quote["contact_id"],
-            totals["grand_total"],
+            invoice_total,
             "Pending",
             quote.get("notes"),
             quote.get("payment_terms"),
@@ -906,6 +917,11 @@ def convert_quote_to_invoice(quote_id: str) -> dict:
                 invoice_item_rows,
             )
 
+        # Same transaction: the quote moves to Invoiced with the invoice.
+        cursor.execute(
+            "UPDATE quotes SET status = 'Invoiced' WHERE quote_id = %s AND status = 'Approved'",
+            (quote_id,),
+        )
         conn.commit()
 
         # 6. Return invoice with items

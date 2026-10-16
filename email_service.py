@@ -1,4 +1,6 @@
 import os
+from html import escape as _esc
+
 import resend
 
 resend.api_key = os.getenv("RESEND_API_KEY")
@@ -22,11 +24,13 @@ def clean_text(value: str) -> str:
 def send_quote_email(contact_email, contact_name, company_name, project_name, quote_id, public_token, pdf_bytes):
 
     clean_title = clean_text(project_name or company_name)
+    # Client-supplied text is escaped before it goes into HTML.
+    safe_name, safe_doc, safe_project = _esc(contact_name or ""), _esc(str(quote_id)), _esc(project_name or "su proyecto")
 
     html = f"""
-        <p>Estimado/a {contact_name},</p>
+        <p>Estimado/a {safe_name},</p>
 
-        <p>Adjunto encontrará la cotización <strong>{quote_id}</strong> correspondiente al proyecto <strong>{project_name or 'su proyecto'}</strong>.</p>
+        <p>Adjunto encontrará la cotización <strong>{safe_doc}</strong> correspondiente al proyecto <strong>{safe_project}</strong>.</p>
 
         <p>Puede ver la cotización en línea aquí:</p>
 
@@ -65,11 +69,13 @@ def send_quote_email(contact_email, contact_name, company_name, project_name, qu
 def send_invoice_email(contact_email, contact_name, company_name, project_name, invoice_id, public_token, pdf_bytes):
 
     clean_title = clean_text(project_name or company_name)
+    # Client-supplied text is escaped before it goes into HTML.
+    safe_name, safe_doc, safe_project = _esc(contact_name or ""), _esc(str(invoice_id)), _esc(project_name or "su proyecto")
 
     html = f"""
-        <p>Estimado/a {contact_name},</p>
+        <p>Estimado/a {safe_name},</p>
 
-        <p>Adjunto encontrará la factura <strong>{invoice_id}</strong> correspondiente al proyecto <strong>{project_name or 'su proyecto'}</strong>.</p>
+        <p>Adjunto encontrará la factura <strong>{safe_doc}</strong> correspondiente al proyecto <strong>{safe_project}</strong>.</p>
 
         <p>Puede ver la factura en línea aquí:</p>
 

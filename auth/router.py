@@ -179,28 +179,32 @@ def change_password(
     username = user.get("sub")
 
     conn = get_db_connection()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    try:
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-    cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
-    db_user = cursor.fetchone()
+        cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
+        db_user = cursor.fetchone()
 
-    if not db_user:
-        raise api_error(404, "User not found", "USER_NOT_FOUND")
+        if not db_user:
+            raise api_error(404, "User not found", "USER_NOT_FOUND")
 
-    if not verify_password(data.old_password, db_user["password_hash"]):
-        raise api_error(401, "Old password incorrect", "PASSWORD_INCORRECT")
+        if not verify_password(data.old_password, db_user["password_hash"]):
+            raise api_error(401, "Old password incorrect", "PASSWORD_INCORRECT")
 
-    new_hash = get_password_hash(data.new_password)
+        new_hash = get_password_hash(data.new_password)
 
-    cursor.execute(
-        "UPDATE users SET password_hash = %s WHERE username = %s",
-        (new_hash, username)
-    )
-
-    conn.commit()
-    conn.close()
-
-    return {"message": "Password updated successfully"}
+        cursor.execute(
+            "UPDATE users SET password_hash = %s WHERE username = %s",
+            (new_hash, username)
+        )
+        conn.commit()
+        return {"message": "Password updated successfully"}
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        # Always returned/closed, including the 404 and 401 paths (was leaked).
+        conn.close()
 
 
 # ============================

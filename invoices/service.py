@@ -17,6 +17,13 @@ def generate_invoice_number() -> str:
 
 
 def calculate_invoice_totals(items: List[dict], charges: dict) -> dict:
+    """Same arithmetic as quotes: one implementation, so the two cannot drift."""
+    from quotes.service import calculate_quote_totals  # local: avoids import cycle
+    return calculate_quote_totals(items, charges)
+
+
+def _legacy_calculate_invoice_totals(items: List[dict], charges: dict) -> dict:
+    """Previous copy, kept only for the parity test. Not used at runtime."""
     items_total = sum(float(item["quantity"] or 0) * float(item["unit_price"] or 0) for item in items)
     total_discounts = 0
     for item in items:

@@ -115,7 +115,7 @@ def send_invoice(invoice_id: int, current_user: dict = Depends(require_auth)):
         contact_name=invoice["contact_name"],
         company_name=invoice["company_name"],
         project_name=invoice.get("project_name", ""),
-        invoice_id=str(invoice["id"]),
+        invoice_id=str(invoice["invoice_number"]),  # printed number, not the DB id
         public_token=str(invoice["public_token"]),
         pdf_bytes=pdf_bytes,
     )

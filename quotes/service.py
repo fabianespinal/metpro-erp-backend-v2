@@ -446,9 +446,9 @@ def get_all_quotes(
             conn.close()
 
 
-# Edit policy toggle.
-#   True  -> quotes can be edited in any status (current main/production behavior).
-#   False -> only Draft quotes can be edited (dev behavior, PR-era rule).
+# Edit policy toggle (production value: False).
+#   False -> only Draft quotes can be edited. Finalized quotes are always locked.
+#   True  -> non-Draft quotes become editable (not used; would break document integrity).
 ALLOW_EDIT_NON_DRAFT_QUOTES = False  # Business rule: only Draft quotes are editable.
 
 

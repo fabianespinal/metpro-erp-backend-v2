@@ -20,11 +20,12 @@ FILES = ["invoices/router.py", "invoices/service.py", "pdf/service.py", "quotes/
 # (file, status, message literal without quotes or f-prefix, code)
 EXPECTED = {
     ("invoices/router.py", 404, "Invoice not found", "INVOICE_NOT_FOUND"),
-    ("invoices/service.py", 404, "Quote not found", "QUOTE_NOT_FOUND"),
-    ("invoices/service.py", 400, "Only approved quotes can be converted to invoices", "QUOTE_NOT_APPROVED"),
-    ("invoices/service.py", 400, "Invoice already exists for this quote", "INVOICE_EXISTS"),
     ("invoices/service.py", 404, "Invoice not found", "INVOICE_NOT_FOUND"),
-    ("invoices/service.py", 400, "Invalid status. Must be one of: {valid_statuses}", "INVOICE_STATUS_INVALID"),
+    ("invoices/service.py", 400, "Invalid status. Must be one of: {list(INVOICE_STATUSES)}", "INVOICE_STATUS_INVALID"),
+    ("invoices/service.py", 400, "Invoices become Paid by recording payments", "INVOICE_PAID_VIA_PAYMENTS"),
+    ("invoices/service.py", 400, "Cannot change invoice from {current['status']} to {status}", "INVOICE_TRANSITION_INVALID"),
+    ("invoices/service.py", 400, "Invoice has payments and cannot be cancelled", "INVOICE_HAS_PAYMENTS"),
+    ("invoices/service.py", 400, "Invoice has payments and cannot be deleted", "INVOICE_HAS_PAYMENTS"),
     ("pdf/service.py", 404, "Quote not found", "QUOTE_NOT_FOUND"),
     ("pdf/service.py", 404, "Client not found", "CLIENT_NOT_FOUND"),
     ("pdf/service.py", 404, "Invoice not found", "INVOICE_NOT_FOUND"),

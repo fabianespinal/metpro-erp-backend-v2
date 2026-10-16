@@ -57,95 +57,36 @@ def calculate_invoice_totals(items: List[dict], charges: dict) -> dict:
 
 
 def create_invoice_from_quote(quote_id: str, notes: Optional[str] = None, created_by_user_id: Optional[str] = None) -> dict:
-    conn = None
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
+    """
+    POST /invoices/ path. Delegates to the single conversion path
+    (quotes.service.convert_quote_to_invoice) so both routes write the same
+    invoice: contact, invoice_items, header totals, and quote status.
+    If notes are given they replace the notes copied from the quote.
+    """
+    from quotes.service import convert_quote_to_invoice  # local: avoids import cycle
 
-        cursor.execute("SELECT * FROM quotes WHERE quote_id = %s", (quote_id,))
-        quote = cursor.fetchone()
-        if not quote:
-            raise api_error(404, "Quote not found", "QUOTE_NOT_FOUND")
+    converted = convert_quote_to_invoice(quote_id, created_by_user_id)
+    invoice_id = converted["id"]
 
-        quote = dict(quote)
-
-        if quote["status"] != "Approved":
-            raise api_error(400, "Only approved quotes can be converted to invoices", "QUOTE_NOT_APPROVED")
-
-        cursor.execute("SELECT id FROM invoices WHERE quote_id = %s", (quote_id,))
-        if cursor.fetchone():
-            raise api_error(400, "Invoice already exists for this quote", "INVOICE_EXISTS")
-
-        cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id", (quote_id,))
-        items = [dict(row) for row in cursor.fetchall()]
-
-        raw_charges = quote.get("included_charges")
+    if notes is not None:
+        conn = None
         try:
-            if isinstance(raw_charges, str):
-                charges = json.loads(raw_charges)
-            else:
-                charges = raw_charges or {}
-        except Exception:
-            charges = {
-                "supervision": True, "supervision_percentage": 10.0,
-                "admin": True, "admin_percentage": 4.0,
-                "insurance": True, "insurance_percentage": 1.0,
-                "transport": True, "transport_percentage": 3.0,
-                "contingency": True, "contingency_percentage": 3.0,
-            }
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE invoices SET notes = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
+                (notes, invoice_id),
+            )
+            conn.commit()
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            raise internal_error("Invoice created but notes could not be saved", e)
+        finally:
+            if conn:
+                conn.close()
 
-        totals = calculate_invoice_totals(items, charges)
-        grand_total = totals["grand_total"]
-
-        invoice_number = generate_invoice_number()
-        invoice_date = datetime.now().strftime("%Y-%m-%d")
-
-        cursor.execute("""
-            INSERT INTO invoices
-                (quote_id, invoice_number, invoice_date, client_id,
-                 total_amount, amount_paid, amount_due, status, notes, created_by_user_id)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            RETURNING id, invoice_number, quote_id, client_id, total_amount,
-                      amount_paid, amount_due, status, invoice_date, notes,
-                      created_at, updated_at
-        """, (
-            quote_id,
-            invoice_number,
-            invoice_date,
-            quote["client_id"],
-            grand_total,
-            0,
-            grand_total,
-            "Pending",
-            notes,
-            created_by_user_id,
-        ))
-
-        invoice = dict(cursor.fetchone())
-
-        cursor.execute(
-            "UPDATE quotes SET status = 'Invoiced' WHERE quote_id = %s",
-            (quote_id,),
-        )
-
-        conn.commit()
-
-        invoice["items"] = items
-        invoice["totals"] = totals
-
-        return invoice
-
-    except HTTPException:
-        if conn:
-            conn.rollback()
-        raise
-    except Exception as e:
-        if conn:
-            conn.rollback()
-        raise internal_error("Failed to create invoice", e)
-    finally:
-        if conn:
-            conn.close()
+    return get_invoice_by_id(invoice_id)
 
 
 def get_all_invoices(client_id: Optional[int] = None, status: Optional[str] = None) -> List[dict]:
@@ -258,28 +199,51 @@ def get_invoice_by_number(invoice_number: str) -> dict:
             conn.close()
 
 
+# Manual status changes. Paid is reached only by recording payments.
+# Cancelled is allowed only while nothing has been paid.
+INVOICE_STATUSES = ("Pending", "Paid", "Cancelled", "Overdue")
+MANUAL_INVOICE_TRANSITIONS = {
+    "Draft": {"Pending", "Cancelled"},      # legacy DB default; not used by the app
+    "Pending": {"Overdue", "Cancelled"},
+    "Overdue": {"Pending", "Cancelled"},
+    "Paid": set(),
+    "Cancelled": set(),
+}
+
+
 def update_invoice_status(invoice_id: int, status: str) -> dict:
     conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        valid_statuses = ["Pending", "Paid", "Cancelled", "Overdue"]
-        if status not in valid_statuses:
-            raise api_error(400, f"Invalid status. Must be one of: {valid_statuses}", "INVOICE_STATUS_INVALID")
+        if status not in INVOICE_STATUSES:
+            raise api_error(400, f"Invalid status. Must be one of: {list(INVOICE_STATUSES)}", "INVOICE_STATUS_INVALID")
 
-        cursor.execute("""
-            UPDATE invoices
-            SET status = %s, updated_at = CURRENT_TIMESTAMP
-            WHERE id = %s
-            RETURNING *
-        """, (status, invoice_id))
-
-        if cursor.rowcount == 0:
+        cursor.execute(
+            "SELECT id, status, COALESCE(amount_paid, 0) AS amount_paid FROM invoices WHERE id = %s FOR UPDATE",
+            (invoice_id,),
+        )
+        current = cursor.fetchone()
+        if not current:
             raise api_error(404, "Invoice not found", "INVOICE_NOT_FOUND")
 
-        conn.commit()
-        return dict(cursor.fetchone())
+        if status != current["status"]:
+            if status == "Paid":
+                raise api_error(400, "Invoices become Paid by recording payments", "INVOICE_PAID_VIA_PAYMENTS")
+            allowed = MANUAL_INVOICE_TRANSITIONS.get(current["status"], set())
+            if status not in allowed:
+                raise api_error(400, f"Cannot change invoice from {current['status']} to {status}", "INVOICE_TRANSITION_INVALID")
+            if status == "Cancelled" and float(current["amount_paid"]) > 0:
+                raise api_error(400, "Invoice has payments and cannot be cancelled", "INVOICE_HAS_PAYMENTS")
+
+            cursor.execute(
+                "UPDATE invoices SET status = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
+                (status, invoice_id),
+            )
+            conn.commit()
+
+        return get_invoice_by_id(invoice_id)
 
     except HTTPException:
         if conn:
@@ -295,24 +259,39 @@ def update_invoice_status(invoice_id: int, status: str) -> dict:
 
 
 def delete_invoice(invoice_id: int) -> dict:
+    """
+    Delete one invoice and its line items in a single transaction.
+    Refused when the invoice has payments: payment records are never deleted.
+    The source quote returns to Approved only if it is currently Invoiced.
+    """
     conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        cursor.execute("SELECT quote_id FROM invoices WHERE id = %s", (invoice_id,))
+        cursor.execute("SELECT id, quote_id FROM invoices WHERE id = %s FOR UPDATE", (invoice_id,))
         invoice = cursor.fetchone()
         if not invoice:
             raise api_error(404, "Invoice not found", "INVOICE_NOT_FOUND")
 
+        cursor.execute("SELECT COUNT(*) AS n FROM invoice_payments WHERE invoice_id = %s", (invoice_id,))
+        if cursor.fetchone()["n"] > 0:
+            raise api_error(400, "Invoice has payments and cannot be deleted", "INVOICE_HAS_PAYMENTS")
+
         quote_id = invoice["quote_id"]
 
-        cursor.execute("DELETE FROM invoice_payments WHERE id = %s", (invoice_id,))
+        cursor.execute("DELETE FROM invoice_items WHERE invoice_id = %s", (invoice_id,))
         cursor.execute("DELETE FROM invoices WHERE id = %s", (invoice_id,))
-        cursor.execute("UPDATE quotes SET status = 'Approved' WHERE quote_id = %s", (quote_id,))
+        quote_reverted = False
+        if quote_id:
+            cursor.execute(
+                "UPDATE quotes SET status = 'Approved' WHERE quote_id = %s AND status = 'Invoiced'",
+                (quote_id,),
+            )
+            quote_reverted = cursor.rowcount > 0
 
         conn.commit()
-        return {"message": "Invoice deleted successfully", "quote_reverted": True}
+        return {"message": "Invoice deleted successfully", "quote_reverted": quote_reverted}
 
     except HTTPException:
         if conn:
@@ -325,6 +304,7 @@ def delete_invoice(invoice_id: int) -> dict:
     finally:
         if conn:
             conn.close()
+
 
 def get_invoice_with_contact(invoice_id: int) -> dict:
     """

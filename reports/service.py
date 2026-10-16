@@ -89,67 +89,79 @@ def get_quotes_summary(start_date: Optional[str], end_date: Optional[str],
 
 def get_revenue_report(start_date: Optional[str], end_date: Optional[str],
                        client_id: Optional[int]) -> dict:
+    """
+    Revenue from invoices and payments (R1). Quotes are not revenue.
 
+    - invoiced:    SUM(total_amount) of non-cancelled invoices (by invoice_date)
+    - collected:   SUM(amount) of payments (by payment_date)  <- headline figure
+    - outstanding: SUM(total_amount - amount_paid) of Pending/Overdue invoices (by invoice_date)
+    - pipeline:    SUM(grand_total) of Approved quotes not yet invoiced (information only)
+    Date filters apply when both start_date and end_date are given.
+    """
     conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        query = """
-            SELECT 
-                q.status,
-                COALESCE(SUM(q.total_amount), 0) AS total_revenue,
-                COUNT(*) AS quote_count
-            FROM quotes q
-            WHERE q.status IN ('Approved', 'Invoiced')
-        """
-        params = []
+        def scoped(base, date_col, client_col, params):
+            q = base
+            if start_date and end_date:
+                q += f" AND {date_col}::date BETWEEN %s AND %s"
+                params.extend([start_date, end_date])
+            if client_id:
+                q += f" AND {client_col} = %s"
+                params.append(client_id)
+            return q
 
-        # Date filter
-        if start_date and end_date:
-            query += " AND q.created_at BETWEEN %s AND %s"
-            params.extend([start_date, end_date])
+        p1 = []
+        cursor.execute(scoped(
+            "SELECT COALESCE(SUM(i.total_amount), 0) AS amount, COUNT(*) AS n "
+            "FROM invoices i WHERE i.status <> 'Cancelled'",
+            "i.invoice_date", "i.client_id", p1), p1)
+        invoiced = cursor.fetchone()
 
-        # Client filter
-        if client_id:
-            query += " AND q.client_id = %s"
-            params.append(client_id)
+        p2 = []
+        cursor.execute(scoped(
+            "SELECT COALESCE(SUM(p.amount), 0) AS amount, COUNT(*) AS n "
+            "FROM invoice_payments p JOIN invoices i ON i.id = p.invoice_id WHERE 1=1",
+            "p.payment_date", "i.client_id", p2), p2)
+        collected = cursor.fetchone()
 
-        query += " GROUP BY q.status ORDER BY q.status"
+        p3 = []
+        cursor.execute(scoped(
+            "SELECT COALESCE(SUM(i.total_amount - COALESCE(i.amount_paid, 0)), 0) AS amount, COUNT(*) AS n "
+            "FROM invoices i WHERE i.status IN ('Pending', 'Overdue')",
+            "i.invoice_date", "i.client_id", p3), p3)
+        outstanding = cursor.fetchone()
 
-        cursor.execute(query, params)
-        results = cursor.fetchall()
+        p4 = []
+        cursor.execute(scoped(
+            "SELECT COALESCE(SUM(COALESCE(q.grand_total, q.total_amount)), 0) AS amount, COUNT(*) AS n "
+            "FROM quotes q WHERE q.status = 'Approved' "
+            "AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.quote_id = q.quote_id)",
+            "q.created_at", "q.client_id", p4), p4)
+        pipeline = cursor.fetchone()
 
-        approved = next((r for r in results if r["status"] == "Approved"),
-                        {"total_revenue": 0, "quote_count": 0})
+        def row(key, label, r):
+            return {"key": key, "status": label, "total_revenue": round(float(r["amount"]), 2),
+                    "count": int(r["n"]), "quote_count": int(r["n"])}
 
-        invoiced = next((r for r in results if r["status"] == "Invoiced"),
-                        {"total_revenue": 0, "quote_count": 0})
-
-        total_revenue = float(approved["total_revenue"] + invoiced["total_revenue"])
-
+        total_collected = round(float(collected["amount"]), 2)
         return {
             "summary": {
-                "total_revenue": total_revenue,   # ⭐ ADDED FIELD
-                "filters": {
-                    "start_date": start_date,
-                    "end_date": end_date,
-                    "client_id": client_id
-                }
+                "total_revenue": total_collected,
+                "invoiced_total": round(float(invoiced["amount"]), 2),
+                "outstanding": round(float(outstanding["amount"]), 2),
+                "pipeline_approved": round(float(pipeline["amount"]), 2),
+                "filters": {"start_date": start_date, "end_date": end_date, "client_id": client_id},
             },
             "revenue_breakdown": [
-                {
-                    "status": "Approved (Ready to Invoice)",
-                    "total_revenue": float(approved["total_revenue"]),
-                    "quote_count": approved["quote_count"]
-                },
-                {
-                    "status": "Invoiced (Realized Revenue)",
-                    "total_revenue": float(invoiced["total_revenue"]),
-                    "quote_count": invoiced["quote_count"]
-                }
+                row("invoiced", "Facturado", invoiced),
+                row("collected", "Cobrado", collected),
+                row("outstanding", "Por cobrar", outstanding),
+                row("pipeline", "Aprobado sin facturar", pipeline),
             ],
-            "grand_total": total_revenue
+            "grand_total": total_collected,
         }
 
     except Exception as e:

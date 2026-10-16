@@ -11,7 +11,8 @@ from auth.service import require_auth, require_role
 from core.rate_limit import public_rate_limit
 
 from invoices.payments.models import PaymentCreate
-from invoices.payments.service import create_payment
+from invoices.payments.service import create_payment, get_payments_for_invoice
+from core.errors import internal_error
 
 from database import get_db_connection
 from psycopg2.extras import RealDictCursor
@@ -138,8 +139,9 @@ def get_invoice_by_number(invoice_number: str, current_user: dict = Depends(requ
 def update_invoice_status(
     invoice_id: int,
     status_update: InvoiceStatusUpdate,
-    current_user: dict = Depends(require_auth),
+    _admin: dict = Depends(require_role("admin")),
 ):
+    """Manual status change. Admin only. Paid is reached by recording payments."""
     result = service.update_invoice_status(invoice_id, status_update.status)
     return Invoice(**result)
 
@@ -155,6 +157,23 @@ def add_payment(invoice_id: int, data: PaymentCreate, current_user: dict = Depen
     try:
         payment_id = create_payment(conn, invoice_id, data)
         return {"payment_id": payment_id}
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise internal_error("Failed to record payment", e)
+    finally:
+        conn.close()
+
+
+@router.get("/{invoice_id}/payments")
+def list_payments(invoice_id: int, current_user: dict = Depends(require_auth)):
+    """Payments for one invoice, oldest first. 404 if the invoice does not exist."""
+    service.get_invoice_by_id(invoice_id)  # raises 404 when missing
+    conn = get_db_connection()
+    try:
+        return get_payments_for_invoice(conn, invoice_id)
     finally:
         conn.close()
 

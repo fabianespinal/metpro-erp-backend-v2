@@ -268,27 +268,19 @@ def test_duplicate_writes_created_by(monkeypatch):
     assert sql.endswith("NULL)")  # public_token still written as literal NULL
 
 
-def test_create_invoice_from_quote_writes_created_by(monkeypatch):
-    cur = Scripted([
-        R("SELECT * FROM quotes WHERE quote_id", one={"quote_id": "q1", "client_id": 7, "status": "Approved", "included_charges": {}}),
-        R("SELECT id FROM invoices WHERE quote_id", one=None),
-        R("SELECT * FROM quote_items", many=[
-            {"product_name": "X", "quantity": 1, "unit_price": 100.0, "discount_value": 0},
-        ]),
-        R("INSERT INTO invoices", one={
-            "id": 9, "invoice_number": "INV-1", "quote_id": "q1", "client_id": 7,
-            "total_amount": 100.0, "amount_paid": 0, "amount_due": 100.0, "status": "Pending",
-            "invoice_date": "2026-10-16", "notes": None, "created_at": None, "updated_at": None,
-        }),
-        R("UPDATE quotes SET status"),
-    ])
-    _patch_db(monkeypatch, isvc, cur)
-    monkeypatch.setattr(isvc, "calculate_invoice_totals", lambda items, charges: {"grand_total": 100.0})
-    monkeypatch.setattr(isvc, "generate_invoice_number", lambda: "INV-1")
-    isvc.create_invoice_from_quote("q1", None, CREATOR)
-    sql, params = cur.sql_with("INSERT INTO invoices")[0]
-    assert params[9] == CREATOR
-    assert len(params) == 10
+def test_create_invoice_from_quote_delegates_to_convert(monkeypatch):
+    """POST /invoices/ uses the single conversion path and passes created_by through."""
+    seen = {}
+
+    def fake_convert(quote_id, created_by_user_id=None):
+        seen["args"] = (quote_id, created_by_user_id)
+        return {"id": 9}
+
+    monkeypatch.setattr(qsvc, "convert_quote_to_invoice", fake_convert)
+    monkeypatch.setattr(isvc, "get_invoice_by_id", lambda invoice_id: {"id": invoice_id})
+    out = isvc.create_invoice_from_quote("q1", None, CREATOR)
+    assert seen["args"] == ("q1", CREATOR)
+    assert out == {"id": 9}
 
 
 def test_convert_quote_to_invoice_writes_created_by(monkeypatch):
@@ -311,7 +303,7 @@ def test_convert_quote_to_invoice_writes_created_by(monkeypatch):
     qsvc.convert_quote_to_invoice("q1", CREATOR)
     sql, params = cur.sql_with("INSERT INTO invoices")[0]
     assert params[10] == CREATOR
-    assert len(params) == 11
+    assert len(params) == 18
 
 
 def test_update_user_sql_has_no_updated_at(monkeypatch):

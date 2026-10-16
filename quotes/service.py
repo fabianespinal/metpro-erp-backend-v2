@@ -872,10 +872,17 @@ def convert_quote_to_invoice(quote_id: str, created_by_user_id: Optional[str] = 
 
         # Invoice total is the stored grand_total set at finalize/save.
         # Recompute only for legacy rows that have no stored total.
+        breakdown = calculate_quote_totals(items, charges)
         if quote.get("grand_total") is not None:
             invoice_total = float(quote["grand_total"])
         else:
-            invoice_total = calculate_quote_totals(items, charges)["grand_total"]
+            invoice_total = breakdown["grand_total"]
+        # Header columns. subtotal = line items before discounts; charges_total =
+        # supervision + admin + insurance + transport + contingency.
+        header_subtotal = round(breakdown["items_total"], 2)
+        header_discounts = round(breakdown["total_discounts"], 2)
+        header_charges = round(breakdown["subtotal_general"] - breakdown["items_after_discount"], 2)
+        header_itbis = round(breakdown["itbis"], 2)
 
         # 4. Create invoice
         timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
@@ -885,8 +892,10 @@ def convert_quote_to_invoice(quote_id: str, created_by_user_id: Optional[str] = 
         cursor.execute("""
             INSERT INTO invoices
                 (quote_id, invoice_number, invoice_date, client_id, contact_id,
-                 total_amount, status, notes, payment_terms, valid_until, created_by_user_id)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 total_amount, status, notes, payment_terms, valid_until, created_by_user_id,
+                 subtotal, discount_total, charges_total, itbis_total, grand_total,
+                 amount_paid, amount_due)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
             quote_id,
@@ -900,6 +909,13 @@ def convert_quote_to_invoice(quote_id: str, created_by_user_id: Optional[str] = 
             quote.get("payment_terms"),
             _serialize_date(quote.get("valid_until")),
             created_by_user_id,
+            header_subtotal,
+            header_discounts,
+            header_charges,
+            header_itbis,
+            invoice_total,
+            0,
+            invoice_total,
         ))
 
         invoice_id = cursor.fetchone()["id"]   # FIXED

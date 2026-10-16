@@ -198,7 +198,6 @@ def update_user(user_id: str, email: Optional[str], full_name: Optional[str],
         if not updates:
             raise api_error(400, "No fields to update", "NO_FIELDS_TO_UPDATE")
 
-        updates.append("updated_at = CURRENT_TIMESTAMP")
         params.append(user_id)
 
         query = f"UPDATE users SET {', '.join(updates)} WHERE id = %s"
@@ -252,7 +251,7 @@ def update_user_password(user_id: str, current_password: str, new_password: str)
 
         cursor.execute("""
             UPDATE users
-            SET password_hash = %s, updated_at = CURRENT_TIMESTAMP
+            SET password_hash = %s
             WHERE id = %s
         """, (new_hash, user_id))
 

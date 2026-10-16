@@ -312,3 +312,20 @@ def test_convert_quote_to_invoice_writes_created_by(monkeypatch):
     sql, params = cur.sql_with("INSERT INTO invoices")[0]
     assert params[10] == CREATOR
     assert len(params) == 11
+
+
+def test_update_user_sql_has_no_updated_at(monkeypatch):
+    cur = Scripted([
+        _target("user", True),
+        R("UPDATE users SET", rowcount=1),
+        R("SELECT id, username, email, full_name, role, is_active, created_at", one=UPDATED_ROW),
+    ])
+    _patch_db(monkeypatch, usvc, cur)
+    usvc.update_user(UID, None, "New Name", None, None)
+    sql, _ = cur.sql_with("UPDATE users SET")[0]
+    assert "updated_at" not in sql
+
+
+def test_invoice_model_exposes_client_name():
+    from invoices.models import Invoice
+    assert "client_name" in Invoice.model_fields

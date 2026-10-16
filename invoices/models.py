@@ -22,6 +22,7 @@ class Invoice(BaseModel):
     notes: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    client_name: Optional[str] = None
     created_by_name: Optional[str] = None
 
     class Config:

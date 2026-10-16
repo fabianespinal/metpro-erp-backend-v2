@@ -147,6 +147,18 @@ def require_auth(authorization: str = Header(None)) -> dict:
     return payload
 
 
+def _allowed_roles(required_role: str) -> set:
+    """
+    Roles that pass a require_role(required_role) check.
+    - superadmin passes every check, including require_role("admin").
+    - require_role("superadmin") passes superadmin only.
+    - Any other required role passes that role and superadmin.
+    """
+    if required_role == "superadmin":
+        return {"superadmin"}
+    return {required_role, "superadmin"}
+
+
 def require_role(required_role: str):
     """
     Dependency factory for role-based access control.
@@ -155,9 +167,11 @@ def require_role(required_role: str):
         def admin_only(user = Depends(require_role("admin"))):
             ...
     """
+    allowed = _allowed_roles(required_role)
+
     def wrapper(user: dict = Depends(require_auth)):
         role = user.get("role")
-        if role != required_role:
+        if role not in allowed:
             raise api_error(403, "Insufficient permissions", "INSUFFICIENT_PERMISSIONS")
         return user
 

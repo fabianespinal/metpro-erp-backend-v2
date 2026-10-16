@@ -20,7 +20,7 @@ def _assert_self_or_admin(user_id: str, current_user: dict) -> None:
     checked by comparing the target user's username.
     Unknown user ids return 403 for non-admins to avoid revealing which ids exist.
     """
-    if current_user.get("role") == "admin":
+    if current_user.get("role") in ("admin", "superadmin"):
         return
     try:
         target = service.get_user_by_id(user_id)

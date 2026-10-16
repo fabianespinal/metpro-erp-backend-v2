@@ -1,5 +1,7 @@
 from core.errors import api_error
+import uuid
 from typing import List, Optional
+from psycopg2 import errors as pg_errors
 from fastapi import HTTPException
 from database import get_db_connection
 from core.errors import internal_error
@@ -85,32 +87,54 @@ def get_user_by_username(username: str) -> dict:
 
 
 # ============================================================
+# SUPERADMIN PROTECTION
+# ============================================================
+
+def _assert_can_manage(actor_role: Optional[str], target_role: Optional[str], new_role: Optional[str] = None) -> None:
+    """
+    Only a superadmin may act on a superadmin account or grant the superadmin role.
+    Admins manage user and admin accounts only.
+    """
+    if actor_role == "superadmin":
+        return
+    if target_role == "superadmin" or new_role == "superadmin":
+        raise api_error(403, "Only a superadmin can manage superadmin accounts", "SUPERADMIN_REQUIRED")
+
+
+# ============================================================
 # CREATE USER
 # ============================================================
 
-def create_user(username: str, password: str, email: str, full_name: str, role: str = "user") -> dict:
+def create_user(username: str, password: str, email: str, full_name: Optional[str], role: str = "user",
+                actor_role: Optional[str] = None) -> dict:
     conn = None
     try:
+        _assert_can_manage(actor_role, None, role)
+
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        # Check username
-        cursor.execute("SELECT id FROM users WHERE username = %s", (username,))
+        # Case-insensitive uniqueness, matching the lower() unique indexes.
+        cursor.execute("SELECT id FROM users WHERE lower(username) = lower(%s)", (username,))
         if cursor.fetchone():
             raise api_error(400, "Username already exists", "USERNAME_TAKEN")
 
-        # Check email
-        cursor.execute("SELECT id FROM users WHERE email = %s", (email,))
+        cursor.execute("SELECT id FROM users WHERE lower(email) = lower(%s)", (email,))
         if cursor.fetchone():
             raise api_error(400, "Email already exists", "EMAIL_TAKEN")
 
         password_hash = get_password_hash(password)
 
-        cursor.execute("""
-            INSERT INTO users (username, password_hash, email, full_name, role, is_active)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            RETURNING id
-        """, (username, password_hash, email, full_name, role, True))
+        # users.id has no DB default in production: the app generates the UUID.
+        new_id = str(uuid.uuid4())
+        try:
+            cursor.execute("""
+                INSERT INTO users (id, username, password_hash, email, full_name, role, is_active)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """, (new_id, username, password_hash, email, full_name, role, True))
+        except pg_errors.UniqueViolation:
+            raise api_error(400, "Username or email already exists", "USER_EXISTS")
 
         new_user = cursor.fetchone()
         conn.commit()
@@ -153,7 +177,7 @@ def _assert_other_active_superadmin(cursor, exclude_user_id: str) -> None:
 
 
 def update_user(user_id: str, email: Optional[str], full_name: Optional[str],
-                role: Optional[str], is_active: Optional[bool]) -> dict:
+                role: Optional[str], is_active: Optional[bool], actor_role: Optional[str] = None) -> dict:
 
     conn = None
     try:
@@ -166,6 +190,8 @@ def update_user(user_id: str, email: Optional[str], full_name: Optional[str],
         if not target:
             raise api_error(404, "User not found", "USER_NOT_FOUND")
 
+        _assert_can_manage(actor_role, target["role"], role)
+
         # Last-superadmin guard: deactivating or demoting the only active superadmin is refused.
         is_target_active_superadmin = target["role"] == "superadmin" and target["is_active"]
         demotes = role is not None and role != "superadmin"
@@ -177,7 +203,7 @@ def update_user(user_id: str, email: Optional[str], full_name: Optional[str],
         params = []
 
         if email is not None:
-            cursor.execute("SELECT id FROM users WHERE email = %s AND id != %s", (email, user_id))
+            cursor.execute("SELECT id FROM users WHERE lower(email) = lower(%s) AND id != %s", (email, user_id))
             if cursor.fetchone():
                 raise api_error(400, "Email already exists", "EMAIL_TAKEN")
             updates.append("email = %s")
@@ -278,16 +304,19 @@ def update_user_password(user_id: str, current_password: str, new_password: str)
 # DELETE USER
 # ============================================================
 
-def reset_user_password(user_id: str, new_password: str) -> dict:
+def reset_user_password(user_id: str, new_password: str, actor_role: Optional[str] = None) -> dict:
     """Admin reset. Sets a new password without the current one. Writes password_hash only."""
     conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        cursor.execute("SELECT id FROM users WHERE id = %s", (user_id,))
-        if not cursor.fetchone():
+        cursor.execute("SELECT id, role FROM users WHERE id = %s", (user_id,))
+        target = cursor.fetchone()
+        if not target:
             raise api_error(404, "User not found", "USER_NOT_FOUND")
+
+        _assert_can_manage(actor_role, target["role"])
 
         cursor.execute(
             "UPDATE users SET password_hash = %s WHERE id = %s",
@@ -311,7 +340,7 @@ def reset_user_password(user_id: str, new_password: str) -> dict:
             conn.close()
 
 
-def delete_user(user_id: str) -> dict:
+def delete_user(user_id: str, actor_role: Optional[str] = None) -> dict:
     conn = None
     try:
         conn = get_db_connection()
@@ -319,6 +348,8 @@ def delete_user(user_id: str) -> dict:
 
         cursor.execute("SELECT role, is_active FROM users WHERE id = %s", (user_id,))
         target = cursor.fetchone()
+        if target:
+            _assert_can_manage(actor_role, target["role"])
         # Last-superadmin guard: deleting the only active superadmin is refused.
         if target and target["role"] == "superadmin" and target["is_active"]:
             _assert_other_active_superadmin(cursor, user_id)

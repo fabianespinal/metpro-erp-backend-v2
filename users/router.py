@@ -50,13 +50,14 @@ def get_user_by_username(username: str, _admin: dict = Depends(require_role("adm
 
 @router.post('/', response_model=User)
 def create_user(user: UserCreate, _admin: dict = Depends(require_role("admin"))):
-    """Create new user. Admin only."""
+    """Create new user. Admin only. Only a superadmin may create a superadmin."""
     result = service.create_user(
         user.username,
         user.password,
         user.email,
         user.full_name,
-        user.role
+        user.role,
+        actor_role=_admin.get("role"),
     )
     return User(**result)
 
@@ -73,7 +74,8 @@ def update_user(
         user_update.email,
         user_update.full_name,
         user_update.role,
-        user_update.is_active
+        user_update.is_active,
+        actor_role=_admin.get("role"),
     )
     return User(**result)
 
@@ -83,7 +85,7 @@ def delete_user(user_id: UserId, current_user: dict = Depends(require_role("admi
     """Delete user. Admin only. Cannot delete yourself."""
     if str(current_user.get("user_id")) == str(user_id):
         raise api_error(400, "Cannot delete your own account", "CANNOT_DELETE_SELF")
-    return service.delete_user(user_id)
+    return service.delete_user(user_id, actor_role=current_user.get("role"))
 
 
 @router.patch('/{user_id}/reset-password')
@@ -93,7 +95,7 @@ def reset_password(
     _admin: dict = Depends(require_role("admin")),
 ):
     """Admin reset of another user's password. No current password required."""
-    return service.reset_user_password(user_id, password_reset.new_password)
+    return service.reset_user_password(user_id, password_reset.new_password, actor_role=_admin.get("role"))
 
 
 # ============================================================

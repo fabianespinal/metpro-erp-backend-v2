@@ -96,7 +96,7 @@ def get_quote_public_pdf(token: Annotated[str, Path(pattern=PUBLIC_TOKEN_PATTERN
 
     pdf_stream = create_quote_pdf(
         doc_type="COTIZACION",
-        doc_id=quote["quote_id"],
+        doc_id=str(quote["quote_number"]),
         doc_date=str(quote["created_at"])[:10] if quote.get("created_at") else "",
         client=client,
         project_name=quote.get("project_name", ""),
@@ -157,7 +157,7 @@ def send_quote(quote_id: str, current_user: dict = Depends(require_auth)):
 
     pdf_stream = create_quote_pdf(
         doc_type="COTIZACION",
-        doc_id=quote["quote_id"],
+        doc_id=str(quote["quote_number"]),
         doc_date=str(quote["created_at"])[:10] if quote.get("created_at") else "",
         client=client,
         project_name=quote.get("project_name", ""),
@@ -230,7 +230,7 @@ def get_quote_pdf(quote_id: str, current_user: dict = Depends(require_auth)):
 
     pdf_stream = create_quote_pdf(
         doc_type="COTIZACION",
-        doc_id=quote["quote_id"],
+        doc_id=str(quote["quote_number"]),
         doc_date=str(quote["created_at"])[:10] if quote.get("created_at") else "",
         client=client,
         project_name=quote.get("project_name", ""),

@@ -174,6 +174,19 @@ def delete_client(client_id: int) -> dict:
         conn = get_db_connection()
         cursor = conn.cursor()
 
+        # A client with documents or projects is kept: deleting it would orphan
+        # quotes and invoices (no FK yet) and cascade-delete its contacts.
+        cursor.execute(
+            """
+            SELECT (SELECT COUNT(*) FROM quotes WHERE client_id = %s)
+                 + (SELECT COUNT(*) FROM invoices WHERE client_id = %s)
+                 + (SELECT COUNT(*) FROM projects WHERE client_id = %s) AS n
+            """,
+            (client_id, client_id, client_id),
+        )
+        if cursor.fetchone()["n"] > 0:
+            raise api_error(400, "Client has quotes, invoices or projects and cannot be deleted", "CLIENT_IN_USE")
+
         cursor.execute("DELETE FROM clients WHERE id = %s", (client_id,))
         if cursor.rowcount == 0:
             raise api_error(404, "Client not found", "CLIENT_NOT_FOUND")
@@ -182,6 +195,8 @@ def delete_client(client_id: int) -> dict:
         return {"message": "Client deleted successfully"}
 
     except HTTPException:
+        if conn:
+            conn.rollback()
         raise
 
     except Exception as e:

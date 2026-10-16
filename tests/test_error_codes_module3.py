@@ -44,6 +44,8 @@ EXPECTED = {
     (400, "End date must be after start date", "DATE_RANGE_INVALID"),
     (404, "Project not found", "PROJECT_NOT_FOUND"),
     (400, "Name cannot be empty", "NAME_REQUIRED"),
+    (400, "Client has quotes, invoices or projects and cannot be deleted", "CLIENT_IN_USE"),
+    (400, "Product is used in a template pack and cannot be deleted", "PRODUCT_IN_USE"),
 }
 
 CALL = re.compile(r"api_error\((\d+), (f?)([\"'])(.*?)\3, \"([A-Z_]+)\"\)", re.S)

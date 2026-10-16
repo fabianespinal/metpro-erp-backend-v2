@@ -131,6 +131,15 @@ def delete_product(product_id: int) -> dict:
         conn = get_db_connection()
         cursor = conn.cursor()
 
+        cursor.execute("SELECT COUNT(*) AS n FROM template_pack_items WHERE product_id = %s", (product_id,))
+        if cursor.fetchone()["n"] > 0:
+            raise api_error(400, "Product is used in a template pack and cannot be deleted", "PRODUCT_IN_USE")
+
+        # Quote and invoice lines keep their name and price; only the catalog link is cleared,
+        # so editing a Draft that used this product does not fail product validation.
+        cursor.execute("UPDATE quote_items SET product_id = NULL WHERE product_id = %s", (product_id,))
+        cursor.execute("UPDATE invoice_items SET product_id = NULL WHERE product_id = %s", (product_id,))
+
         cursor.execute("DELETE FROM products WHERE id = %s", (product_id,))
         if cursor.rowcount == 0:
             raise api_error(404, "Product not found", "PRODUCT_NOT_FOUND")
@@ -139,6 +148,8 @@ def delete_product(product_id: int) -> dict:
         return {"message": "Product deleted successfully"}
 
     except HTTPException:
+        if conn:
+            conn.rollback()
         raise
 
     except Exception as e:

@@ -38,6 +38,8 @@ EXPECTED = {
     ("quotes/service.py", 400, "Only Draft quotes can be finalized", "QUOTE_NOT_DRAFT"),
     ("quotes/service.py", 400, "Use the finalize endpoint to set Final", "QUOTE_USE_FINALIZE"),
     ("quotes/service.py", 400, "Finalized quotes can only move to Approved, Rejected or Invoiced", "QUOTE_FINALIZED"),
+    ("quotes/service.py", 400, "Quote must be finalized before it can be approved", "QUOTE_NOT_FINALIZED"),
+    ("quotes/service.py", 400, "Quote must be finalized before it can be invoiced", "QUOTE_NOT_FINALIZED"),
     ("quotes/service.py", 400, "Quote must have at least one item to finalize", "QUOTE_EMPTY"),
     ("quotes/service.py", 400, "Product not found", "PRODUCT_NOT_FOUND"),
     ("quotes/service.py", 400, "Invoice already exists for this quote", "INVOICE_EXISTS"),

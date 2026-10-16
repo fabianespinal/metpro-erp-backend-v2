@@ -794,6 +794,13 @@ def update_quote_status(quote_id: str, status: str) -> dict:
         if current["status"] == QUOTE_STATUS_FINAL and status not in FINAL_ALLOWED_NEXT:
             raise api_error(400, "Finalized quotes can only move to Approved, Rejected or Invoiced", "QUOTE_FINALIZED")
 
+        # Approval and invoicing require a finalized quote. A Draft cannot jump
+        # to Approved or Invoiced: it would have no public_token and no totals lock.
+        if status == "Approved" and current["status"] != QUOTE_STATUS_FINAL:
+            raise api_error(400, "Quote must be finalized before it can be approved", "QUOTE_NOT_FINALIZED")
+        if status == "Invoiced" and current["status"] not in (QUOTE_STATUS_FINAL, "Approved"):
+            raise api_error(400, "Quote must be finalized before it can be invoiced", "QUOTE_NOT_FINALIZED")
+
         cursor.execute(
             "UPDATE quotes SET status = %s WHERE quote_id = %s", (status, quote_id)
         )

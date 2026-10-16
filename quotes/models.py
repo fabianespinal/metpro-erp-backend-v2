@@ -1,5 +1,5 @@
-from pydantic import BaseModel
-from typing import List, Optional
+from pydantic import BaseModel, Field
+from typing import List, Literal, Optional
 from datetime import datetime, date
 
 
@@ -32,6 +32,13 @@ class QuoteItemBase(BaseModel):
     unit_price: float
     discount_type: str = "none"
     discount_value: float = 0.0
+    # Quoting v1. Accepted and validated now; persisted only after the
+    # 2026-10-14_quoting_v1 migration is applied (Phase 5).
+    item_type: Literal["product", "service", "custom"] = "product"
+    description: Optional[str] = None
+    # Optional link to products.id. Not required (existing clients send none).
+    # Persisted on create and update from quoting v1 (Phase 6 prerequisite).
+    product_id: Optional[int] = None
 
 
 # -----------------------------
@@ -105,3 +112,21 @@ class QuoteResponse(BaseModel):
 
     class Config:
         orm_mode = True
+
+
+# -----------------------------
+# Totals preview (stateless, no DB writes)
+# -----------------------------
+class TotalsItemIn(BaseModel):
+    product_name: str = ""
+    quantity: float = Field(default=0, ge=0)
+    unit_price: float = Field(default=0, ge=0)
+    discount_type: Literal["none", "percentage", "fixed"] = "none"
+    discount_value: float = Field(default=0, ge=0)
+    item_type: Literal["product", "service", "custom"] = "product"
+    description: Optional[str] = None
+
+
+class TotalsPreviewIn(BaseModel):
+    items: List[TotalsItemIn] = []
+    included_charges: IncludedCharges = IncludedCharges()

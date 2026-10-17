@@ -7,6 +7,7 @@ from fastapi import HTTPException
 import json
 import uuid
 from datetime import datetime, date
+import logging
 from database import get_db_connection
 from core.errors import internal_error
 from quotes.dynamic_charges import dynamic_charges_total
@@ -19,6 +20,8 @@ INS_ITEMS_SQL = (
     "INSERT INTO quote_items (quote_id, product_name, quantity, unit_price, discount_type, "
     "discount_value, item_type, description, product_id, category) VALUES %s"
 )
+logger = logging.getLogger(__name__)
+
 QUOTE_STATUS_FINAL = "Final"
 FINAL_ALLOWED_NEXT = ("Approved", "Invoiced", "Rejected")
 
@@ -874,6 +877,20 @@ def update_quote_status(quote_id: str, status: str) -> dict:
         cursor.execute(
             "UPDATE quotes SET status = %s, updated_at = CURRENT_TIMESTAMP WHERE quote_id = %s", (status, quote_id)
         )
+
+        # Approval creates the project (Phase 2). Savepoint: a project failure never blocks the approval.
+        if status == "Approved":
+            cursor.execute("SAVEPOINT project_from_quote")
+            try:
+                from projects.service import create_project_from_quote  # local: avoids import cycle
+                from psycopg2.extras import RealDictCursor as _RDC
+                pcur = conn.cursor(cursor_factory=_RDC)
+                create_project_from_quote(pcur, quote_id)
+                cursor.execute("RELEASE SAVEPOINT project_from_quote")
+            except Exception:
+                cursor.execute("ROLLBACK TO SAVEPOINT project_from_quote")
+                logger.exception("Project creation failed for approved quote %s", quote_id)
+
         conn.commit()
 
         return {"message": "Status updated successfully", "quote_id": quote_id, "status": status}

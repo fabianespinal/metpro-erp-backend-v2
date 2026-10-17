@@ -9,11 +9,12 @@ router = APIRouter(prefix='/projects', tags=['projects'])
 
 @router.post('/', response_model=Project)
 def create_project(project: ProjectBase, current_user: dict = Depends(require_auth)):
-    """Create new project"""
+    """Crear proyecto"""
     try:
         result = service.create_project(
             project.client_id, project.name, project.description, project.status,
-            project.start_date, project.end_date, project.estimated_budget, project.notes
+            project.start_date, project.end_date, project.estimated_budget, project.notes,
+            project.job_site_address
         )
         return Project(**result)
     except HTTPException:
@@ -27,7 +28,7 @@ def get_projects(
     status: Optional[str] = None,
     current_user: dict = Depends(require_auth)
 ):
-    """List projects with optional filters"""
+    """Listar proyectos con filtros opcionales"""
     try:
         projects = service.get_all_projects(client_id, status)
         return [Project(**p) for p in projects]
@@ -36,7 +37,7 @@ def get_projects(
 
 @router.get('/{project_id}', response_model=Project)
 def get_project(project_id: int, current_user: dict = Depends(require_auth)):
-    """Get single project"""
+    """Obtener un proyecto"""
     try:
         result = service.get_project_by_id(project_id)
         return Project(**result)
@@ -51,7 +52,7 @@ def update_project(
     project: ProjectUpdate,  # FIXED: Use ProjectUpdate for partial updates
     current_user: dict = Depends(require_auth)
 ):
-    """Update project"""
+    """Actualizar proyecto"""
     try:
         result = service.update_project(
             project_id,
@@ -62,7 +63,8 @@ def update_project(
             start_date=project.start_date,
             end_date=project.end_date,
             estimated_budget=project.estimated_budget,
-            notes=project.notes
+            notes=project.notes,
+            job_site_address=project.job_site_address
         )
         return Project(**result)
     except HTTPException:
@@ -72,7 +74,7 @@ def update_project(
 
 @router.delete('/{project_id}')
 def delete_project(project_id: int, current_user: dict = Depends(require_auth)):
-    """Delete project"""
+    """Eliminar proyecto"""
     try:
         return service.delete_project(project_id)
     except HTTPException:

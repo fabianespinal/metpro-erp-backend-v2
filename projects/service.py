@@ -5,6 +5,73 @@ from fastapi import HTTPException
 from database import get_db_connection
 from core.errors import internal_error
 from psycopg2.extras import RealDictCursor
+import logging
+from core.numbering import quote_label
+
+logger = logging.getLogger(__name__)
+
+# Projects joined with client and the invoice of their originating quote.
+PROJECT_SELECT = """
+    SELECT p.*, c.company_name AS client_name,
+           inv.id AS invoice_id, inv.invoice_number AS invoice_number
+    FROM projects p
+    JOIN clients c ON p.client_id = c.id
+    LEFT JOIN invoices inv ON inv.quote_id = p.quote_id AND p.quote_id IS NOT NULL
+"""
+
+
+def project_label(project_id) -> str:
+    return f"P-{int(project_id):04d}"
+
+
+def _enrich(row):
+    """Add the display numbers: P-0001, Q-10002."""
+    if row is None:
+        return None
+    d = dict(row)
+    d["project_number"] = project_label(d["id"])
+    d["quote_label"] = quote_label(d["quote_number"]) if d.get("quote_number") else None
+    return d
+
+
+def fetch_project(cursor, project_id: int):
+    cursor.execute(PROJECT_SELECT + " WHERE p.id = %s", (project_id,))
+    return _enrich(cursor.fetchone())
+
+
+def create_project_from_quote(cursor, quote_id: str):
+    """
+    Create the project for an approved quote, in the caller's transaction.
+    Idempotent: one project per quote (unique index), a second call is a no-op.
+    Returns the new project id, or None when one already exists.
+    """
+    cursor.execute("""
+        SELECT q.quote_id, q.quote_number, q.client_id, q.project_name,
+               c.address AS client_address
+        FROM quotes q LEFT JOIN clients c ON c.id = q.client_id
+        WHERE q.quote_id = %s
+    """, (quote_id,))
+    q = cursor.fetchone()
+    if not q:
+        return None
+
+    cursor.execute(
+        "SELECT product_name FROM quote_items WHERE quote_id = %s ORDER BY id LIMIT 3", (quote_id,)
+    )
+    names = [r["product_name"] for r in cursor.fetchall() if r.get("product_name")]
+    description = ", ".join(names)[:200] or None
+    label = quote_label(q["quote_number"]) if q.get("quote_number") else "sin número"
+    name = (q.get("project_name") or "").strip() or f"Proyecto {label}"
+
+    cursor.execute("""
+        INSERT INTO projects
+            (client_id, name, description, status, start_date, job_site_address, quote_id, quote_number)
+        VALUES (%s, %s, %s, 'pending', CURRENT_DATE, %s, %s, %s)
+        ON CONFLICT (quote_id) WHERE quote_id IS NOT NULL DO NOTHING
+        RETURNING id
+    """, (q["client_id"], name, description, q.get("client_address"), q["quote_id"], q.get("quote_number")))
+    row = cursor.fetchone()
+    return row["id"] if row else None
 
 # ============================================================
 # CREATE PROJECT
@@ -17,7 +84,8 @@ def create_project(
     start_date: date,  # NOT NULL per Supabase
     end_date: Optional[date],
     estimated_budget: Optional[float],
-    notes: Optional[str]
+    notes: Optional[str],
+    job_site_address: Optional[str] = None
 ) -> dict:
     conn = None
     try:
@@ -36,19 +104,18 @@ def create_project(
         # Insert project
         cursor.execute("""
             INSERT INTO projects
-            (client_id, name, description, status, start_date, end_date, estimated_budget, notes)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            (client_id, name, description, status, start_date, end_date, estimated_budget, notes, job_site_address)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
             client_id, name, description, status,
-            start_date, end_date, estimated_budget, notes
+            start_date, end_date, estimated_budget, notes, job_site_address
         ))
 
         new_id = cursor.fetchone()["id"]
         conn.commit()
 
-        cursor.execute("SELECT * FROM projects WHERE id = %s", (new_id,))
-        return cursor.fetchone()
+        return fetch_project(cursor, new_id)
 
     except HTTPException:
         if conn:
@@ -73,12 +140,7 @@ def get_all_projects(client_id: Optional[int] = None, status: Optional[str] = No
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        query = """
-            SELECT p.*, c.company_name AS client_name
-            FROM projects p
-            JOIN clients c ON p.client_id = c.id
-            WHERE 1=1
-        """
+        query = PROJECT_SELECT + " WHERE 1=1"
         params = []
 
         if client_id:
@@ -92,7 +154,7 @@ def get_all_projects(client_id: Optional[int] = None, status: Optional[str] = No
         query += " ORDER BY p.created_at DESC"
 
         cursor.execute(query, params)
-        return cursor.fetchall()
+        return [_enrich(r) for r in cursor.fetchall()]
 
     finally:
         if conn:
@@ -107,8 +169,7 @@ def get_project_by_id(project_id: int) -> dict:
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        cursor.execute("SELECT * FROM projects WHERE id = %s", (project_id,))
-        row = cursor.fetchone()
+        row = fetch_project(cursor, project_id)
 
         if not row:
             raise api_error(404, "Project not found", "PROJECT_NOT_FOUND")
@@ -131,7 +192,8 @@ def update_project(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     estimated_budget: Optional[float] = None,
-    notes: Optional[str] = None
+    notes: Optional[str] = None,
+    job_site_address: Optional[str] = None
 ) -> dict:
     conn = None
     try:
@@ -181,6 +243,7 @@ def update_project(
         final_end_date = norm_date(end_date, current_project["end_date"])
         final_estimated_budget = norm_float(estimated_budget, current_project["estimated_budget"])
         final_notes = norm_str(notes) if notes is not None else current_project["notes"]
+        final_address = norm_str(job_site_address) if job_site_address is not None else current_project["job_site_address"]
 
         # Validate client if changed
         if client_id is not None:
@@ -209,6 +272,7 @@ def update_project(
                 end_date = %s,  -- FIXED: removed space typo
                 estimated_budget = %s,
                 notes = %s,
+                job_site_address = %s,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = %s
         """, (
@@ -220,13 +284,13 @@ def update_project(
             final_end_date,
             final_estimated_budget,
             final_notes,
+            final_address,
             project_id
         ))
 
         conn.commit()
 
-        cursor.execute("SELECT * FROM projects WHERE id = %s", (project_id,))
-        return cursor.fetchone()
+        return fetch_project(cursor, project_id)
 
     except HTTPException:
         if conn:

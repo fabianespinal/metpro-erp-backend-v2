@@ -4,9 +4,12 @@ from datetime import date, datetime
 
 # Allowed statuses (MUST match Supabase constraint)
 ALLOWED_STATUSES = {
+    'pending',
     'planning',
     'in_progress',
-    'completed'
+    'completed',
+    'on_hold',
+    'cancelled',
 }
 
 class ProjectBase(BaseModel):
@@ -18,9 +21,10 @@ class ProjectBase(BaseModel):
     end_date: Optional[date] = None
     estimated_budget: Optional[float] = None
     notes: Optional[str] = None
+    job_site_address: Optional[str] = None
 
     # Normalize empty strings → None
-    @field_validator('description', 'notes', mode='before')
+    @field_validator('description', 'notes', 'job_site_address', mode='before')
     @classmethod
     def empty_str_to_none(cls, v):
         if v == "":
@@ -41,7 +45,7 @@ class ProjectBase(BaseModel):
             v = "in_progress"
 
         if v not in ALLOWED_STATUSES:
-            raise ValueError(f"Status must be one of: {', '.join(ALLOWED_STATUSES)}")
+            raise ValueError(f"Status must be one of: {', '.join(sorted(ALLOWED_STATUSES))}")
 
         return v
 
@@ -50,6 +54,14 @@ class Project(ProjectBase):
     id: int
     created_at: datetime
     updated_at: datetime
+    # Derived / joined (read only)
+    project_number: Optional[str] = None      # P-0001
+    client_name: Optional[str] = None
+    quote_id: Optional[str] = None
+    quote_number: Optional[int] = None
+    quote_label: Optional[str] = None         # Q-10002
+    invoice_id: Optional[int] = None
+    invoice_number: Optional[str] = None      # F-10002
 
     class Config:
         from_attributes = True
@@ -68,9 +80,10 @@ class ProjectUpdate(BaseModel):
     end_date: Optional[date] = None
     estimated_budget: Optional[float] = None
     notes: Optional[str] = None
+    job_site_address: Optional[str] = None
 
     # Normalize empty strings → None
-    @field_validator('description', 'notes', mode='before')
+    @field_validator('description', 'notes', 'job_site_address', mode='before')
     @classmethod
     def empty_str_to_none(cls, v):
         if v == "":
@@ -99,6 +112,6 @@ class ProjectUpdate(BaseModel):
             v = "in_progress"
 
         if v not in ALLOWED_STATUSES:
-            raise ValueError(f"Status must be one of: {', '.join(ALLOWED_STATUSES)}")
+            raise ValueError(f"Status must be one of: {', '.join(sorted(ALLOWED_STATUSES))}")
 
         return v

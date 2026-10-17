@@ -368,6 +368,7 @@ def get_quote_with_contact(quote_id: str) -> dict:
         cursor.execute("""
             SELECT
                 q.quote_id,
+                q.id,
                 q.quote_number,
                 q.public_token,
                 q.client_id,

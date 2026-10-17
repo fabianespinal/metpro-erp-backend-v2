@@ -11,7 +11,7 @@ from core.errors import api_error
 from core.rate_limit import public_rate_limit
 from pdf.builder_quote import create_quote_pdf
 from pdf.utils.signer import resolve_signer_name
-from core.numbering import quote_label
+from core.numbering import quote_label_for
 
 # Email sending
 from email_service import send_quote_email
@@ -100,7 +100,7 @@ def get_quote_public_pdf(token: Annotated[str, Path(pattern=PUBLIC_TOKEN_PATTERN
     pdf_stream = create_quote_pdf(
         doc_type="COTIZACION",
         signer_name=resolve_signer_name(None, quote.get("created_by_name")),
-        doc_id=quote_label(quote["quote_number"]),
+        doc_id=quote_label_for(quote),
         doc_date=str(quote["created_at"])[:10] if quote.get("created_at") else "",
         client=client,
         project_name=quote.get("project_name", ""),
@@ -162,7 +162,7 @@ def send_quote(quote_id: str, current_user: dict = Depends(require_auth)):
     pdf_stream = create_quote_pdf(
         doc_type="COTIZACION",
         signer_name=resolve_signer_name(current_user, quote.get("created_by_name")),
-        doc_id=quote_label(quote["quote_number"]),
+        doc_id=quote_label_for(quote),
         doc_date=str(quote["created_at"])[:10] if quote.get("created_at") else "",
         client=client,
         project_name=quote.get("project_name", ""),
@@ -237,7 +237,7 @@ def get_quote_pdf(quote_id: str, current_user: dict = Depends(require_auth)):
     pdf_stream = create_quote_pdf(
         doc_type="COTIZACION",
         signer_name=resolve_signer_name(current_user, quote.get("created_by_name")),
-        doc_id=quote_label(quote["quote_number"]),
+        doc_id=quote_label_for(quote),
         doc_date=str(quote["created_at"])[:10] if quote.get("created_at") else "",
         client=client,
         project_name=quote.get("project_name", ""),

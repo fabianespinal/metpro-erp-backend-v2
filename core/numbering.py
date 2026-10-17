@@ -13,6 +13,12 @@ def quote_label(quote_number) -> str:
     return f"Q-{quote_number}"
 
 
+def quote_label_for(quote: dict) -> str:
+    """Q-<quote_number>; a quote with no number falls back to its row id; then a dash."""
+    number = quote.get("quote_number") or quote.get("id")
+    return quote_label(number) if number else "Q-S/N"
+
+
 def invoice_label(quote_number) -> str:
     return f"F-{quote_number}"
 

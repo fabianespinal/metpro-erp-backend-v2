@@ -34,8 +34,8 @@ def test_no_quote_pdf_prints_the_uuid():
 
 
 def test_every_quote_pdf_uses_quote_number():
-    assert "doc_id=quote_label(quote['quote_number'])" in _src("pdf/service.py")
-    assert _src("quotes/router.py").count('doc_id=quote_label(quote["quote_number"])') == 3
+    assert "doc_id=quote_label_for(quote)" in _src("pdf/service.py")
+    assert _src("quotes/router.py").count('doc_id=quote_label_for(quote)') == 3
 
 
 def test_quote_email_shows_number():

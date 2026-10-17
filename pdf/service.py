@@ -14,7 +14,7 @@ from pdf.builder_invoice import create_invoice_pdf
 from pdf.builder_conduce import create_conduce_pdf
 from pdf.utils.layout_utils import build_quote_invoice_pdf
 from pdf.utils.signer import resolve_signer_name
-from core.numbering import quote_label, conduce_label, conduce_label_from_invoice_number
+from core.numbering import quote_label_for, conduce_label, conduce_label_from_invoice_number
 from core.errors import internal_error
 import logging
 
@@ -127,7 +127,7 @@ def generate_quote_pdf(quote_id: str, current_user: dict = None) -> StreamingRes
 
         pdf_stream = build_quote_invoice_pdf(
             doc_type='COTIZACION',
-            doc_id=quote_label(quote['quote_number']),
+            doc_id=quote_label_for(quote),
             doc_date=doc_date,
             client=client,
             project_name=quote.get('project_name'),
@@ -158,7 +158,7 @@ def generate_quote_pdf(quote_id: str, current_user: dict = None) -> StreamingRes
         return StreamingResponse(
             pdf_stream,
             media_type='application/pdf',
-            headers={'Content-Disposition': f'attachment; filename={quote_label(quote["quote_number"])}_cotizacion.pdf'}
+            headers={'Content-Disposition': f'attachment; filename={quote_label_for(quote)}_cotizacion.pdf'}
         )
 
     except HTTPException:

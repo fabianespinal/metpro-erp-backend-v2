@@ -110,3 +110,10 @@ def test_signer_falls_back_to_claim_then_creator(monkeypatch):
     assert signer.resolve_signer_name({"sub": "u", "name": "Claim Name"}) == "Claim Name"
     assert signer.resolve_signer_name(None, "Creator Name") == "Creator Name"
     assert signer.resolve_signer_name(None, None) is None
+
+
+def test_quote_label_for_falls_back_to_row_id():
+    from core.numbering import quote_label_for
+    assert quote_label_for({"quote_number": 10002, "id": 9}) == "Q-10002"
+    assert quote_label_for({"quote_number": None, "id": 9}) == "Q-9"
+    assert quote_label_for({}) == "Q-S/N"

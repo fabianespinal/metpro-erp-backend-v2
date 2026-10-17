@@ -94,6 +94,25 @@ def build_quote_invoice_pdf(
     amount_due = amount_due or 0
 
     pdf = FPDF()
+
+    # Page 1: cover (portada). A failure here must never block the quote or invoice itself.
+    try:
+        from cover_page.service import get_active_body
+        kind = "quote" if doc_type == "COTIZACION" else "invoice"
+        cover_body = get_active_body(kind)
+        if cover_body:
+            from pdf.builder_cover import add_cover_page
+            add_cover_page(
+                pdf, kind, cover_body,
+                client_name=(client or {}).get("company_name", ""),
+                contact_name=(client or {}).get("contact_name", ""),
+                user_name=signer_name or "",
+                date_text=doc_date,
+                doc_label=doc_id,
+            )
+    except Exception:
+        logger.exception("Cover page failed; continuing without it")
+
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
 

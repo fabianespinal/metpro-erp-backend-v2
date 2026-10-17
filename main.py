@@ -84,6 +84,7 @@ from expenses.router import router as expenses_router
 from contacts.router import router as contacts_router
 from template_packs.router import router as template_packs_router
 from emails import router as emails_router
+from cover_page.router import router as cover_page_router
 
 
 app.include_router(auth_router)
@@ -99,6 +100,7 @@ app.include_router(expenses_router)
 app.include_router(contacts_router)
 app.include_router(template_packs_router)
 app.include_router(emails_router)
+app.include_router(cover_page_router)
 
 
 # ============================================================

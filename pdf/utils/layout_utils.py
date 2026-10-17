@@ -471,5 +471,15 @@ def build_quote_invoice_pdf(
     # ==================== SIGNATURES ====================
     add_footer_with_signature(pdf, signer_name)
 
+    # Final page: Terms and Conditions (off until an admin enables it). Never blocks the document.
+    try:
+        from terms_page.service import get_active_sections
+        terms = get_active_sections("quote" if doc_type == "COTIZACION" else "invoice")
+        if terms:
+            from pdf.builder_terms import add_terms_pages
+            add_terms_pages(pdf, terms)
+    except Exception:
+        logger.exception("Terms page failed; continuing without it")
+
     pdf_bytes = pdf.output(dest="S")   # already bytearray
     return io.BytesIO(pdf_bytes)

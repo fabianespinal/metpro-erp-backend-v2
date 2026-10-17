@@ -1,7 +1,7 @@
 from typing import Annotated
-from fastapi import APIRouter, Depends, HTTPException, Path
+from fastapi import APIRouter, Depends, File, HTTPException, Path, UploadFile
 from fastapi.responses import StreamingResponse
-from typing import Optional
+from typing import List, Optional
 import json
 
 from .models import QuoteCreate, StatusUpdate, QuoteUpdate, TotalsPreviewIn
@@ -12,6 +12,7 @@ from core.rate_limit import public_rate_limit
 from pdf.builder_quote import create_quote_pdf
 from pdf.utils.signer import resolve_signer_name
 from core.numbering import quote_label_for
+from core.email_attachments import read_extra_attachments
 
 # Email sending
 from email_service import send_quote_email
@@ -135,8 +136,15 @@ def get_quote_public_pdf(token: Annotated[str, Path(pattern=PUBLIC_TOKEN_PATTERN
 
 
 @router.post("/{quote_id}/send")
-def send_quote(quote_id: str, current_user: dict = Depends(require_auth)):
-    """Send quote PDF to client via email"""
+def send_quote(
+    quote_id: str,
+    files: List[UploadFile] = File(default=[]),
+    current_user: dict = Depends(require_auth),
+):
+    """Send quote PDF to client via email. Optional extra files are attached and discarded."""
+
+    # Validate uploads first. Nothing is stored.
+    extra_attachments = read_extra_attachments(files)
 
     quote = service.get_quote_with_contact(quote_id)
 
@@ -199,6 +207,7 @@ def send_quote(quote_id: str, current_user: dict = Depends(require_auth)):
         quote_id=str(quote["quote_number"]),  # printed number, never the UUID
         public_token=str(quote["public_token"]),
         pdf_bytes=pdf_bytes,
+        extra_attachments=extra_attachments,
     )
 
     # Final -> Sent. Sent and Approved keep their status. Cannot fail on transition rules.

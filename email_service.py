@@ -21,7 +21,7 @@ def clean_text(value: str) -> str:
 # ---------------------------------------------------------
 # QUOTES
 # ---------------------------------------------------------
-def send_quote_email(contact_email, contact_name, company_name, project_name, quote_id, public_token, pdf_bytes):
+def send_quote_email(contact_email, contact_name, company_name, project_name, quote_id, public_token, pdf_bytes, extra_attachments=None):
 
     clean_title = clean_text(project_name or company_name)
     # Client-supplied text is escaped before it goes into HTML.
@@ -56,7 +56,8 @@ def send_quote_email(contact_email, contact_name, company_name, project_name, qu
             {
                 "filename": f"cotizacion_{quote_id}.pdf",
                 "content": list(pdf_bytes),
-            }
+            },
+            *(extra_attachments or []),
         ],
     }
 
@@ -66,7 +67,7 @@ def send_quote_email(contact_email, contact_name, company_name, project_name, qu
 # ---------------------------------------------------------
 # INVOICES
 # ---------------------------------------------------------
-def send_invoice_email(contact_email, contact_name, company_name, project_name, invoice_id, public_token, pdf_bytes):
+def send_invoice_email(contact_email, contact_name, company_name, project_name, invoice_id, public_token, pdf_bytes, extra_attachments=None):
 
     clean_title = clean_text(project_name or company_name)
     # Client-supplied text is escaped before it goes into HTML.
@@ -101,7 +102,8 @@ def send_invoice_email(contact_email, contact_name, company_name, project_name, 
             {
                 "filename": f"factura_{invoice_id}.pdf",
                 "content": list(pdf_bytes),
-            }
+            },
+            *(extra_attachments or []),
         ],
     }
 

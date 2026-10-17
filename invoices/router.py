@@ -2,13 +2,14 @@ from core.errors import api_error
 import json
 import base64
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Response
+from fastapi import APIRouter, Depends, File, HTTPException, Path, Response, UploadFile
 from typing import Annotated, List, Optional
 
 from .models import Invoice, InvoiceCreate, InvoiceStatusUpdate
 from . import service
 from auth.service import require_auth, require_role
 from core.rate_limit import public_rate_limit
+from core.email_attachments import read_extra_attachments
 
 from invoices.payments.models import PaymentCreate
 from invoices.payments.service import create_payment, get_payments_for_invoice
@@ -42,8 +43,15 @@ def get_invoices(
 
 
 @router.post("/{invoice_id}/send")
-def send_invoice(invoice_id: int, current_user: dict = Depends(require_auth)):
-    """Send invoice PDF to client via email"""
+def send_invoice(
+    invoice_id: int,
+    files: List[UploadFile] = File(default=[]),
+    current_user: dict = Depends(require_auth),
+):
+    """Send invoice PDF to client via email. Optional extra files are attached and discarded."""
+
+    # Validate uploads first. Nothing is stored.
+    extra_attachments = read_extra_attachments(files)
 
     invoice = service.get_invoice_with_contact(invoice_id)
     if not invoice:
@@ -120,6 +128,7 @@ def send_invoice(invoice_id: int, current_user: dict = Depends(require_auth)):
         invoice_id=str(invoice["invoice_number"]),  # printed number, not the DB id
         public_token=str(invoice["public_token"]),
         pdf_bytes=pdf_bytes,
+        extra_attachments=extra_attachments,
     )
 
     return {"message": "Factura enviada exitosamente", "invoice_id": invoice_id}

@@ -11,7 +11,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 LOGO_PATH = os.path.join(BASE_DIR, "assets", "logo.png")
 
 
-def add_footer_with_signature(pdf):
+def add_footer_with_signature(pdf, signer_name=None):
     """Add signature section with two columns to PDF"""
 
     sig_y = pdf.get_y() + 10
@@ -35,7 +35,7 @@ def add_footer_with_signature(pdf):
     else:
         pdf.set_font("Arial", "I", 12)
     pdf.set_text_color(60, 60, 60)
-    pdf.cell(75, 6, "Karmary Mata", 0, 1, "C")
+    pdf.cell(75, 6, sanitize_text(signer_name) if signer_name else "", 0, 1, "C")
 
     pdf.set_draw_color(180, 180, 180)
     pdf.line(15, sig_y + 8, 90, sig_y + 8)
@@ -54,6 +54,28 @@ def add_footer_with_signature(pdf):
     pdf.cell(75, 4, "Representante Cliente", 0, 1, "C")
 
 
+def _category_heading(pdf, item, current, width):
+    """
+    Bold section row above the first item of each template-pack category.
+    Items without a category after categorised ones go under "Otros".
+    Documents with no categories at all render exactly as before.
+    Returns the category now in effect.
+    """
+    cat = (item.get("category") or "").strip() or None
+    if cat == current:
+        return current
+    if cat is None and current is None:
+        return current
+    label = cat if cat else "Otros"
+    pdf.set_font("Arial", "B", 7)
+    pdf.set_fill_color(235, 235, 235)
+    pdf.set_text_color(30, 30, 30)
+    pdf.cell(width, 5, sanitize_text(label)[:80], 1, 1, "L", True)
+    pdf.set_font("Arial", "", 7)
+    pdf.set_text_color(30, 30, 30)
+    return cat
+
+
 def build_quote_invoice_pdf(
     doc_type, doc_id, doc_date, client, project_name, notes, items,
     charges, items_total, total_discounts, items_after_discount,
@@ -64,7 +86,8 @@ def build_quote_invoice_pdf(
     valid_until=None,
     payments=None,
     amount_paid=0,
-    amount_due=0
+    amount_due=0,
+    signer_name=None
 ):
     payments = payments or []
     amount_paid = amount_paid or 0
@@ -220,7 +243,9 @@ def build_quote_invoice_pdf(
     pdf.set_text_color(30, 30, 30)
     row_color = True
 
+    current_category = None
     for item in items:
+        current_category = _category_heading(pdf, item, current_category, 190)
         qty = float(item.get('quantity') or 0)
         price = float(item.get('unit_price') or 0)
         subtotal = qty * price
@@ -268,6 +293,14 @@ def build_quote_invoice_pdf(
         pdf.cell(25, 4, f'${items_after_discount:,.2f}', 0, 1, 'R')
         pdf.ln(1)
 
+    dynamic_lines = list(dynamic_charge_lines(charges, items_after_discount))
+    if any(charges.get(k) for k in ('supervision', 'admin', 'insurance', 'transport', 'contingency')) or dynamic_lines:
+        pdf.set_x(summary_x)
+        pdf.set_font('Arial', 'B', 7)
+        pdf.set_text_color(30, 30, 30)
+        pdf.cell(70, 5, 'Cargos Indirectos', 0, 1, 'L')
+        pdf.set_font('Arial', '', 7)
+
     if charges.get('supervision'):
         pdf.set_x(summary_x)
         pdf.set_text_color(100, 100, 100)
@@ -304,7 +337,7 @@ def build_quote_invoice_pdf(
         pdf.cell(25, 4, f'${contingency:,.2f}', 0, 1, 'R')
 
     # User-defined charges (none for legacy quotes). Same base and rule as totals.
-    for dc in dynamic_charge_lines(charges, items_after_discount):
+    for dc in dynamic_lines:
         pdf.set_x(summary_x)
         pdf.set_text_color(100, 100, 100)
         label = sanitize_text(f"{dc['name'][:22]} ({dc['percentage']:.1f}%):")
@@ -417,7 +450,7 @@ def build_quote_invoice_pdf(
         pdf.ln(6)
 
     # ==================== SIGNATURES ====================
-    add_footer_with_signature(pdf)
+    add_footer_with_signature(pdf, signer_name)
 
     pdf_bytes = pdf.output(dest="S")   # already bytearray
     return io.BytesIO(pdf_bytes)

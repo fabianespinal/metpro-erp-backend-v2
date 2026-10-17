@@ -20,6 +20,7 @@ from psycopg2.extras import RealDictCursor
 from email_service import send_invoice_email
 from invoices.service import calculate_invoice_totals
 from pdf.builder_invoice import create_invoice_pdf
+from pdf.utils.signer import resolve_signer_name
 
 router = APIRouter(prefix="/invoices", tags=["invoices"])
 
@@ -78,6 +79,7 @@ def send_invoice(invoice_id: int, current_user: dict = Depends(require_auth)):
 
     pdf_stream = create_invoice_pdf(
         doc_type="FACTURA",
+        signer_name=resolve_signer_name(current_user, invoice.get("created_by_name")),
         doc_id=invoice["invoice_number"],
         doc_date=str(invoice["invoice_date"])[:10] if invoice.get("invoice_date") else "",
         client=client,
@@ -235,6 +237,7 @@ def _render_public_invoice_pdf(invoice_id: int) -> Response:
 
     pdf_stream = create_invoice_pdf(
         doc_type="FACTURA",
+        signer_name=resolve_signer_name(None, invoice.get("created_by_name")),
         doc_id=invoice["invoice_number"],
         doc_date=str(invoice["invoice_date"])[:10] if invoice.get("invoice_date") else "",
         client={

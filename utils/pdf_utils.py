@@ -1,6 +1,6 @@
 import os
 
-def add_footer_with_signature(pdf):
+def add_footer_with_signature(pdf, signer_name=None):
     """Add signature section with two columns to PDF"""
 
     # Ensure we start BELOW the last printed content
@@ -33,7 +33,7 @@ def add_footer_with_signature(pdf):
         pdf.set_font("Arial", "", 12)
 
     pdf.set_text_color(60, 60, 60)
-    pdf.cell(75, 6, "Karmary Mata", 0, 1, "C")
+    pdf.cell(75, 6, str(signer_name) if signer_name else "", 0, 1, "C")
 
     # Signature line
     pdf.set_xy(15, sig_y + 12)

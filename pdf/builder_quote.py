@@ -28,7 +28,8 @@ def create_quote_pdf(
     grand_total,
 
     payment_terms=None,
-    valid_until=None
+    valid_until=None,
+    signer_name=None
 ):
     """Generate PDF bytes for a quote."""
 
@@ -59,6 +60,7 @@ def create_quote_pdf(
     subtotal_general=subtotal_general,
     itbis=itbis,
     grand_total=grand_total,
+    signer_name=signer_name,
 )
 
     if pdf_stream is None:

@@ -235,7 +235,7 @@ def test_public_pdf_uses_stored_totals(monkeypatch):
 
     router_mod.get_quote_public_pdf(TOKEN)
 
-    assert captured["doc_id"] == "10001"  # printed number is the sequence, not the UUID
+    assert captured["doc_id"] == "Q-10001"  # printed number is Q-<sequence>, not the UUID
     assert captured["grand_total"] == 259.6
     assert captured["itbis"] == 39.6
     assert captured["subtotal_general"] == 220.0

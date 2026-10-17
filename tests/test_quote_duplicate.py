@@ -159,8 +159,8 @@ def test_duplicate_items_keep_product_id_type_description(monkeypatch):
     assert len(rows) == 2
     # (quote_id, product_id, product_name, quantity, unit_price,
     #  discount_type, discount_value, item_type, description)
-    assert rows[0] == (NEW_ID, 42, "IPE 200", 4.0, 100.0, "percentage", 5.0, "product", None)
-    assert rows[1] == (NEW_ID, None, "Site survey", 1.0, 250.0, "none", 0.0, "service", "On-site walk")
+    assert rows[0] == (NEW_ID, 42, "IPE 200", 4.0, 100.0, "percentage", 5.0, "product", None, None)
+    assert rows[1] == (NEW_ID, None, "Site survey", 1.0, 250.0, "none", 0.0, "service", "On-site walk", None)
 
 
 def test_duplicate_items_default_item_type_when_missing(monkeypatch):

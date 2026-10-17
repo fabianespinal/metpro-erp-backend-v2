@@ -10,13 +10,14 @@ from datetime import datetime, date
 from database import get_db_connection
 from core.errors import internal_error
 from quotes.dynamic_charges import dynamic_charges_total
+from core.numbering import invoice_label
 from psycopg2.extras import RealDictCursor, execute_values
 
 INS_SQL = "INSERT INTO quote_items (quote_id, product_name, quantity, unit_price, discount_type, discount_value) VALUES %s"
 # Create and update paths. Requires quoting_v1 migration (item_type, description).
 INS_ITEMS_SQL = (
     "INSERT INTO quote_items (quote_id, product_name, quantity, unit_price, discount_type, "
-    "discount_value, item_type, description, product_id) VALUES %s"
+    "discount_value, item_type, description, product_id, category) VALUES %s"
 )
 QUOTE_STATUS_FINAL = "Final"
 FINAL_ALLOWED_NEXT = ("Approved", "Invoiced", "Rejected")
@@ -43,7 +44,7 @@ DELETABLE_STATUSES = ("Draft", "Rejected")
 # Duplicate path only. Requires quoting_v1 migration (item_type, description).
 INS_DUP_SQL = (
     "INSERT INTO quote_items (quote_id, product_id, product_name, quantity, unit_price, "
-    "discount_type, discount_value, item_type, description) VALUES %s"
+    "discount_type, discount_value, item_type, description, category) VALUES %s"
 )
 
 
@@ -267,6 +268,7 @@ def create_quote(
                 item.get("item_type") or "product",
                 item.get("description"),
                 item.get("product_id"),
+                item.get("category"),
             )
             for item in items
         ]
@@ -523,6 +525,7 @@ def update_quote(quote_id: str, quote_update) -> dict:
                     item.get("item_type") or "product",
                     item.get("description"),
                     item.get("product_id"),
+                    item.get("category"),
                 )
                 for item in normalized
             ]
@@ -720,6 +723,7 @@ def duplicate_quote(quote_id: str, created_by_user_id: Optional[str] = None) -> 
                 item.get("discount_value") or 0.0,
                 item.get("item_type") or "product",
                 item.get("description"),
+                item.get("category"),
             )
             for item in original_items
         ]
@@ -949,7 +953,7 @@ def convert_quote_to_invoice(quote_id: str, created_by_user_id: Optional[str] = 
 
         # 1. Load quote
         cursor.execute("""
-            SELECT quote_id, client_id, contact_id, project_name, notes, status,
+            SELECT quote_id, quote_number, client_id, contact_id, project_name, notes, status,
                    included_charges, total_amount, grand_total, payment_terms, valid_until
             FROM quotes
             WHERE quote_id = %s
@@ -990,8 +994,13 @@ def convert_quote_to_invoice(quote_id: str, created_by_user_id: Optional[str] = 
         header_itbis = round(breakdown["itbis"], 2)
 
         # 4. Create invoice
-        timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
-        invoice_number = f"INV-{timestamp}"
+        # Q-10002 -> F-10002. One invoice per quote (checked above), so the label is unique.
+        # Quotes without a number (not expected) keep the timestamp form.
+        quote_number = quote.get("quote_number")
+        if quote_number:
+            invoice_number = invoice_label(quote_number)
+        else:
+            invoice_number = f"INV-{datetime.now().strftime('%Y%m%d%H%M%S')}"
         invoice_date = datetime.now().strftime("%Y-%m-%d")
 
         cursor.execute("""
@@ -999,8 +1008,8 @@ def convert_quote_to_invoice(quote_id: str, created_by_user_id: Optional[str] = 
                 (quote_id, invoice_number, invoice_date, client_id, contact_id,
                  total_amount, status, notes, payment_terms, valid_until, created_by_user_id,
                  subtotal, discount_total, charges_total, itbis_total, grand_total,
-                 amount_paid, amount_due)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 amount_paid, amount_due, quote_number)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
             quote_id,
@@ -1021,19 +1030,20 @@ def convert_quote_to_invoice(quote_id: str, created_by_user_id: Optional[str] = 
             invoice_total,
             0,
             invoice_total,
+            quote_number,
         ))
 
         invoice_id = cursor.fetchone()["id"]   # FIXED
 
         # 5. Insert invoice items
         invoice_item_rows = [
-            (invoice_id, item["product_id"], item["product_name"], *_invoice_line_amounts(item))
+            (invoice_id, item["product_id"], item["product_name"], *_invoice_line_amounts(item), item.get("category"))
             for item in items
         ]
         if invoice_item_rows:
             execute_values(
                 cursor,
-                "INSERT INTO invoice_items (invoice_id, product_id, description, quantity, unit_price, discount, total) VALUES %s",
+                "INSERT INTO invoice_items (invoice_id, product_id, description, quantity, unit_price, discount, total, category) VALUES %s",
                 invoice_item_rows,
             )
 

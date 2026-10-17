@@ -303,7 +303,7 @@ def test_convert_quote_to_invoice_writes_created_by(monkeypatch):
     qsvc.convert_quote_to_invoice("q1", CREATOR)
     sql, params = cur.sql_with("INSERT INTO invoices")[0]
     assert params[10] == CREATOR
-    assert len(params) == 18
+    assert len(params) == 19
 
 
 def test_update_user_sql_has_no_updated_at(monkeypatch):

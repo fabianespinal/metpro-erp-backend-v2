@@ -6,12 +6,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Import external footer helper
-try:
-    from utils.pdf_utils import add_footer_with_signature
-except ImportError:
-    def add_footer_with_signature(pdf):
-        pass  # Placeholder if external util is missing
+from pdf.utils.layout_utils import add_footer_with_signature, _category_heading
 
 
 # ==================== ABSOLUTE LOGO PATH (FIXED) ====================
@@ -21,7 +16,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 LOGO_PATH = os.path.join(BASE_DIR, "assets", "logo.png")
 
 
-def create_conduce_pdf(doc_id, doc_date, client, project_name, notes, items):
+def create_conduce_pdf(doc_id, doc_date, client, project_name, notes, items, signer_name=None):
     """Generate PDF bytes for a conduce (delivery note)."""
     pdf = FPDF()
     pdf.add_page()
@@ -133,7 +128,9 @@ def create_conduce_pdf(doc_id, doc_date, client, project_name, notes, items):
     pdf.set_text_color(30, 30, 30)
     row_color = True
 
+    current_category = None
     for item in items:
+        current_category = _category_heading(pdf, item, current_category, 190)
         qty = float(item['quantity'] or 0)
         product_name = sanitize_text(item.get('product_name', 'Item'))[:80]
 
@@ -150,7 +147,7 @@ def create_conduce_pdf(doc_id, doc_date, client, project_name, notes, items):
     pdf.ln(12)
 
     # ==================== SIGNATURES ====================
-    add_footer_with_signature(pdf)
+    add_footer_with_signature(pdf, signer_name)
 
     # ==================== FOOTER ====================
     pdf.set_y(-15)

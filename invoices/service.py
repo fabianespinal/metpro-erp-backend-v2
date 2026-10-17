@@ -79,7 +79,7 @@ def _invoice_lines(cursor, invoice: dict):
     these rows are never updated. A line_no column is prepared in migrations.
     """
     cursor.execute(
-        "SELECT description, quantity, unit_price, discount, total, product_id "
+        "SELECT description, quantity, unit_price, discount, total, product_id, category "
         "FROM invoice_items WHERE invoice_id = %s ORDER BY ctid",
         (invoice["id"],),
     )
@@ -95,6 +95,7 @@ def _invoice_lines(cursor, invoice: dict):
                 "discount_type": "fixed" if float(r["discount"] or 0) > 0 else "none",
                 "discount_value": float(r["discount"] or 0),
                 "product_id": r.get("product_id"),
+                "category": r.get("category"),
             }
             for r in rows
         ], "invoice_items"

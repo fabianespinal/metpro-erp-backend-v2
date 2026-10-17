@@ -12,7 +12,9 @@ from invoices.service import invoice_lines_and_totals
 from quotes.dynamic_charges import dynamic_charges_total
 from pdf.builder_invoice import create_invoice_pdf
 from pdf.builder_conduce import create_conduce_pdf
-from pdf.utils.layout_utils import build_quote_invoice_pdf   # ✅ ADD THIS
+from pdf.utils.layout_utils import build_quote_invoice_pdf
+from pdf.utils.signer import resolve_signer_name
+from core.numbering import quote_label, conduce_label, conduce_label_from_invoice_number
 from core.errors import internal_error
 import logging
 
@@ -22,7 +24,7 @@ logger = logging.getLogger("metpro.pdf")
 # ============================================================
 # QUOTE PDF GENERATION
 # ============================================================
-def generate_quote_pdf(quote_id: str) -> StreamingResponse:
+def generate_quote_pdf(quote_id: str, current_user: dict = None) -> StreamingResponse:
     conn = None
     try:
         conn = get_db_connection()
@@ -125,7 +127,7 @@ def generate_quote_pdf(quote_id: str) -> StreamingResponse:
 
         pdf_stream = build_quote_invoice_pdf(
             doc_type='COTIZACION',
-            doc_id=str(quote['quote_number']),
+            doc_id=quote_label(quote['quote_number']),
             doc_date=doc_date,
             client=client,
             project_name=quote.get('project_name'),
@@ -149,13 +151,14 @@ def generate_quote_pdf(quote_id: str) -> StreamingResponse:
             contingency_pct=contingency_pct,
             subtotal_general=subtotal_general,
             itbis=itbis,
-            grand_total=grand_total
+            grand_total=grand_total,
+            signer_name=resolve_signer_name(current_user, quote.get('created_by_name'))
         )
 
         return StreamingResponse(
             pdf_stream,
             media_type='application/pdf',
-            headers={'Content-Disposition': f'attachment; filename={quote["quote_number"]}_cotizacion.pdf'}
+            headers={'Content-Disposition': f'attachment; filename={quote_label(quote["quote_number"])}_cotizacion.pdf'}
         )
 
     except HTTPException:
@@ -171,7 +174,7 @@ def generate_quote_pdf(quote_id: str) -> StreamingResponse:
 # ============================================================
 # INVOICE PDF GENERATION
 # ============================================================
-def generate_invoice_pdf(invoice_id: int) -> StreamingResponse:
+def generate_invoice_pdf(invoice_id: int, current_user: dict = None) -> StreamingResponse:
     conn = None
     try:
         conn = get_db_connection()
@@ -315,7 +318,8 @@ def generate_invoice_pdf(invoice_id: int) -> StreamingResponse:
             grand_total=grand_total,
             payments=payments,
             amount_paid=amount_paid,
-            amount_due=amount_due
+            amount_due=amount_due,
+            signer_name=resolve_signer_name(current_user, invoice.get('created_by_name'))
         )
 
         return StreamingResponse(
@@ -334,10 +338,27 @@ def generate_invoice_pdf(invoice_id: int) -> StreamingResponse:
             conn.close()
 
 
+def _record_conduce(conn, cursor, conduce_number, invoice_id, quote_number):
+    """
+    Store the conduce number with its invoice and originating quote number.
+    Idempotent (conduce_number is unique). A failure here never blocks the PDF.
+    """
+    try:
+        cursor.execute(
+            "INSERT INTO conduces (conduce_number, invoice_id, quote_number) "
+            "VALUES (%s, %s, %s) ON CONFLICT (conduce_number) DO NOTHING",
+            (conduce_number, invoice_id, quote_number),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        logger.exception("Could not record conduce %s", conduce_number)
+
+
 # ============================================================
 # CONDUCE PDF GENERATION (NO PRICES)
 # ============================================================
-def generate_conduce_pdf(invoice_id: int) -> StreamingResponse:
+def generate_conduce_pdf(invoice_id: int, current_user: dict = None) -> StreamingResponse:
     conn = None
     try:
         conn = get_db_connection()
@@ -385,25 +406,35 @@ def generate_conduce_pdf(invoice_id: int) -> StreamingResponse:
 
         items, _ = invoice_lines_and_totals(dict(invoice), {})
 
-        cursor.execute('SELECT project_name FROM quotes WHERE quote_id = %s', (invoice['quote_id'],))
+        cursor.execute('SELECT project_name, quote_number FROM quotes WHERE quote_id = %s', (invoice['quote_id'],))
         quote_data = cursor.fetchone()
         project_name = quote_data.get('project_name') if quote_data else None
+        quote_number = invoice.get('quote_number') or (quote_data.get('quote_number') if quote_data else None)
+
+        # Same numeric suffix as the quote and invoice: Q-10002 -> F-10002 -> C-10002.
+        # Legacy invoices with no quote number keep the old derived label.
+        if quote_number:
+            conduce_number = conduce_label(quote_number)
+        else:
+            conduce_number = conduce_label_from_invoice_number(invoice['invoice_number'])
+        _record_conduce(conn, cursor, conduce_number, invoice_id, quote_number)
 
         doc_date = format_date(invoice['invoice_date'])
 
         pdf_stream = create_conduce_pdf(
-            doc_id=invoice['invoice_number'].replace('INV-', 'CD-'),
+            doc_id=conduce_number,
             doc_date=doc_date,
             client=client,
             project_name=project_name,
             notes=invoice.get('notes'),
-            items=items
+            items=items,
+            signer_name=resolve_signer_name(current_user, invoice.get('created_by_name'))
         )
 
         return StreamingResponse(
             pdf_stream,
             media_type='application/pdf',
-            headers={'Content-Disposition': f'attachment; filename=CD-{invoice["invoice_number"]}_conduce.pdf'}
+            headers={'Content-Disposition': f'attachment; filename={conduce_number}_conduce.pdf'}
         )
 
     except HTTPException:

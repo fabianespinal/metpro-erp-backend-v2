@@ -58,6 +58,8 @@ class QuoteItemBase(BaseModel):
     # Optional link to products.id. Not required (existing clients send none).
     # Persisted on create and update from quoting v1 (Phase 6 prerequisite).
     product_id: Optional[int] = None
+    # Template-pack category name. Printed as a section heading on the PDFs.
+    category: Optional[str] = Field(default=None, max_length=120)
 
 
 # -----------------------------

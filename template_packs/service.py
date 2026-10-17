@@ -43,11 +43,31 @@ def _insert_categories(cursor, pack_id: int, categories: List) -> None:
             cursor.execute(
                 """
                 INSERT INTO template_pack_items
-                    (category_id, product_id, default_qty, optional, sort_order)
-                VALUES (%s, %s, %s, %s, %s)
+                    (category_id, product_id, default_qty, optional, sort_order, pack_price_override)
+                VALUES (%s, %s, %s, %s, %s, %s)
                 """,
-                (category_id, item.product_id, item.default_qty, item.optional, item.sort_order),
+                (category_id, item.product_id, item.default_qty, item.optional, item.sort_order,
+                 item.pack_price_override),
             )
+
+
+def _insert_charges(cursor, pack_id: int, charges: List) -> None:
+    for i, ch in enumerate(charges):
+        cursor.execute(
+            """
+            INSERT INTO template_pack_charges
+                (pack_id, name, type, value, enabled_by_default, sort_order)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """,
+            (pack_id, ch.name, ch.type, ch.value, ch.enabled_by_default, i),
+        )
+
+
+def _effective_price(catalog, override):
+    """Override wins when set (0 is a valid override). Else the catalog price."""
+    if override is not None:
+        return float(override)
+    return float(catalog) if catalog is not None else None
 
 
 def _load_pack(cursor, pack_id: int) -> dict:
@@ -76,7 +96,8 @@ def _load_pack(cursor, pack_id: int) -> dict:
         cursor.execute(
             """
             SELECT i.id, i.category_id, i.product_id, p.name AS product_name,
-                   p.unit_price, i.default_qty, i.optional, i.sort_order
+                   p.unit_price AS catalog_price, i.pack_price_override,
+                   i.default_qty, i.optional, i.sort_order
             FROM template_pack_items i
             JOIN template_pack_categories c ON c.id = i.category_id
             LEFT JOIN products p ON p.id = i.product_id
@@ -87,11 +108,23 @@ def _load_pack(cursor, pack_id: int) -> dict:
         )
         for row in cursor.fetchall():
             row = dict(row)
+            row["unit_price"] = _effective_price(row["catalog_price"], row["pack_price_override"])
             category_id = row.pop("category_id")
             if category_id in by_id:
                 by_id[category_id]["items"].append(row)
 
     pack["categories"] = categories
+
+    cursor.execute(
+        """
+        SELECT id, name, type, value, enabled_by_default, sort_order
+        FROM template_pack_charges
+        WHERE pack_id = %s
+        ORDER BY sort_order, id
+        """,
+        (pack_id,),
+    )
+    pack["charges"] = [dict(r) for r in cursor.fetchall()]
     return pack
 
 
@@ -162,6 +195,7 @@ def create_pack(data: PackIn) -> dict:
         )
         pack_id = cursor.fetchone()["id"]
         _insert_categories(cursor, pack_id, data.categories)
+        _insert_charges(cursor, pack_id, data.charges)
         conn.commit()
         return _load_pack(cursor, pack_id)
     except Exception as e:
@@ -199,6 +233,8 @@ def update_pack(pack_id: int, data: PackIn) -> dict:
         # Categories cascade-delete their items.
         cursor.execute("DELETE FROM template_pack_categories WHERE pack_id = %s", (pack_id,))
         _insert_categories(cursor, pack_id, data.categories)
+        cursor.execute("DELETE FROM template_pack_charges WHERE pack_id = %s", (pack_id,))
+        _insert_charges(cursor, pack_id, data.charges)
         conn.commit()
         return _load_pack(cursor, pack_id)
     except Exception as e:

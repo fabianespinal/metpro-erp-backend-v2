@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional
 from datetime import date
 
@@ -13,8 +13,14 @@ class ExpenseBase(BaseModel):
     description: Optional[str] = None
     amount: float
     payment_method: Optional[str] = None
-    project_id: Optional[str] = None
+    # Project Cost Ledger: projects.id (INTEGER). Empty string or null = no project.
+    project_id: Optional[int] = None
     quote_id: Optional[str] = None
+
+    @field_validator("project_id", mode="before")
+    @classmethod
+    def _blank_project_is_none(cls, v):
+        return None if v is None or (isinstance(v, str) and not v.strip()) else v
 
 
 class ExpenseCreate(ExpenseBase):
@@ -29,8 +35,13 @@ class ExpenseUpdate(BaseModel):
     description: Optional[str] = None
     amount: Optional[float] = None
     payment_method: Optional[str] = None
-    project_id: Optional[str] = None
+    project_id: Optional[int] = None  # explicit null unlinks the expense from its project
     quote_id: Optional[str] = None
+
+    @field_validator("project_id", mode="before")
+    @classmethod
+    def _blank_project_is_none(cls, v):
+        return None if v is None or (isinstance(v, str) and not v.strip()) else v
 
 
 class Expense(ExpenseBase):

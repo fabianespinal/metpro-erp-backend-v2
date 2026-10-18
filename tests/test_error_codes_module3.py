@@ -21,7 +21,7 @@ ROOT = os.path.join(os.path.dirname(__file__), "..")
 FILES = [
     "clients/router.py", "clients/service.py", "contacts/router.py",
     "expenses/router.py", "expenses/services.py",
-    "products/router.py", "products/service.py", "projects/service.py",
+    "products/router.py", "products/service.py", "projects/service.py", "projects/ledger.py",
 ]
 
 # (status, message literal without quotes or f-prefix, code)
@@ -46,6 +46,7 @@ EXPECTED = {
     (400, "El nombre no puede estar vacío", "NAME_REQUIRED"),
     (400, "El cliente tiene cotizaciones, facturas o proyectos y no se puede eliminar", "CLIENT_IN_USE"),
     (400, "El producto se usa en un paquete de plantilla y no se puede eliminar", "PRODUCT_IN_USE"),
+    (400, "El proyecto tiene gastos asociados y no se puede eliminar", "PROJECT_HAS_EXPENSES"),
 }
 
 CALL = re.compile(r"api_error\((\d+), (f?)([\"'])(.*?)\3, \"([A-Z_]+)\"\)", re.S)

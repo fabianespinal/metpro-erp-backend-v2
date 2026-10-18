@@ -231,3 +231,186 @@ def get_client_activity(start_date: Optional[str], end_date: Optional[str]) -> d
     finally:
         if conn:
             conn.close()
+
+
+# ============================================================
+# PROJECT PROFITABILITY (Project Cost Ledger)
+# ============================================================
+
+def get_project_profitability(start_date=None, end_date=None, client_id: Optional[int] = None,
+                              project_id: Optional[int] = None) -> dict:
+    """
+    Per project:
+    - billed:   SUM(total_amount) of non-cancelled invoices of the project's quote (by invoice_date).
+                total_amount is the billed amount and includes ITBIS; billed_itbis is reported apart.
+    - paid:     SUM(payments) on those invoices (by payment_date).
+    - expenses: SUM(expenses.amount) linked to the project (by expense date).
+    - net_margin = billed - expenses; margin_pct = net_margin / billed * 100 (None when billed is 0).
+    - cash_margin = paid - expenses.
+    Date bounds are optional and inclusive.
+    """
+    from projects.ledger import categories_from_rows, expense_date_filter
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+
+        params = []
+        inv_dates = expense_date_filter("i.invoice_date", start_date, end_date, params)
+        pay_params = []
+        pay_dates = expense_date_filter("ip.payment_date", start_date, end_date, pay_params)
+        exp_params = []
+        exp_dates = expense_date_filter("e.date", start_date, end_date, exp_params)
+
+        sql = f"""
+            SELECT p.id, p.name, p.status, p.quote_number, c.company_name AS client_name,
+                   COALESCE(b.billed, 0) AS billed, COALESCE(b.itbis, 0) AS billed_itbis,
+                   COALESCE(pay.paid, 0) AS paid,
+                   COALESCE(x.expenses, 0) AS expenses, COALESCE(x.n, 0) AS expense_count
+            FROM projects p
+            JOIN clients c ON c.id = p.client_id
+            LEFT JOIN LATERAL (
+                SELECT SUM(i.total_amount) AS billed, SUM(i.itbis_total) AS itbis
+                FROM invoices i
+                WHERE p.quote_id IS NOT NULL AND i.quote_id = p.quote_id AND i.status <> 'Cancelled'{inv_dates}
+            ) b ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT SUM(ip.amount) AS paid
+                FROM invoice_payments ip JOIN invoices i ON i.id = ip.invoice_id
+                WHERE p.quote_id IS NOT NULL AND i.quote_id = p.quote_id{pay_dates}
+            ) pay ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT SUM(e.amount) AS expenses, COUNT(*) AS n
+                FROM expenses e WHERE e.project_id = p.id{exp_dates}
+            ) x ON TRUE
+            WHERE 1=1
+        """
+        all_params = params + pay_params + exp_params
+        if client_id:
+            sql += " AND p.client_id = %s"
+            all_params.append(client_id)
+        if project_id:
+            sql += " AND p.id = %s"
+            all_params.append(project_id)
+        sql += " ORDER BY p.id"
+        cur.execute(sql, all_params)
+        rows = cur.fetchall()
+
+        ids = [r["id"] for r in rows]
+        cats_by_project = {}
+        if ids:
+            cp = [ids]
+            cur.execute(
+                "SELECT e.project_id, e.category, COALESCE(SUM(e.amount), 0) AS total, COUNT(*) AS n "
+                "FROM expenses e WHERE e.project_id = ANY(%s)"
+                + expense_date_filter("e.date", start_date, end_date, cp)
+                + " GROUP BY e.project_id, e.category",
+                cp,
+            )
+            for r in cur.fetchall():
+                cats_by_project.setdefault(r["project_id"], []).append(r)
+
+        projects = []
+        tot = {"billed": 0.0, "billed_itbis": 0.0, "paid": 0.0, "expenses": 0.0}
+        for r in rows:
+            billed = round(float(r["billed"]), 2)
+            paid = round(float(r["paid"]), 2)
+            expenses = round(float(r["expenses"]), 2)
+            net = round(billed - expenses, 2)
+            projects.append({
+                "project_id": r["id"],
+                "project_number": f"P-{int(r['id']):04d}",
+                "name": r["name"],
+                "status": r["status"],
+                "client_name": r["client_name"],
+                "quote_label": f"Q-{r['quote_number']}" if r["quote_number"] else None,
+                "billed": billed,
+                "billed_itbis": round(float(r["billed_itbis"]), 2),
+                "paid": paid,
+                "outstanding": round(max(billed - paid, 0), 2),
+                "expenses": expenses,
+                "expense_count": int(r["expense_count"]),
+                "net_margin": net,
+                "margin_pct": round(net / billed * 100, 2) if billed else None,
+                "cash_margin": round(paid - expenses, 2),
+                "expense_categories": categories_from_rows(cats_by_project.get(r["id"], []), expenses),
+            })
+            for k in tot:
+                tot[k] += round(float(r[k] if k != "billed_itbis" else r["billed_itbis"]), 2)
+
+        billed_t = round(tot["billed"], 2)
+        net_t = round(tot["billed"] - tot["expenses"], 2)
+        return {
+            "summary": {
+                "project_count": len(projects),
+                "total_billed": billed_t,
+                "total_billed_itbis": round(tot["billed_itbis"], 2),
+                "total_paid": round(tot["paid"], 2),
+                "total_expenses": round(tot["expenses"], 2),
+                "net_margin": net_t,
+                "margin_pct": round(net_t / billed_t * 100, 2) if billed_t else None,
+                "cash_margin": round(tot["paid"] - tot["expenses"], 2),
+                "filters": {"start_date": start_date, "end_date": end_date,
+                            "client_id": client_id, "project_id": project_id},
+            },
+            "projects": projects,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise internal_error("No se pudo generar el reporte de rentabilidad", e)
+    finally:
+        if conn:
+            conn.close()
+
+
+# ============================================================
+# EXPENSES BY CATEGORY (Project Cost Ledger)
+# ============================================================
+
+def get_expenses_by_category(start_date=None, end_date=None, project_id: Optional[int] = None) -> dict:
+    """All expenses (or one project's) grouped by category, with assigned vs unassigned totals."""
+    from projects.ledger import categories_from_rows, expense_date_filter
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        params = []
+        where = " WHERE 1=1" + expense_date_filter("e.date", start_date, end_date, params)
+        if project_id:
+            where += " AND e.project_id = %s"
+            params.append(project_id)
+
+        cur.execute(
+            "SELECT COALESCE(SUM(e.amount), 0) AS total, COUNT(*) AS n, "
+            "COALESCE(SUM(e.amount) FILTER (WHERE e.project_id IS NOT NULL), 0) AS assigned, "
+            "COALESCE(SUM(e.amount) FILTER (WHERE e.project_id IS NULL), 0) AS unassigned "
+            "FROM expenses e" + where,
+            params,
+        )
+        s = cur.fetchone()
+        total = round(float(s["total"]), 2)
+        cur.execute(
+            "SELECT e.category, COALESCE(SUM(e.amount), 0) AS total, COUNT(*) AS n FROM expenses e"
+            + where + " GROUP BY e.category",
+            params,
+        )
+        return {
+            "summary": {
+                "total_expenses": total,
+                "count": int(s["n"]),
+                "assigned_to_projects": round(float(s["assigned"]), 2),
+                "unassigned": round(float(s["unassigned"]), 2),
+                "filters": {"start_date": start_date, "end_date": end_date, "project_id": project_id},
+            },
+            "categories": categories_from_rows(cur.fetchall(), total),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise internal_error("No se pudo generar el reporte de gastos", e)
+    finally:
+        if conn:
+            conn.close()

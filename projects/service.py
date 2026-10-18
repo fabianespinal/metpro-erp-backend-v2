@@ -315,6 +315,11 @@ def delete_project(project_id: int) -> dict:
         conn = get_db_connection()
         cursor = conn.cursor()
 
+        # Project Cost Ledger: a project with expenses is never deleted (FK is NO ACTION).
+        cursor.execute("SELECT 1 FROM expenses WHERE project_id = %s LIMIT 1", (project_id,))
+        if cursor.fetchone():
+            raise api_error(400, "El proyecto tiene gastos asociados y no se puede eliminar", "PROJECT_HAS_EXPENSES")
+
         cursor.execute("DELETE FROM projects WHERE id = %s", (project_id,))
         if cursor.rowcount == 0:
             raise api_error(404, "Proyecto no encontrado", "PROJECT_NOT_FOUND")

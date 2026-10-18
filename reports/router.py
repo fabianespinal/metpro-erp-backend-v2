@@ -1,5 +1,7 @@
+from datetime import date
 from fastapi import APIRouter, Depends
 from typing import Optional
+from core.errors import api_error
 from . import service
 from auth.service import require_auth
 
@@ -33,3 +35,33 @@ def get_client_activity(
 ):
     """Client activity report"""
     return service.get_client_activity(start_date, end_date)
+
+
+@router.get('/project-profitability')
+def get_project_profitability(
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    client_id: Optional[int] = None,
+    project_id: Optional[int] = None,
+    current_user: dict = Depends(require_auth)
+):
+    """Rentabilidad por proyecto: facturado, cobrado, gastos, margen neto, categorías."""
+    _check_range(start_date, end_date)
+    return service.get_project_profitability(start_date, end_date, client_id, project_id)
+
+
+@router.get('/expenses-by-category')
+def get_expenses_by_category(
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    project_id: Optional[int] = None,
+    current_user: dict = Depends(require_auth)
+):
+    """Gastos por categoría (todos o de un proyecto)."""
+    _check_range(start_date, end_date)
+    return service.get_expenses_by_category(start_date, end_date, project_id)
+
+
+def _check_range(start_date, end_date):
+    if start_date and end_date and start_date > end_date:
+        raise api_error(400, "La fecha de fin debe ser posterior a la fecha de inicio", "DATE_RANGE_INVALID")

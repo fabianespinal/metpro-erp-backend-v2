@@ -23,12 +23,32 @@ def _resolve_client_name(conn, client_id):
     return row[0]
 
 
+def _assert_project_exists(conn, project_id):
+    """404 when a project_id is given and does not exist. None means no project."""
+    if project_id is None:
+        return
+    with conn.cursor() as cur:
+        cur.execute("SELECT 1 FROM projects WHERE id = %s", (project_id,))
+        if not cur.fetchone():
+            raise api_error(404, "Proyecto no encontrado", "PROJECT_NOT_FOUND")
+
+
+# Expense rows with the linked project's display data (name, P-0001).
+EXPENSE_SELECT = """
+    SELECT e.*, p.name AS project_name,
+           CASE WHEN p.id IS NULL THEN NULL ELSE 'P-' || lpad(p.id::text, 4, '0') END AS project_number
+    FROM expenses e
+    LEFT JOIN projects p ON p.id = e.project_id
+"""
+
+
 def create_expense(conn, expense: ExpenseCreate):
     # Two frontends are live:
     #   - main frontend sends client_name (free text)
     #   - dev frontend sends client_id (select from clients)
     # client_id, when present, is resolved and wins. Otherwise client_name is used.
     client_name = _resolve_client_name(conn, expense.client_id) or expense.client_name
+    _assert_project_exists(conn, expense.project_id)
 
     with conn.cursor() as cur:
         cur.execute("""
@@ -43,7 +63,7 @@ def create_expense(conn, expense: ExpenseCreate):
             expense.description,
             expense.amount,
             expense.payment_method,
-            str(expense.project_id) if expense.project_id else None,
+            expense.project_id,
             str(expense.quote_id) if expense.quote_id else None,
         ))
 
@@ -58,21 +78,24 @@ def create_expense(conn, expense: ExpenseCreate):
 
 def get_expenses(conn):
     with conn.cursor() as cur:
-        cur.execute("SELECT * FROM expenses ORDER BY created_at DESC;")
+        cur.execute(EXPENSE_SELECT + " ORDER BY e.created_at DESC;")
         return cur.fetchall()
 
 
 def get_expense(conn, expense_id: int):
     with conn.cursor() as cur:
-        cur.execute("SELECT * FROM expenses WHERE expense_id = %s;", (expense_id,))
+        cur.execute(EXPENSE_SELECT + " WHERE e.expense_id = %s;", (expense_id,))
         return cur.fetchone()
 
 
 def update_expense(conn, expense_id: int, data: ExpenseUpdate):
     fields = []
     values = []
+    changes = data.dict(exclude_unset=True)
+    if changes.get("project_id") is not None:
+        _assert_project_exists(conn, changes["project_id"])
 
-    for key, value in data.dict(exclude_unset=True).items():
+    for key, value in changes.items():
         fields.append(f"{key} = %s")
         values.append(value)
 
@@ -87,6 +110,8 @@ def update_expense(conn, expense_id: int, data: ExpenseUpdate):
             SET {', '.join(fields)}
             WHERE expense_id = %s;
         """, values)
+        if cur.rowcount == 0:
+            raise api_error(404, "Gasto no encontrado", "EXPENSE_NOT_FOUND")
         return True
 
 

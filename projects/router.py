@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
+from datetime import date
 from typing import List, Optional
 from .models import Project, ProjectBase, ProjectUpdate
-from . import service
+from . import service, ledger
 from auth.service import require_auth, require_role
 from core.errors import internal_error
 
@@ -32,6 +33,21 @@ def get_projects(
     try:
         projects = service.get_all_projects(client_id, status)
         return [Project(**p) for p in projects]
+    except Exception as e:
+        raise internal_error("No se pudo obtener la información", e)
+
+@router.get('/{project_id}/expenses')
+def get_project_expenses(
+    project_id: int,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    current_user: dict = Depends(require_auth),
+):
+    """Gastos del proyecto: lista, total y desglose por categoría. Fechas opcionales (inclusive)."""
+    try:
+        return ledger.get_project_expenses(project_id, start_date, end_date)
+    except HTTPException:
+        raise
     except Exception as e:
         raise internal_error("No se pudo obtener la información", e)
 

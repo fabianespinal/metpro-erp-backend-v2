@@ -1,4 +1,5 @@
 -- 2026-10-18: product catalog cleanup (approved by Fabian). Data only, no schema change.
+-- APPLIED to production 2026-10-18 (run by Fabian in the Supabase SQL editor; verified: 137 products, 0 garbled, 6/6 pack items intact).
 -- Garbled names came from an old non-UTF-8 import ("?" was the inch mark; U+FFFD replaced accents).
 -- Deletes only rows with no template pack, quote item or invoice item reference.
 BEGIN;

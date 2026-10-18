@@ -206,14 +206,20 @@ def test_profitability_report(db):
     p = [x for x in data["projects"] if x["project_id"] == pid][0]
     assert p["billed"] == 1180.0          # cancelled invoice excluded
     assert p["billed_itbis"] == 180.0
+    assert p["billed_net"] == 1000.0      # Facturado (sin ITBIS)
     assert p["paid"] == 500.0 and p["outstanding"] == 680.0
-    assert p["expenses"] == 380.0 and p["net_margin"] == 800.0
-    assert p["margin_pct"] == round(800 / 1180 * 100, 2)
-    assert p["cash_margin"] == 120.0
+    assert p["paid_net"] == round(500 * 1000 / 1180, 2)   # Cobrado (sin ITBIS), proportional
+    # Margins exclude ITBIS (approved 2026-10-18)
+    assert p["expenses"] == 380.0 and p["net_margin"] == 620.0
+    assert p["margin_pct"] == 62.0
+    assert p["cash_margin"] == round(500 * 1000 / 1180 - 380, 2)
+    assert p["invoices_without_itbis"] == 0
     assert [c["category"] for c in p["expense_categories"]] == ["Materiales", "Combustible"]
     other = [x for x in data["projects"] if x["project_id"] == db["pid2"]][0]
     assert other["billed"] == 0 and other["margin_pct"] is None
     assert data["summary"]["total_billed"] == 1180.0 and data["summary"]["total_expenses"] == 380.0
+    assert data["summary"]["total_billed_net"] == 1000.0 and data["summary"]["net_margin"] == 620.0
+    assert data["summary"]["margin_basis"] == "sin_itbis"
     one = client.get(f"/reports/project-profitability?project_id={pid}", headers=_hdr()).json()["data"]
     assert [x["project_id"] for x in one["projects"]] == [pid]
     later = client.get("/reports/project-profitability?start_date=2026-11-01", headers=_hdr()).json()["data"]
@@ -231,3 +237,21 @@ def test_expenses_by_category_report(db):
     assert data["categories"][0] == {"category": "Materiales", "total": 60.0, "count": 1, "percentage": 60.0}
     only = client.get(f"/reports/expenses-by-category?project_id={pid}", headers=_hdr()).json()["data"]
     assert only["summary"]["total_expenses"] == 60.0 and len(only["categories"]) == 1
+
+
+@needs_db
+def test_invoice_without_itbis_is_flagged_and_counted_as_net(db):
+    import psycopg2
+    conn = psycopg2.connect(DSN)
+    cur = conn.cursor()
+    cur.execute("INSERT INTO quotes (quote_id, client_id, status) VALUES ('q-legacy', %s, 'Invoiced')", (db["cid"],))
+    cur.execute("INSERT INTO projects (client_id, name, start_date, quote_id) VALUES (%s, 'Legacy', '2026-10-01', 'q-legacy') "
+                "RETURNING id", (db["cid"],))
+    pid = cur.fetchone()[0]
+    cur.execute("INSERT INTO invoices (invoice_number, quote_id, client_id, status, total_amount, itbis_total, invoice_date) "
+                "VALUES ('F-L', 'q-legacy', %s, 'Pending', 500, 0, '2026-10-05')", (db["cid"],))
+    conn.commit()
+    conn.close()
+    p = client.get(f"/reports/project-profitability?project_id={pid}", headers=_hdr()).json()["data"]["projects"][0]
+    assert p["invoices_without_itbis"] == 1
+    assert p["billed_net"] == 500.0 and p["margin_pct"] == 100.0

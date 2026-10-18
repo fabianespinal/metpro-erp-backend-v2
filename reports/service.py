@@ -241,12 +241,19 @@ def get_project_profitability(start_date=None, end_date=None, client_id: Optiona
                               project_id: Optional[int] = None) -> dict:
     """
     Per project:
-    - billed:   SUM(total_amount) of non-cancelled invoices of the project's quote (by invoice_date).
-                total_amount is the billed amount and includes ITBIS; billed_itbis is reported apart.
-    - paid:     SUM(payments) on those invoices (by payment_date).
+    - billed:     SUM(total_amount) of non-cancelled invoices of the project's quote (by invoice_date),
+                  ITBIS included. billed_itbis = SUM(itbis_total).
+    - billed_net: billed - billed_itbis (Facturado sin ITBIS).
+    - paid:       SUM(payments) on those invoices (by payment_date), ITBIS included.
+    - paid_net:   each payment without its ITBIS share: amount * (total_amount - itbis_total) / total_amount
+                  of its invoice (Cobrado sin ITBIS).
+    - outstanding: billed - paid (receivable, ITBIS included).
+    All margins exclude ITBIS (approved 2026-10-18):
     - expenses: SUM(expenses.amount) linked to the project (by expense date).
-    - net_margin = billed - expenses; margin_pct = net_margin / billed * 100 (None when billed is 0).
-    - cash_margin = paid - expenses.
+    - net_margin = billed_net - expenses; margin_pct = net_margin / billed_net * 100 (None when 0).
+    - cash_margin = paid_net - expenses.
+    invoices_without_itbis counts billed invoices whose itbis_total is 0 (legacy rows), so a margin
+    computed on them can be checked by hand.
     Date bounds are optional and inclusive.
     """
     from projects.ledger import categories_from_rows, expense_date_filter
@@ -266,17 +273,22 @@ def get_project_profitability(start_date=None, end_date=None, client_id: Optiona
         sql = f"""
             SELECT p.id, p.name, p.status, p.quote_number, c.company_name AS client_name,
                    COALESCE(b.billed, 0) AS billed, COALESCE(b.itbis, 0) AS billed_itbis,
-                   COALESCE(pay.paid, 0) AS paid,
+                   COALESCE(b.no_itbis, 0) AS invoices_without_itbis,
+                   COALESCE(pay.paid, 0) AS paid, COALESCE(pay.paid_net, 0) AS paid_net,
                    COALESCE(x.expenses, 0) AS expenses, COALESCE(x.n, 0) AS expense_count
             FROM projects p
             JOIN clients c ON c.id = p.client_id
             LEFT JOIN LATERAL (
-                SELECT SUM(i.total_amount) AS billed, SUM(i.itbis_total) AS itbis
+                SELECT SUM(i.total_amount) AS billed, SUM(COALESCE(i.itbis_total, 0)) AS itbis,
+                       COUNT(*) FILTER (WHERE COALESCE(i.itbis_total, 0) = 0 AND i.total_amount > 0) AS no_itbis
                 FROM invoices i
                 WHERE p.quote_id IS NOT NULL AND i.quote_id = p.quote_id AND i.status <> 'Cancelled'{inv_dates}
             ) b ON TRUE
             LEFT JOIN LATERAL (
-                SELECT SUM(ip.amount) AS paid
+                SELECT SUM(ip.amount) AS paid,
+                       SUM(ip.amount * CASE WHEN i.total_amount > 0
+                                            THEN (i.total_amount - COALESCE(i.itbis_total, 0)) / i.total_amount
+                                            ELSE 1 END) AS paid_net
                 FROM invoice_payments ip JOIN invoices i ON i.id = ip.invoice_id
                 WHERE p.quote_id IS NOT NULL AND i.quote_id = p.quote_id{pay_dates}
             ) pay ON TRUE
@@ -312,12 +324,17 @@ def get_project_profitability(start_date=None, end_date=None, client_id: Optiona
                 cats_by_project.setdefault(r["project_id"], []).append(r)
 
         projects = []
-        tot = {"billed": 0.0, "billed_itbis": 0.0, "paid": 0.0, "expenses": 0.0}
+        tot = {"billed": 0.0, "billed_itbis": 0.0, "billed_net": 0.0, "paid": 0.0, "paid_net": 0.0,
+               "expenses": 0.0, "invoices_without_itbis": 0}
         for r in rows:
             billed = round(float(r["billed"]), 2)
+            itbis = round(float(r["billed_itbis"]), 2)
+            billed_net = round(billed - itbis, 2)
             paid = round(float(r["paid"]), 2)
+            paid_net = round(float(r["paid_net"]), 2)
             expenses = round(float(r["expenses"]), 2)
-            net = round(billed - expenses, 2)
+            net = round(billed_net - expenses, 2)
+            no_itbis = int(r["invoices_without_itbis"])
             projects.append({
                 "project_id": r["id"],
                 "project_number": f"P-{int(r['id']):04d}",
@@ -326,31 +343,39 @@ def get_project_profitability(start_date=None, end_date=None, client_id: Optiona
                 "client_name": r["client_name"],
                 "quote_label": f"Q-{r['quote_number']}" if r["quote_number"] else None,
                 "billed": billed,
-                "billed_itbis": round(float(r["billed_itbis"]), 2),
+                "billed_itbis": itbis,
+                "billed_net": billed_net,
                 "paid": paid,
+                "paid_net": paid_net,
                 "outstanding": round(max(billed - paid, 0), 2),
                 "expenses": expenses,
                 "expense_count": int(r["expense_count"]),
                 "net_margin": net,
-                "margin_pct": round(net / billed * 100, 2) if billed else None,
-                "cash_margin": round(paid - expenses, 2),
+                "margin_pct": round(net / billed_net * 100, 2) if billed_net else None,
+                "cash_margin": round(paid_net - expenses, 2),
+                "invoices_without_itbis": no_itbis,
                 "expense_categories": categories_from_rows(cats_by_project.get(r["id"], []), expenses),
             })
-            for k in tot:
-                tot[k] += round(float(r[k] if k != "billed_itbis" else r["billed_itbis"]), 2)
+            for k, v in (("billed", billed), ("billed_itbis", itbis), ("billed_net", billed_net), ("paid", paid),
+                         ("paid_net", paid_net), ("expenses", expenses), ("invoices_without_itbis", no_itbis)):
+                tot[k] += v
 
-        billed_t = round(tot["billed"], 2)
-        net_t = round(tot["billed"] - tot["expenses"], 2)
+        billed_net_t = round(tot["billed_net"], 2)
+        net_t = round(tot["billed_net"] - tot["expenses"], 2)
         return {
             "summary": {
                 "project_count": len(projects),
-                "total_billed": billed_t,
+                "margin_basis": "sin_itbis",
+                "total_billed": round(tot["billed"], 2),
                 "total_billed_itbis": round(tot["billed_itbis"], 2),
+                "total_billed_net": billed_net_t,
                 "total_paid": round(tot["paid"], 2),
+                "total_paid_net": round(tot["paid_net"], 2),
                 "total_expenses": round(tot["expenses"], 2),
                 "net_margin": net_t,
-                "margin_pct": round(net_t / billed_t * 100, 2) if billed_t else None,
-                "cash_margin": round(tot["paid"] - tot["expenses"], 2),
+                "margin_pct": round(net_t / billed_net_t * 100, 2) if billed_net_t else None,
+                "cash_margin": round(tot["paid_net"] - tot["expenses"], 2),
+                "invoices_without_itbis": tot["invoices_without_itbis"],
                 "filters": {"start_date": start_date, "end_date": end_date,
                             "client_id": client_id, "project_id": project_id},
             },

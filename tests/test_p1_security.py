@@ -70,7 +70,7 @@ def test_deactivated_user_is_rejected(auth, monkeypatch):
     with pytest.raises(HTTPException) as e:
         auth.require_auth(_bearer(auth))
     assert e.value.status_code == 401
-    assert e.value.detail == "Account disabled"
+    assert e.value.detail == "Cuenta deshabilitada"
 
 
 def test_deleted_user_is_rejected(auth, monkeypatch):
@@ -78,7 +78,7 @@ def test_deleted_user_is_rejected(auth, monkeypatch):
     _patch_db(monkeypatch, [])
     with pytest.raises(HTTPException) as e:
         auth.require_auth(_bearer(auth))
-    assert e.value.detail == "User not found"
+    assert e.value.detail == "Usuario no encontrado"
 
 
 def test_toggle_off_skips_db(auth, monkeypatch):

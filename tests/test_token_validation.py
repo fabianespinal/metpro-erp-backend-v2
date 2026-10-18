@@ -95,15 +95,15 @@ def test_valid_token_is_accepted(auth, monkeypatch, entry):
 # ---------- rejected: signature, algorithm, expiry, claims ----------
 
 CASES = {
-    "bad_signature": (lambda: _token(_good_claims(), key="wrong-key"), "Invalid token"),
-    "alg_none": (lambda: _unsigned_none_token(), "Invalid token"),
-    "wrong_alg_hs512": (lambda: _token(_good_claims(), alg="HS512"), "Invalid token"),
-    "expired": (lambda: _token(_good_claims(exp=int(time.time()) - 5)), "Token expired"),
-    "missing_exp": (lambda: _token({"sub": "alice", "role": "admin"}), "Invalid token"),
-    "missing_sub": (lambda: _token({"role": "admin", "exp": int(time.time()) + 600}), "Invalid token"),
-    "empty_sub": (lambda: _token(_good_claims(sub="")), "Invalid token"),
-    "non_string_sub": (lambda: _token(_good_claims(sub=123)), "Invalid token"),
-    "malformed": (lambda: "not.a.jwt", "Invalid token"),
+    "bad_signature": (lambda: _token(_good_claims(), key="wrong-key"), "Token no válido"),
+    "alg_none": (lambda: _unsigned_none_token(), "Token no válido"),
+    "wrong_alg_hs512": (lambda: _token(_good_claims(), alg="HS512"), "Token no válido"),
+    "expired": (lambda: _token(_good_claims(exp=int(time.time()) - 5)), "El token expiró"),
+    "missing_exp": (lambda: _token({"sub": "alice", "role": "admin"}), "Token no válido"),
+    "missing_sub": (lambda: _token({"role": "admin", "exp": int(time.time()) + 600}), "Token no válido"),
+    "empty_sub": (lambda: _token(_good_claims(sub="")), "Token no válido"),
+    "non_string_sub": (lambda: _token(_good_claims(sub=123)), "Token no válido"),
+    "malformed": (lambda: "not.a.jwt", "Token no válido"),
 }
 
 
@@ -140,7 +140,7 @@ def test_tampered_payload_rejected(auth, monkeypatch, entry):
     ).rstrip(b"=").decode()
     with pytest.raises(HTTPException) as e:
         entry(auth, f"{head}.{evil}.{sig}")
-    assert e.value.detail == "Invalid token"
+    assert e.value.detail == "Token no válido"
 
 
 # ---------- rejected: user state ----------
@@ -151,7 +151,7 @@ def test_deactivated_user_rejected(auth, monkeypatch, entry):
     with pytest.raises(HTTPException) as e:
         entry(auth, _token(_good_claims()))
     assert e.value.status_code == 401
-    assert e.value.detail == "Account disabled"
+    assert e.value.detail == "Cuenta deshabilitada"
 
 
 @pytest.mark.parametrize("entry", ENTRY_POINTS)
@@ -159,7 +159,7 @@ def test_deleted_user_rejected(auth, monkeypatch, entry):
     _db(monkeypatch, None)
     with pytest.raises(HTTPException) as e:
         entry(auth, _token(_good_claims()))
-    assert e.value.detail == "User not found"
+    assert e.value.detail == "Usuario no encontrado"
 
 
 @pytest.mark.parametrize("entry", ENTRY_POINTS)
@@ -175,9 +175,9 @@ def test_active_check_toggle_off_skips_db(auth, monkeypatch, entry):
 # ---------- header parsing ----------
 
 @pytest.mark.parametrize("header, detail", [
-    (None, "Missing authorization token"),
-    ("Bearer", "Invalid authorization header format"),
-    ("Token abc", "Invalid authorization scheme"),
+    (None, "Falta el token de autorización"),
+    ("Bearer", "Formato de encabezado de autorización no válido"),
+    ("Token abc", "Esquema de autorización no válido"),
 ])
 def test_header_parsing_errors_unchanged(auth, header, detail):
     with pytest.raises(HTTPException) as e:

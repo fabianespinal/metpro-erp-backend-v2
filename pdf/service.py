@@ -33,13 +33,13 @@ def generate_quote_pdf(quote_id: str, current_user: dict = None) -> StreamingRes
         cursor.execute('SELECT * FROM quotes WHERE quote_id = %s', (quote_id,))
         quote = cursor.fetchone()
         if not quote:
-            raise api_error(404, 'Quote not found', "QUOTE_NOT_FOUND")
+            raise api_error(404, "Cotización no encontrada", "QUOTE_NOT_FOUND")
         quote = dict(quote)
 
         cursor.execute('SELECT * FROM clients WHERE id = %s', (quote['client_id'],))
         raw_client = cursor.fetchone()
         if not raw_client:
-            raise api_error(404, 'Client not found', "CLIENT_NOT_FOUND")
+            raise api_error(404, "Cliente no encontrado", "CLIENT_NOT_FOUND")
         raw_client = dict(raw_client)
 
         # Fetch the contact selected on this quote — not any company default
@@ -165,7 +165,7 @@ def generate_quote_pdf(quote_id: str, current_user: dict = None) -> StreamingRes
         raise
     except Exception as e:
         logger.error("PDF generation failed for quote %s", quote_id)
-        raise internal_error("Quote PDF generation failed", e)
+        raise internal_error("No se pudo generar el PDF de la cotización", e)
     finally:
         if conn:
             conn.close()
@@ -183,13 +183,13 @@ def generate_invoice_pdf(invoice_id: int, current_user: dict = None) -> Streamin
         cursor.execute('SELECT * FROM invoices WHERE id = %s', (invoice_id,))
         invoice = cursor.fetchone()
         if not invoice:
-            raise api_error(404, 'Invoice not found', "INVOICE_NOT_FOUND")
+            raise api_error(404, "Factura no encontrada", "INVOICE_NOT_FOUND")
         invoice = dict(invoice)
 
         cursor.execute('SELECT * FROM clients WHERE id = %s', (invoice['client_id'],))
         raw_client = cursor.fetchone()
         if not raw_client:
-            raise api_error(404, 'Client not found', "CLIENT_NOT_FOUND")
+            raise api_error(404, "Cliente no encontrado", "CLIENT_NOT_FOUND")
         raw_client = dict(raw_client)
 
         # Invoice carries the same contact as its source quote (Option A)
@@ -332,7 +332,7 @@ def generate_invoice_pdf(invoice_id: int, current_user: dict = None) -> Streamin
         raise
     except Exception as e:
         logger.error("PDF generation failed for invoice %s", invoice_id)
-        raise internal_error("Invoice PDF generation failed", e)
+        raise internal_error("No se pudo generar el PDF de la factura", e)
     finally:
         if conn:
             conn.close()
@@ -367,13 +367,13 @@ def generate_conduce_pdf(invoice_id: int, current_user: dict = None) -> Streamin
         cursor.execute('SELECT * FROM invoices WHERE id = %s', (invoice_id,))
         invoice = cursor.fetchone()
         if not invoice:
-            raise api_error(404, 'Invoice not found', "INVOICE_NOT_FOUND")
+            raise api_error(404, "Factura no encontrada", "INVOICE_NOT_FOUND")
         invoice = dict(invoice)
 
         cursor.execute('SELECT * FROM clients WHERE id = %s', (invoice['client_id'],))
         raw_client = cursor.fetchone()
         if not raw_client:
-            raise api_error(404, 'Client not found', "CLIENT_NOT_FOUND")
+            raise api_error(404, "Cliente no encontrado", "CLIENT_NOT_FOUND")
         raw_client = dict(raw_client)
 
         # Invoice carries the same contact as its source quote (Option A)
@@ -441,7 +441,7 @@ def generate_conduce_pdf(invoice_id: int, current_user: dict = None) -> Streamin
         raise
     except Exception as e:
         logger.error("Conduce generation failed for invoice %s", invoice_id)
-        raise internal_error("Conduce generation failed", e)
+        raise internal_error("No se pudo generar el conduce", e)
     finally:
         if conn:
             conn.close()

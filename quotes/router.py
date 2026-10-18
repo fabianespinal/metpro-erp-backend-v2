@@ -338,7 +338,7 @@ def convert_to_invoice(quote_id: str, current_user: dict = Depends(require_auth)
         "total_amount": invoice["total_amount"],
         "status": invoice["status"],
         "invoice_date": invoice["invoice_date"],
-        "message": f"Quote {quote_id} converted to invoice {invoice['invoice_number']}",
+        "message": f"Cotización {quote_id} convertida en la factura {invoice['invoice_number']}",
     }
 
 

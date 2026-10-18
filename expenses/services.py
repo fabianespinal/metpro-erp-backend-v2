@@ -17,7 +17,7 @@ def _resolve_client_name(conn, client_id):
         cur.execute("SELECT company_name FROM clients WHERE id = %s", (client_id,))
         row = cur.fetchone()
     if not row:
-        raise api_error(404, "Client not found", "CLIENT_NOT_FOUND")
+        raise api_error(404, "Cliente no encontrado", "CLIENT_NOT_FOUND")
     if isinstance(row, dict):
         return row.get("company_name")
     return row[0]
@@ -53,7 +53,7 @@ def create_expense(conn, expense: ExpenseCreate):
         return row["expense_id"]
     if row:
         return row[0]
-    raise api_error(500, "Insert failed to return expense_id", "EXPENSE_INSERT_FAILED")
+    raise api_error(500, "No se pudo registrar el gasto", "EXPENSE_INSERT_FAILED")
 
 
 def get_expenses(conn):

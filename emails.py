@@ -14,7 +14,7 @@ def send_test_email(to: str, _admin: dict = Depends(require_role("admin"))):
     params = {
         "from": "noreply@metprord.site",
         "to": [to],
-        "subject": "METPRO test email",
+        "subject": "Correo de prueba de METPRO",
         "html": "<strong>If you see this, Resend + FastAPI works.</strong>",
     }
 

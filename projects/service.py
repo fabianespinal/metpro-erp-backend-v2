@@ -95,11 +95,11 @@ def create_project(
         # Validate client exists
         cursor.execute("SELECT 1 FROM clients WHERE id = %s", (client_id,))
         if not cursor.fetchone():
-            raise api_error(404, "Client not found", "CLIENT_NOT_FOUND")
+            raise api_error(404, "Cliente no encontrado", "CLIENT_NOT_FOUND")
 
         # Validate date range if both dates provided
         if start_date and end_date and end_date < start_date:
-            raise api_error(400, "End date must be after start date", "DATE_RANGE_INVALID")
+            raise api_error(400, "La fecha de fin debe ser posterior a la fecha de inicio", "DATE_RANGE_INVALID")
 
         # Insert project
         cursor.execute("""
@@ -125,7 +125,7 @@ def create_project(
     except Exception as e:
         if conn:
             conn.rollback()
-        raise internal_error("Create failed", e)
+        raise internal_error("No se pudo crear", e)
 
     finally:
         if conn:
@@ -172,7 +172,7 @@ def get_project_by_id(project_id: int) -> dict:
         row = fetch_project(cursor, project_id)
 
         if not row:
-            raise api_error(404, "Project not found", "PROJECT_NOT_FOUND")
+            raise api_error(404, "Proyecto no encontrado", "PROJECT_NOT_FOUND")
 
         return row
 
@@ -204,7 +204,7 @@ def update_project(
         cursor.execute("SELECT * FROM projects WHERE id = %s", (project_id,))
         current_project = cursor.fetchone()
         if not current_project:
-            raise api_error(404, "Project not found", "PROJECT_NOT_FOUND")
+            raise api_error(404, "Proyecto no encontrado", "PROJECT_NOT_FOUND")
 
         # -----------------------------
         # Normalization helpers
@@ -249,15 +249,15 @@ def update_project(
         if client_id is not None:
             cursor.execute("SELECT 1 FROM clients WHERE id = %s", (final_client_id,))
             if not cursor.fetchone():
-                raise api_error(404, "Client not found", "CLIENT_NOT_FOUND")
+                raise api_error(404, "Cliente no encontrado", "CLIENT_NOT_FOUND")
 
         # Validate date range
         if final_start_date and final_end_date and final_end_date < final_start_date:
-            raise api_error(400, "End date must be after start date", "DATE_RANGE_INVALID")
+            raise api_error(400, "La fecha de fin debe ser posterior a la fecha de inicio", "DATE_RANGE_INVALID")
 
         # Validate name is not empty
         if final_name is None or final_name.strip() == "":
-            raise api_error(400, "Name cannot be empty", "NAME_REQUIRED")
+            raise api_error(400, "El nombre no puede estar vacío", "NAME_REQUIRED")
 
         # -----------------------------
         # Perform update
@@ -300,7 +300,7 @@ def update_project(
     except Exception as e:
         if conn:
             conn.rollback()
-        raise internal_error("Update failed", e)
+        raise internal_error("No se pudo actualizar", e)
 
     finally:
         if conn:
@@ -317,10 +317,10 @@ def delete_project(project_id: int) -> dict:
 
         cursor.execute("DELETE FROM projects WHERE id = %s", (project_id,))
         if cursor.rowcount == 0:
-            raise api_error(404, "Project not found", "PROJECT_NOT_FOUND")
+            raise api_error(404, "Proyecto no encontrado", "PROJECT_NOT_FOUND")
 
         conn.commit()
-        return {"message": "Project deleted successfully"}
+        return {"message": "Proyecto eliminado correctamente"}
 
     except HTTPException:
         raise
@@ -328,7 +328,7 @@ def delete_project(project_id: int) -> dict:
     except Exception as e:
         if conn:
             conn.rollback()
-        raise internal_error("Delete failed", e)
+        raise internal_error("No se pudo eliminar", e)
 
     finally:
         if conn:

@@ -66,13 +66,13 @@ def login(credentials: LoginRequest):
         user = cursor.fetchone()
 
         if not user:
-            raise api_error(401, "Invalid username or password", "INVALID_CREDENTIALS")
+            raise api_error(401, "Usuario o contraseña incorrectos", "INVALID_CREDENTIALS")
 
         if not user.get("is_active", True):
-            raise api_error(401, "Account is disabled", "ACCOUNT_DISABLED")
+            raise api_error(401, "La cuenta está deshabilitada", "ACCOUNT_DISABLED")
 
         if not verify_password(credentials.password, user["password_hash"]):
-            raise api_error(401, "Invalid username or password", "INVALID_CREDENTIALS")
+            raise api_error(401, "Usuario o contraseña incorrectos", "INVALID_CREDENTIALS")
 
         token_data = {
             "sub": user["username"],
@@ -93,7 +93,7 @@ def login(credentials: LoginRequest):
     except Exception:
         # Full detail goes to server logs only. Never return driver or DSN errors to the client.
         logger.exception("Login failed due to an internal error")
-        raise api_error(500, "Login temporarily unavailable", "LOGIN_UNAVAILABLE")
+        raise api_error(500, "El inicio de sesión no está disponible temporalmente", "LOGIN_UNAVAILABLE")
     finally:
         if conn:
             conn.close()
@@ -112,11 +112,11 @@ def register(user_data: RegisterRequest, _admin: dict = Depends(require_role("ad
 
         cursor.execute("SELECT id FROM users WHERE lower(username) = lower(%s)", (user_data.username,))
         if cursor.fetchone():
-            raise api_error(400, "Username already exists", "USERNAME_TAKEN")
+            raise api_error(400, "El nombre de usuario ya existe", "USERNAME_TAKEN")
 
         cursor.execute("SELECT id FROM users WHERE lower(email) = lower(%s)", (user_data.email,))
         if cursor.fetchone():
-            raise api_error(400, "Email already exists", "EMAIL_TAKEN")
+            raise api_error(400, "El correo ya existe", "EMAIL_TAKEN")
 
         password_hash = get_password_hash(user_data.password)
 
@@ -138,7 +138,7 @@ def register(user_data: RegisterRequest, _admin: dict = Depends(require_role("ad
         conn.commit()
 
         return {
-            "message": "User registered successfully",
+            "message": "Usuario registrado correctamente",
             "user_id": new_user["id"],
             "username": user_data.username
         }
@@ -151,7 +151,7 @@ def register(user_data: RegisterRequest, _admin: dict = Depends(require_role("ad
         if conn:
             conn.rollback()
         logger.exception("Registration failed due to an internal error")
-        raise api_error(500, "Registration temporarily unavailable", "REGISTRATION_UNAVAILABLE")
+        raise api_error(500, "El registro no está disponible temporalmente", "REGISTRATION_UNAVAILABLE")
     finally:
         if conn:
             conn.close()
@@ -209,10 +209,10 @@ def change_password(
         db_user = cursor.fetchone()
 
         if not db_user:
-            raise api_error(404, "User not found", "USER_NOT_FOUND")
+            raise api_error(404, "Usuario no encontrado", "USER_NOT_FOUND")
 
         if not verify_password(data.old_password, db_user["password_hash"]):
-            raise api_error(401, "Old password incorrect", "PASSWORD_INCORRECT")
+            raise api_error(401, "La contraseña anterior es incorrecta", "PASSWORD_INCORRECT")
 
         new_hash = get_password_hash(data.new_password)
 
@@ -221,7 +221,7 @@ def change_password(
             (new_hash, username)
         )
         conn.commit()
-        return {"message": "Password updated successfully"}
+        return {"message": "Contraseña actualizada correctamente"}
     except Exception:
         conn.rollback()
         raise
@@ -236,4 +236,4 @@ def change_password(
 
 @router.get("/admin-only")
 def admin_only(user = Depends(require_role("admin"))):
-    return {"message": "Admin access confirmed"}
+    return {"message": "Acceso de administrador confirmado"}

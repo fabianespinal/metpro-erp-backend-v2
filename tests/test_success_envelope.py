@@ -143,7 +143,7 @@ def test_root_wrapped():
     resp = TestClient(app).get("/")
     body = resp.json()
     assert body["success"] is True
-    assert body["data"]["message"] == "METPRO ERP API is running!"
+    assert body["data"]["message"] == "¡La API de METPRO ERP está en funcionamiento!"
     assert body["data"]["version"] == "2.0.0"
 
 
@@ -208,7 +208,7 @@ def test_login_failure_stays_error_shape(monkeypatch):
     monkeypatch.setattr(ar, "get_db_connection", lambda: _Conn([]))
     resp = TestClient(app).post("/auth/login", json={"username": "x", "password": "y"})
     assert resp.status_code == 401
-    assert resp.json() == {"detail": "Invalid username or password", "code": "INVALID_CREDENTIALS"}
+    assert resp.json() == {"detail": "Usuario o contraseña incorrectos", "code": "INVALID_CREDENTIALS"}
 
 
 def test_authenticated_success_wrapped(monkeypatch):

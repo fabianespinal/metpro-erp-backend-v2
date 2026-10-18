@@ -50,7 +50,7 @@ def get_user_by_id(user_id: str) -> dict:
 
         user = cursor.fetchone()
         if not user:
-            raise api_error(404, "User not found", "USER_NOT_FOUND")
+            raise api_error(404, "Usuario no encontrado", "USER_NOT_FOUND")
 
         return user
 
@@ -77,7 +77,7 @@ def get_user_by_username(username: str) -> dict:
 
         user = cursor.fetchone()
         if not user:
-            raise api_error(404, "User not found", "USER_NOT_FOUND")
+            raise api_error(404, "Usuario no encontrado", "USER_NOT_FOUND")
 
         return user
 
@@ -98,7 +98,7 @@ def _assert_can_manage(actor_role: Optional[str], target_role: Optional[str], ne
     if actor_role == "superadmin":
         return
     if target_role == "superadmin" or new_role == "superadmin":
-        raise api_error(403, "Only a superadmin can manage superadmin accounts", "SUPERADMIN_REQUIRED")
+        raise api_error(403, "Solo un superadministrador puede gestionar cuentas de superadministrador", "SUPERADMIN_REQUIRED")
 
 
 # ============================================================
@@ -117,11 +117,11 @@ def create_user(username: str, password: str, email: str, full_name: Optional[st
         # Case-insensitive uniqueness, matching the lower() unique indexes.
         cursor.execute("SELECT id FROM users WHERE lower(username) = lower(%s)", (username,))
         if cursor.fetchone():
-            raise api_error(400, "Username already exists", "USERNAME_TAKEN")
+            raise api_error(400, "El nombre de usuario ya existe", "USERNAME_TAKEN")
 
         cursor.execute("SELECT id FROM users WHERE lower(email) = lower(%s)", (email,))
         if cursor.fetchone():
-            raise api_error(400, "Email already exists", "EMAIL_TAKEN")
+            raise api_error(400, "El correo ya existe", "EMAIL_TAKEN")
 
         password_hash = get_password_hash(password)
 
@@ -134,7 +134,7 @@ def create_user(username: str, password: str, email: str, full_name: Optional[st
                 RETURNING id
             """, (new_id, username, password_hash, email, full_name, role, True))
         except pg_errors.UniqueViolation:
-            raise api_error(400, "Username or email already exists", "USER_EXISTS")
+            raise api_error(400, "El usuario o el correo ya existe", "USER_EXISTS")
 
         new_user = cursor.fetchone()
         conn.commit()
@@ -155,7 +155,7 @@ def create_user(username: str, password: str, email: str, full_name: Optional[st
     except Exception as e:
         if conn:
             conn.rollback()
-        raise internal_error("Failed to create user", e)
+        raise internal_error("No se pudo crear el usuario", e)
 
     finally:
         if conn:
@@ -173,7 +173,7 @@ def _assert_other_active_superadmin(cursor, exclude_user_id: str) -> None:
         (exclude_user_id,),
     )
     if cursor.fetchone()["n"] == 0:
-        raise api_error(400, "Cannot remove the last active superadmin", "LAST_SUPERADMIN")
+        raise api_error(400, "No se puede quitar al último superadministrador activo", "LAST_SUPERADMIN")
 
 
 def update_user(user_id: str, email: Optional[str], full_name: Optional[str],
@@ -188,7 +188,7 @@ def update_user(user_id: str, email: Optional[str], full_name: Optional[str],
         cursor.execute("SELECT id, role, is_active FROM users WHERE id = %s", (user_id,))
         target = cursor.fetchone()
         if not target:
-            raise api_error(404, "User not found", "USER_NOT_FOUND")
+            raise api_error(404, "Usuario no encontrado", "USER_NOT_FOUND")
 
         _assert_can_manage(actor_role, target["role"], role)
 
@@ -205,7 +205,7 @@ def update_user(user_id: str, email: Optional[str], full_name: Optional[str],
         if email is not None:
             cursor.execute("SELECT id FROM users WHERE lower(email) = lower(%s) AND id != %s", (email, user_id))
             if cursor.fetchone():
-                raise api_error(400, "Email already exists", "EMAIL_TAKEN")
+                raise api_error(400, "El correo ya existe", "EMAIL_TAKEN")
             updates.append("email = %s")
             params.append(email)
 
@@ -222,7 +222,7 @@ def update_user(user_id: str, email: Optional[str], full_name: Optional[str],
             params.append(is_active)
 
         if not updates:
-            raise api_error(400, "No fields to update", "NO_FIELDS_TO_UPDATE")
+            raise api_error(400, "No hay campos para actualizar", "NO_FIELDS_TO_UPDATE")
 
         params.append(user_id)
 
@@ -247,7 +247,7 @@ def update_user(user_id: str, email: Optional[str], full_name: Optional[str],
     except Exception as e:
         if conn:
             conn.rollback()
-        raise internal_error("Failed to update user", e)
+        raise internal_error("No se pudo actualizar el usuario", e)
 
     finally:
         if conn:
@@ -268,10 +268,10 @@ def update_user_password(user_id: str, current_password: str, new_password: str)
         user = cursor.fetchone()
 
         if not user:
-            raise api_error(404, "User not found", "USER_NOT_FOUND")
+            raise api_error(404, "Usuario no encontrado", "USER_NOT_FOUND")
 
         if not verify_password(current_password, user["password_hash"]):
-            raise api_error(400, "Current password is incorrect", "PASSWORD_INCORRECT")
+            raise api_error(400, "La contraseña actual es incorrecta", "PASSWORD_INCORRECT")
 
         new_hash = get_password_hash(new_password)
 
@@ -283,7 +283,7 @@ def update_user_password(user_id: str, current_password: str, new_password: str)
 
         conn.commit()
 
-        return {"message": "Password updated successfully"}
+        return {"message": "Contraseña actualizada correctamente"}
 
     except HTTPException:
         if conn:
@@ -293,7 +293,7 @@ def update_user_password(user_id: str, current_password: str, new_password: str)
     except Exception as e:
         if conn:
             conn.rollback()
-        raise internal_error("Failed to update password", e)
+        raise internal_error("No se pudo actualizar la contraseña", e)
 
     finally:
         if conn:
@@ -314,7 +314,7 @@ def reset_user_password(user_id: str, new_password: str, actor_role: Optional[st
         cursor.execute("SELECT id, role FROM users WHERE id = %s", (user_id,))
         target = cursor.fetchone()
         if not target:
-            raise api_error(404, "User not found", "USER_NOT_FOUND")
+            raise api_error(404, "Usuario no encontrado", "USER_NOT_FOUND")
 
         _assert_can_manage(actor_role, target["role"])
 
@@ -323,7 +323,7 @@ def reset_user_password(user_id: str, new_password: str, actor_role: Optional[st
             (get_password_hash(new_password), user_id),
         )
         conn.commit()
-        return {"message": "Password reset successfully"}
+        return {"message": "Contraseña restablecida correctamente"}
 
     except HTTPException:
         if conn:
@@ -333,7 +333,7 @@ def reset_user_password(user_id: str, new_password: str, actor_role: Optional[st
     except Exception as e:
         if conn:
             conn.rollback()
-        raise internal_error("Failed to reset password", e)
+        raise internal_error("No se pudo restablecer la contraseña", e)
 
     finally:
         if conn:
@@ -357,10 +357,10 @@ def delete_user(user_id: str, actor_role: Optional[str] = None) -> dict:
         cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
 
         if cursor.rowcount == 0:
-            raise api_error(404, "User not found", "USER_NOT_FOUND")
+            raise api_error(404, "Usuario no encontrado", "USER_NOT_FOUND")
 
         conn.commit()
-        return {"message": "User deleted successfully"}
+        return {"message": "Usuario eliminado correctamente"}
 
     except HTTPException:
         if conn:
@@ -370,7 +370,7 @@ def delete_user(user_id: str, actor_role: Optional[str] = None) -> dict:
     except Exception as e:
         if conn:
             conn.rollback()
-        raise internal_error("Failed to delete user", e)
+        raise internal_error("No se pudo eliminar el usuario", e)
 
     finally:
         if conn:

@@ -45,7 +45,7 @@ class ProjectBase(BaseModel):
             v = "in_progress"
 
         if v not in ALLOWED_STATUSES:
-            raise ValueError(f"Status must be one of: {', '.join(sorted(ALLOWED_STATUSES))}")
+            raise ValueError(f"El estado debe ser uno de: {', '.join(sorted(ALLOWED_STATUSES))}")
 
         return v
 
@@ -95,7 +95,7 @@ class ProjectUpdate(BaseModel):
     @classmethod
     def empty_name_check(cls, v):
         if v == "":
-            raise ValueError("Name cannot be empty")
+            raise ValueError("El nombre no puede estar vacío")
         return v
 
     # Normalize and validate status
@@ -112,6 +112,6 @@ class ProjectUpdate(BaseModel):
             v = "in_progress"
 
         if v not in ALLOWED_STATUSES:
-            raise ValueError(f"Status must be one of: {', '.join(sorted(ALLOWED_STATUSES))}")
+            raise ValueError(f"El estado debe ser uno de: {', '.join(sorted(ALLOWED_STATUSES))}")
 
         return v

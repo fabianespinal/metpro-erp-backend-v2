@@ -61,7 +61,7 @@ def test_unused_client_is_deleted(monkeypatch):
     cur = Cur([{"n": 0}])
     conn = Conn(cur)
     monkeypatch.setattr(csvc, "get_db_connection", lambda: conn)
-    assert csvc.delete_client(7)["message"] == "Client deleted successfully"
+    assert csvc.delete_client(7)["message"] == "Cliente eliminado correctamente"
     assert cur.sql[-1].startswith("DELETE FROM clients") and conn.committed
 
 

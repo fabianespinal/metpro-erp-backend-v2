@@ -35,7 +35,7 @@ def create_payment(conn, invoice_id: int, data) -> int:
     """
     amount = float(data.amount or 0)
     if amount <= 0:
-        raise api_error(400, "Payment amount must be greater than zero", "PAYMENT_AMOUNT_INVALID")
+        raise api_error(400, "El monto del pago debe ser mayor que cero", "PAYMENT_AMOUNT_INVALID")
 
     with conn.cursor(cursor_factory=RealDictCursor) as cursor:
         cursor.execute(
@@ -44,11 +44,11 @@ def create_payment(conn, invoice_id: int, data) -> int:
         )
         invoice = cursor.fetchone()
         if not invoice:
-            raise api_error(404, "Invoice not found", "INVOICE_NOT_FOUND")
+            raise api_error(404, "Factura no encontrada", "INVOICE_NOT_FOUND")
 
         status = invoice["status"]
         if status not in PAYABLE_STATUSES:
-            raise api_error(400, f"Payments are not accepted for {status} invoices", "INVOICE_NOT_PAYABLE")
+            raise api_error(400, f"No se aceptan pagos para facturas en estado {status}", "INVOICE_NOT_PAYABLE")
 
         total_amount = float(invoice["total_amount"] or 0)
 
@@ -60,7 +60,7 @@ def create_payment(conn, invoice_id: int, data) -> int:
         due_before = total_amount - paid_before
 
         if amount > due_before + CENT_TOLERANCE:
-            raise api_error(400, "Payment exceeds the amount due", "PAYMENT_EXCEEDS_DUE")
+            raise api_error(400, "El pago excede el monto pendiente", "PAYMENT_EXCEEDS_DUE")
 
         cursor.execute(
             """

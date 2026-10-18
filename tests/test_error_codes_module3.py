@@ -26,26 +26,26 @@ FILES = [
 
 # (status, message literal without quotes or f-prefix, code)
 EXPECTED = {
-    (400, "File must be CSV format", "CSV_FORMAT_INVALID"),
-    (404, "Client not found", "CLIENT_NOT_FOUND"),
-    (404, "Client with ID {client_id} not found", "CLIENT_NOT_FOUND"),
-    (400, "Invalid email format", "EMAIL_INVALID"),
-    (400, "Email {email} is already in use by another client", "CLIENT_EMAIL_TAKEN"),
-    (400, "Tax ID {tax_id} is already in use by another client", "CLIENT_TAX_ID_TAKEN"),
-    (400, "File must be UTF-8 encoded", "FILE_ENCODING_INVALID"),
-    (400, "CSV file is empty", "CSV_EMPTY"),
-    (400, "Missing required column: company_name", "CSV_COLUMN_MISSING"),
-    (404, "Contact not found", "CONTACT_NOT_FOUND"),
-    (404, "Expense not found", "EXPENSE_NOT_FOUND"),
-    (400, "Nothing to update", "NOTHING_TO_UPDATE"),
-    (500, "Insert failed to return expense_id", "EXPENSE_INSERT_FAILED"),
-    (404, "Product not found", "PRODUCT_NOT_FOUND"),
-    (400, "Missing required columns: {required_cols}", "CSV_COLUMNS_MISSING"),
-    (400, "End date must be after start date", "DATE_RANGE_INVALID"),
-    (404, "Project not found", "PROJECT_NOT_FOUND"),
-    (400, "Name cannot be empty", "NAME_REQUIRED"),
-    (400, "Client has quotes, invoices or projects and cannot be deleted", "CLIENT_IN_USE"),
-    (400, "Product is used in a template pack and cannot be deleted", "PRODUCT_IN_USE"),
+    (400, "El archivo debe ser formato CSV", "CSV_FORMAT_INVALID"),
+    (404, "Cliente no encontrado", "CLIENT_NOT_FOUND"),
+    (404, "Cliente con ID {client_id} no encontrado", "CLIENT_NOT_FOUND"),
+    (400, "Formato de correo no válido", "EMAIL_INVALID"),
+    (400, "El correo {email} ya está en uso por otro cliente", "CLIENT_EMAIL_TAKEN"),
+    (400, "El RNC {tax_id} ya está en uso por otro cliente", "CLIENT_TAX_ID_TAKEN"),
+    (400, "El archivo debe estar codificado en UTF-8", "FILE_ENCODING_INVALID"),
+    (400, "El archivo CSV está vacío", "CSV_EMPTY"),
+    (400, "Falta la columna obligatoria: company_name", "CSV_COLUMN_MISSING"),
+    (404, "Contacto no encontrado", "CONTACT_NOT_FOUND"),
+    (404, "Gasto no encontrado", "EXPENSE_NOT_FOUND"),
+    (400, "No hay nada que actualizar", "NOTHING_TO_UPDATE"),
+    (500, "No se pudo registrar el gasto", "EXPENSE_INSERT_FAILED"),
+    (404, "Producto no encontrado", "PRODUCT_NOT_FOUND"),
+    (400, "Faltan columnas obligatorias: {required_cols}", "CSV_COLUMNS_MISSING"),
+    (400, "La fecha de fin debe ser posterior a la fecha de inicio", "DATE_RANGE_INVALID"),
+    (404, "Proyecto no encontrado", "PROJECT_NOT_FOUND"),
+    (400, "El nombre no puede estar vacío", "NAME_REQUIRED"),
+    (400, "El cliente tiene cotizaciones, facturas o proyectos y no se puede eliminar", "CLIENT_IN_USE"),
+    (400, "El producto se usa en un paquete de plantilla y no se puede eliminar", "PRODUCT_IN_USE"),
 }
 
 CALL = re.compile(r"api_error\((\d+), (f?)([\"'])(.*?)\3, \"([A-Z_]+)\"\)", re.S)
@@ -147,7 +147,7 @@ def test_get_client_missing_has_code(monkeypatch):
     _patch_service_db(monkeypatch, "clients.service", [])
     resp = TestClient(app).get("/clients/999", headers=_auth_headers())
     assert resp.status_code == 404
-    assert resp.json() == {"detail": "Client not found", "code": "CLIENT_NOT_FOUND"}
+    assert resp.json() == {"detail": "Cliente no encontrado", "code": "CLIENT_NOT_FOUND"}
 
 
 def test_get_product_missing_has_code(monkeypatch):
@@ -155,7 +155,7 @@ def test_get_product_missing_has_code(monkeypatch):
     _patch_service_db(monkeypatch, "products.service", [])
     resp = TestClient(app).get("/products/999", headers=_auth_headers())
     assert resp.status_code == 404
-    assert resp.json() == {"detail": "Product not found", "code": "PRODUCT_NOT_FOUND"}
+    assert resp.json() == {"detail": "Producto no encontrado", "code": "PRODUCT_NOT_FOUND"}
 
 
 def test_get_project_missing_has_code(monkeypatch):
@@ -163,7 +163,7 @@ def test_get_project_missing_has_code(monkeypatch):
     _patch_service_db(monkeypatch, "projects.service", [])
     resp = TestClient(app).get("/projects/999", headers=_auth_headers())
     assert resp.status_code == 404
-    assert resp.json() == {"detail": "Project not found", "code": "PROJECT_NOT_FOUND"}
+    assert resp.json() == {"detail": "Proyecto no encontrado", "code": "PROJECT_NOT_FOUND"}
 
 
 def test_bulk_import_wrong_file_type_has_code(monkeypatch):
@@ -174,7 +174,7 @@ def test_bulk_import_wrong_file_type_has_code(monkeypatch):
         files={"file": ("clients.txt", b"x", "text/plain")},
     )
     assert resp.status_code == 400
-    assert resp.json() == {"detail": "File must be CSV format", "code": "CSV_FORMAT_INVALID"}
+    assert resp.json() == {"detail": "El archivo debe ser formato CSV", "code": "CSV_FORMAT_INVALID"}
 
 
 def test_product_csv_wrong_type_has_code(monkeypatch):
@@ -185,7 +185,7 @@ def test_product_csv_wrong_type_has_code(monkeypatch):
         files={"file": ("products.txt", b"x", "text/plain")},
     )
     assert resp.status_code == 400
-    assert resp.json() == {"detail": "File must be CSV format", "code": "CSV_FORMAT_INVALID"}
+    assert resp.json() == {"detail": "El archivo debe ser formato CSV", "code": "CSV_FORMAT_INVALID"}
 
 
 def test_api_error_renders_dynamic_message_unchanged(monkeypatch):

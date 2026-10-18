@@ -146,7 +146,7 @@ def test_login_blocks_after_limit_with_retry_after(login_db, monkeypatch):
     assert _login(client).status_code == 401
     blocked = _login(client)
     assert blocked.status_code == 429
-    assert blocked.json()["detail"] == "Too many requests"
+    assert blocked.json()["detail"] == "Demasiadas solicitudes"
     assert int(blocked.headers["Retry-After"]) >= 1
 
 
@@ -188,7 +188,7 @@ def test_login_limit_does_not_change_success_body(monkeypatch):
         headers={"X-Forwarded-For": "203.0.113.50"},
     )
     assert resp.status_code == 401
-    assert resp.json()["detail"] == "Invalid username or password"
+    assert resp.json()["detail"] == "Usuario o contraseña incorrectos"
 
 
 # ---------- public token routes ----------

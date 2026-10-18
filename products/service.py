@@ -33,7 +33,7 @@ def create_product(name: str, description: str, unit_price: float) -> dict:
     except Exception as e:
         if conn:
             conn.rollback()
-        raise internal_error("Failed to create product", e)
+        raise internal_error("No se pudo crear el producto", e)
 
     finally:
         if conn:
@@ -72,7 +72,7 @@ def get_product_by_id(product_id: int) -> dict:
         row = cursor.fetchone()
 
         if not row:
-            raise api_error(404, "Product not found", "PRODUCT_NOT_FOUND")
+            raise api_error(404, "Producto no encontrado", "PRODUCT_NOT_FOUND")
 
         return row
 
@@ -93,7 +93,7 @@ def update_product(product_id: int, name: str, description: str, unit_price: flo
 
         cursor.execute("SELECT id FROM products WHERE id = %s", (product_id,))
         if not cursor.fetchone():
-            raise api_error(404, "Product not found", "PRODUCT_NOT_FOUND")
+            raise api_error(404, "Producto no encontrado", "PRODUCT_NOT_FOUND")
 
         cursor.execute("""
             UPDATE products
@@ -114,7 +114,7 @@ def update_product(product_id: int, name: str, description: str, unit_price: flo
     except Exception as e:
         if conn:
             conn.rollback()
-        raise internal_error("Failed to update product", e)
+        raise internal_error("No se pudo actualizar el producto", e)
 
     finally:
         if conn:
@@ -133,7 +133,7 @@ def delete_product(product_id: int) -> dict:
 
         cursor.execute("SELECT COUNT(*) AS n FROM template_pack_items WHERE product_id = %s", (product_id,))
         if cursor.fetchone()["n"] > 0:
-            raise api_error(400, "Product is used in a template pack and cannot be deleted", "PRODUCT_IN_USE")
+            raise api_error(400, "El producto se usa en un paquete de plantilla y no se puede eliminar", "PRODUCT_IN_USE")
 
         # Quote and invoice lines keep their name and price; only the catalog link is cleared,
         # so editing a Draft that used this product does not fail product validation.
@@ -142,10 +142,10 @@ def delete_product(product_id: int) -> dict:
 
         cursor.execute("DELETE FROM products WHERE id = %s", (product_id,))
         if cursor.rowcount == 0:
-            raise api_error(404, "Product not found", "PRODUCT_NOT_FOUND")
+            raise api_error(404, "Producto no encontrado", "PRODUCT_NOT_FOUND")
 
         conn.commit()
-        return {"message": "Product deleted successfully"}
+        return {"message": "Producto eliminado correctamente"}
 
     except HTTPException:
         if conn:
@@ -155,7 +155,7 @@ def delete_product(product_id: int) -> dict:
     except Exception as e:
         if conn:
             conn.rollback()
-        raise internal_error("Delete failed", e)
+        raise internal_error("No se pudo eliminar", e)
 
     finally:
         if conn:
@@ -173,16 +173,16 @@ async def import_products_from_csv(file_content: bytes, filename: str) -> dict:
         try:
             csv_text = file_content.decode("utf-8-sig")
         except UnicodeDecodeError:
-            raise api_error(400, "File must be UTF-8 encoded", "FILE_ENCODING_INVALID")
+            raise api_error(400, "El archivo debe estar codificado en UTF-8", "FILE_ENCODING_INVALID")
 
         rows = list(csv.DictReader(io.StringIO(csv_text)))
 
         if not rows:
-            raise api_error(400, "CSV file is empty", "CSV_EMPTY")
+            raise api_error(400, "El archivo CSV está vacío", "CSV_EMPTY")
 
         required_cols = ["name", "unit_price"]
         if not all(col in rows[0] for col in required_cols):
-            raise api_error(400, f"Missing required columns: {required_cols}", "CSV_COLUMNS_MISSING")
+            raise api_error(400, f"Faltan columnas obligatorias: {required_cols}", "CSV_COLUMNS_MISSING")
 
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
@@ -238,7 +238,7 @@ async def import_products_from_csv(file_content: bytes, filename: str) -> dict:
     except Exception as e:
         if conn:
             conn.rollback()
-        raise internal_error("Import failed", e)
+        raise internal_error("No se pudo importar", e)
 
     finally:
         if conn:

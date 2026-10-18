@@ -71,7 +71,7 @@ def _validate_access_token(token: str) -> dict:
       5. The user named in "sub" must exist and be active (see _assert_user_active).
     """
     if not token:
-        raise api_error(401, "Token is empty", "TOKEN_EMPTY")
+        raise api_error(401, "El token está vacío", "TOKEN_EMPTY")
 
     try:
         payload = jwt.decode(
@@ -81,13 +81,13 @@ def _validate_access_token(token: str) -> dict:
             options=_REQUIRED_CLAIMS,
         )
     except ExpiredSignatureError:
-        raise api_error(401, "Token expired", "TOKEN_EXPIRED")
+        raise api_error(401, "El token expiró", "TOKEN_EXPIRED")
     except JWTError:
-        raise api_error(401, "Invalid token", "TOKEN_INVALID")
+        raise api_error(401, "Token no válido", "TOKEN_INVALID")
 
     sub = payload.get("sub")
     if not isinstance(sub, str) or not sub:
-        raise api_error(401, "Invalid token", "TOKEN_INVALID")
+        raise api_error(401, "Token no válido", "TOKEN_INVALID")
 
     # The DB role wins over the token role, so demotions apply on the next request.
     db_role = _assert_user_active(sub)
@@ -109,7 +109,7 @@ def _assert_user_active(username):
     if not ENFORCE_ACTIVE_CHECK:
         return None
     if not username:
-        raise api_error(401, "Invalid token", "TOKEN_INVALID")
+        raise api_error(401, "Token no válido", "TOKEN_INVALID")
     from database import get_db_connection
     conn = get_db_connection()
     try:
@@ -119,13 +119,13 @@ def _assert_user_active(username):
     finally:
         conn.close()
     if row is None:
-        raise api_error(401, "User not found", "USER_NOT_FOUND")
+        raise api_error(401, "Usuario no encontrado", "USER_NOT_FOUND")
     if isinstance(row, dict):
         active, role = row["is_active"], row.get("role")
     else:
         active, role = row[0], (row[1] if len(row) > 1 else None)
     if not active:
-        raise api_error(401, "Account disabled", "ACCOUNT_DISABLED")
+        raise api_error(401, "Cuenta deshabilitada", "ACCOUNT_DISABLED")
     return role
 
 
@@ -136,18 +136,18 @@ def require_auth(authorization: str = Header(None)) -> dict:
     _validate_access_token. Returns the decoded payload.
     """
     if not authorization:
-        raise api_error(401, "Missing authorization token", "TOKEN_MISSING")
+        raise api_error(401, "Falta el token de autorización", "TOKEN_MISSING")
 
     try:
         scheme, token = authorization.split()
     except ValueError:
-        raise api_error(401, "Invalid authorization header format", "AUTH_HEADER_INVALID")
+        raise api_error(401, "Formato de encabezado de autorización no válido", "AUTH_HEADER_INVALID")
 
     if scheme.lower() != "bearer":
-        raise api_error(401, "Invalid authorization scheme", "AUTH_SCHEME_INVALID")
+        raise api_error(401, "Esquema de autorización no válido", "AUTH_SCHEME_INVALID")
 
     if not token:
-        raise api_error(401, "Token is empty", "TOKEN_EMPTY")
+        raise api_error(401, "El token está vacío", "TOKEN_EMPTY")
 
     payload = _validate_access_token(token)
     mark_authenticated(payload["sub"])
@@ -180,7 +180,7 @@ def require_role(required_role: str):
     def wrapper(user: dict = Depends(require_auth)):
         role = user.get("role")
         if role not in allowed:
-            raise api_error(403, "Insufficient permissions", "INSUFFICIENT_PERMISSIONS")
+            raise api_error(403, "Permisos insuficientes", "INSUFFICIENT_PERMISSIONS")
         return user
 
     return wrapper

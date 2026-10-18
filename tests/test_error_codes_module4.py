@@ -19,38 +19,38 @@ FILES = ["invoices/router.py", "invoices/service.py", "pdf/service.py", "quotes/
 
 # (file, status, message literal without quotes or f-prefix, code)
 EXPECTED = {
-    ("invoices/router.py", 404, "Invoice not found", "INVOICE_NOT_FOUND"),
-    ("invoices/service.py", 404, "Invoice not found", "INVOICE_NOT_FOUND"),
-    ("invoices/service.py", 400, "Invalid status. Must be one of: {list(INVOICE_STATUSES)}", "INVOICE_STATUS_INVALID"),
-    ("invoices/service.py", 400, "Invoices become Paid by recording payments", "INVOICE_PAID_VIA_PAYMENTS"),
-    ("invoices/service.py", 400, "Cannot change invoice from {current['status']} to {status}", "INVOICE_TRANSITION_INVALID"),
-    ("invoices/service.py", 400, "Invoice has payments and cannot be cancelled", "INVOICE_HAS_PAYMENTS"),
-    ("invoices/service.py", 400, "Invoice has payments and cannot be deleted", "INVOICE_HAS_PAYMENTS"),
-    ("pdf/service.py", 404, "Quote not found", "QUOTE_NOT_FOUND"),
-    ("pdf/service.py", 404, "Client not found", "CLIENT_NOT_FOUND"),
-    ("pdf/service.py", 404, "Invoice not found", "INVOICE_NOT_FOUND"),
-    ("quotes/service.py", 404, "Client not found", "CLIENT_NOT_FOUND"),
-    ("quotes/service.py", 400, "Contact {contact_id} does not belong to client {client_id}", "CONTACT_CLIENT_MISMATCH"),
-    ("quotes/service.py", 404, "Quote not found", "QUOTE_NOT_FOUND"),
-    ("quotes/service.py", 400, "Only Draft quotes can be edited", "QUOTE_NOT_DRAFT"),
-    ("quotes/service.py", 400, "Only approved quotes can be converted to invoices", "QUOTE_NOT_APPROVED"),
-    ("quotes/service.py", 400, "Finalized quotes cannot be edited", "QUOTE_FINALIZED"),
-    ("quotes/service.py", 400, "Only Draft quotes can be finalized", "QUOTE_NOT_DRAFT"),
-    ("quotes/service.py", 400, "Use the finalize endpoint to set Final", "QUOTE_USE_FINALIZE"),
-    ("quotes/service.py", 400, "Quote must have at least one item to finalize", "QUOTE_EMPTY"),
-    ("quotes/service.py", 400, "Product not found", "PRODUCT_NOT_FOUND"),
-    ("quotes/service.py", 400, "Invoice already exists for this quote", "INVOICE_EXISTS"),
-    ("quotes/service.py", 400, "Invalid status. Must be one of: {list(QUOTE_STATUSES)}", "QUOTE_STATUS_INVALID"),
-    ("quotes/service.py", 400, "Cannot change quote from {current['status']} to {status}", "QUOTE_TRANSITION_INVALID"),
-    ("quotes/service.py", 400, "Use the send endpoint to mark a quote as Sent", "QUOTE_USE_SEND"),
-    ("quotes/service.py", 400, "Use convert-to-invoice to invoice a quote", "QUOTE_USE_CONVERT"),
-    ("quotes/service.py", 400, "Quotes cannot return to Draft. Duplicate the quote to rework it", "QUOTE_REOPEN_BLOCKED"),
-    ("quotes/service.py", 400, "Only finalized quotes can be sent", "QUOTE_NOT_FINALIZED"),
-    ("quotes/service.py", 400, "Quote contact has no email address", "QUOTE_NO_CONTACT_EMAIL"),
-    ("quotes/service.py", 400, "Only Draft or Rejected quotes can be deleted", "QUOTE_DELETE_BLOCKED"),
-    ("quotes/service.py", 400, "Quote has an invoice and cannot be deleted", "QUOTE_DELETE_BLOCKED"),
-    ("quotes/service.py", 400, "Percentage discount cannot exceed 100", "QUOTE_DISCOUNT_INVALID"),
-    ("quotes/service.py", 400, "Fixed discount cannot exceed the line amount", "QUOTE_DISCOUNT_INVALID"),
+    ("invoices/router.py", 404, "Factura no encontrada", "INVOICE_NOT_FOUND"),
+    ("invoices/service.py", 404, "Factura no encontrada", "INVOICE_NOT_FOUND"),
+    ("invoices/service.py", 400, "Estado no válido. Debe ser uno de: {list(INVOICE_STATUSES)}", "INVOICE_STATUS_INVALID"),
+    ("invoices/service.py", 400, "Las facturas pasan a Pagada al registrar pagos", "INVOICE_PAID_VIA_PAYMENTS"),
+    ("invoices/service.py", 400, "No se puede cambiar la factura de {current['status']} a {status}", "INVOICE_TRANSITION_INVALID"),
+    ("invoices/service.py", 400, "La factura tiene pagos y no se puede cancelar", "INVOICE_HAS_PAYMENTS"),
+    ("invoices/service.py", 400, "La factura tiene pagos y no se puede eliminar", "INVOICE_HAS_PAYMENTS"),
+    ("pdf/service.py", 404, "Cotización no encontrada", "QUOTE_NOT_FOUND"),
+    ("pdf/service.py", 404, "Cliente no encontrado", "CLIENT_NOT_FOUND"),
+    ("pdf/service.py", 404, "Factura no encontrada", "INVOICE_NOT_FOUND"),
+    ("quotes/service.py", 404, "Cliente no encontrado", "CLIENT_NOT_FOUND"),
+    ("quotes/service.py", 400, "El contacto {contact_id} no pertenece al cliente {client_id}", "CONTACT_CLIENT_MISMATCH"),
+    ("quotes/service.py", 404, "Cotización no encontrada", "QUOTE_NOT_FOUND"),
+    ("quotes/service.py", 400, "Solo las cotizaciones en Borrador se pueden editar", "QUOTE_NOT_DRAFT"),
+    ("quotes/service.py", 400, "Solo las cotizaciones aprobadas se pueden convertir en facturas", "QUOTE_NOT_APPROVED"),
+    ("quotes/service.py", 400, "Las cotizaciones finalizadas no se pueden editar", "QUOTE_FINALIZED"),
+    ("quotes/service.py", 400, "Solo las cotizaciones en Borrador se pueden finalizar", "QUOTE_NOT_DRAFT"),
+    ("quotes/service.py", 400, "Use la acción de finalizar para establecer Final", "QUOTE_USE_FINALIZE"),
+    ("quotes/service.py", 400, "La cotización debe tener al menos un ítem para finalizarla", "QUOTE_EMPTY"),
+    ("quotes/service.py", 400, "Producto no encontrado", "PRODUCT_NOT_FOUND"),
+    ("quotes/service.py", 400, "Ya existe una factura para esta cotización", "INVOICE_EXISTS"),
+    ("quotes/service.py", 400, "Estado no válido. Debe ser uno de: {list(QUOTE_STATUSES)}", "QUOTE_STATUS_INVALID"),
+    ("quotes/service.py", 400, "No se puede cambiar la cotización de {current['status']} a {status}", "QUOTE_TRANSITION_INVALID"),
+    ("quotes/service.py", 400, "Use la acción de enviar para marcar una cotización como Enviada", "QUOTE_USE_SEND"),
+    ("quotes/service.py", 400, "Use convertir a factura para facturar una cotización", "QUOTE_USE_CONVERT"),
+    ("quotes/service.py", 400, "Las cotizaciones no pueden volver a Borrador. Duplique la cotización para reelaborarla", "QUOTE_REOPEN_BLOCKED"),
+    ("quotes/service.py", 400, "Solo se pueden enviar cotizaciones finalizadas", "QUOTE_NOT_FINALIZED"),
+    ("quotes/service.py", 400, "El contacto de la cotización no tiene correo electrónico", "QUOTE_NO_CONTACT_EMAIL"),
+    ("quotes/service.py", 400, "Solo se pueden eliminar cotizaciones en Borrador o Rechazadas", "QUOTE_DELETE_BLOCKED"),
+    ("quotes/service.py", 400, "La cotización tiene una factura y no se puede eliminar", "QUOTE_DELETE_BLOCKED"),
+    ("quotes/service.py", 400, "El descuento porcentual no puede exceder 100", "QUOTE_DISCOUNT_INVALID"),
+    ("quotes/service.py", 400, "El descuento fijo no puede exceder el monto de la línea", "QUOTE_DISCOUNT_INVALID"),
 }
 
 CALL = re.compile(r"api_error\((\d+), (f?)([\"'])(.*?)\3, \"([A-Z_]+)\"\)", re.S)
@@ -144,7 +144,7 @@ def test_get_quote_missing_has_code(monkeypatch):
     _patch_service_db(monkeypatch, "quotes.service")
     resp = TestClient(app).get("/quotes/999", headers=_auth_headers())
     assert resp.status_code == 404
-    assert resp.json() == {"detail": "Quote not found", "code": "QUOTE_NOT_FOUND"}
+    assert resp.json() == {"detail": "Cotización no encontrada", "code": "QUOTE_NOT_FOUND"}
 
 
 def test_get_invoice_missing_has_code(monkeypatch):
@@ -152,7 +152,7 @@ def test_get_invoice_missing_has_code(monkeypatch):
     _patch_service_db(monkeypatch, "invoices.service")
     resp = TestClient(app).get("/invoices/999", headers=_auth_headers())
     assert resp.status_code == 404
-    assert resp.json() == {"detail": "Invoice not found", "code": "INVOICE_NOT_FOUND"}
+    assert resp.json() == {"detail": "Factura no encontrada", "code": "INVOICE_NOT_FOUND"}
 
 
 def test_api_error_keeps_dynamic_message():

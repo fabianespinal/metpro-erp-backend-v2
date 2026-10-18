@@ -141,9 +141,9 @@ def _validate_item_discounts(items: List[dict]) -> None:
         value = float(item.get("discount_value") or 0)
         line = float(item.get("quantity") or 0) * float(item.get("unit_price") or 0)
         if dtype == "percentage" and value > 100:
-            raise api_error(400, "Percentage discount cannot exceed 100", "QUOTE_DISCOUNT_INVALID")
+            raise api_error(400, "El descuento porcentual no puede exceder 100", "QUOTE_DISCOUNT_INVALID")
         if dtype == "fixed" and value > line + 0.005:
-            raise api_error(400, "Fixed discount cannot exceed the line amount", "QUOTE_DISCOUNT_INVALID")
+            raise api_error(400, "El descuento fijo no puede exceder el monto de la línea", "QUOTE_DISCOUNT_INVALID")
 
 
 def _validate_product_ids(cursor, items: List[dict]) -> None:
@@ -154,7 +154,7 @@ def _validate_product_ids(cursor, items: List[dict]) -> None:
     cursor.execute("SELECT id FROM products WHERE id = ANY(%s)", (list(ids),))
     found = {r["id"] for r in cursor.fetchall()}
     if ids - found:
-        raise api_error(400, "Product not found", "PRODUCT_NOT_FOUND")
+        raise api_error(400, "Producto no encontrado", "PRODUCT_NOT_FOUND")
 
 
 def preview_totals(items: List[dict], charges: dict) -> dict:
@@ -219,7 +219,7 @@ def create_quote(
 
         cursor.execute("SELECT id FROM clients WHERE id = %s", (client_id,))
         if not cursor.fetchone():
-            raise api_error(404, "Client not found", "CLIENT_NOT_FOUND")
+            raise api_error(404, "Cliente no encontrado", "CLIENT_NOT_FOUND")
 
         # Validate that the contact belongs to the selected client
         cursor.execute(
@@ -227,7 +227,7 @@ def create_quote(
             (contact_id, client_id),
         )
         if not cursor.fetchone():
-            raise api_error(400, f"Contact {contact_id} does not belong to client {client_id}", "CONTACT_CLIENT_MISMATCH")
+            raise api_error(400, f"El contacto {contact_id} no pertenece al cliente {client_id}", "CONTACT_CLIENT_MISMATCH")
 
         _validate_product_ids(cursor, items)
         _validate_item_discounts(items)
@@ -303,7 +303,7 @@ def create_quote(
     except Exception as e:
         if conn:
             conn.rollback()
-        raise internal_error("Failed to create quote", e)
+        raise internal_error("No se pudo crear la cotización", e)
 
     finally:
         if conn:
@@ -328,7 +328,7 @@ def get_quote_by_id(quote_id: str) -> dict:
         quote = cursor.fetchone()
 
         if not quote:
-            raise api_error(404, "Quote not found", "QUOTE_NOT_FOUND")
+            raise api_error(404, "Cotización no encontrada", "QUOTE_NOT_FOUND")
 
         quote = dict(quote)
 
@@ -353,7 +353,7 @@ def quote_id_for_public_token(token: str) -> str:
     finally:
         conn.close()
     if not row:
-        raise api_error(404, "Quote not found", "QUOTE_NOT_FOUND")
+        raise api_error(404, "Cotización no encontrada", "QUOTE_NOT_FOUND")
     return row["quote_id"]
 
 
@@ -406,7 +406,7 @@ def get_quote_with_contact(quote_id: str) -> dict:
         row = cursor.fetchone()
 
         if not row:
-            raise api_error(404, "Quote not found", "QUOTE_NOT_FOUND")
+            raise api_error(404, "Cotización no encontrada", "QUOTE_NOT_FOUND")
 
         quote = dict(row)
 
@@ -475,14 +475,14 @@ def update_quote(quote_id: str, quote_update) -> dict:
         cursor.execute("SELECT * FROM quotes WHERE quote_id = %s", (quote_id,))
         quote = cursor.fetchone()
         if not quote:
-            raise api_error(404, "Quote not found", "QUOTE_NOT_FOUND")
+            raise api_error(404, "Cotización no encontrada", "QUOTE_NOT_FOUND")
 
         # Finalized quotes are locked regardless of ALLOW_EDIT_NON_DRAFT_QUOTES.
         if quote["status"] == QUOTE_STATUS_FINAL:
-            raise api_error(400, "Finalized quotes cannot be edited", "QUOTE_FINALIZED")
+            raise api_error(400, "Las cotizaciones finalizadas no se pueden editar", "QUOTE_FINALIZED")
 
         if not ALLOW_EDIT_NON_DRAFT_QUOTES and quote["status"] != "Draft":
-            raise api_error(400, "Only Draft quotes can be edited", "QUOTE_NOT_DRAFT")
+            raise api_error(400, "Solo las cotizaciones en Borrador se pueden editar", "QUOTE_NOT_DRAFT")
 
         update_dict = quote_update.dict(exclude_unset=True)
 
@@ -593,7 +593,7 @@ def update_quote(quote_id: str, quote_update) -> dict:
     except Exception as e:
         if conn:
             conn.rollback()
-        raise internal_error("Failed to update quote", e)
+        raise internal_error("No se pudo actualizar la cotización", e)
 
     finally:
         if conn:
@@ -610,18 +610,18 @@ def delete_quote(quote_id: str) -> dict:
         cursor.execute("SELECT status FROM quotes WHERE quote_id = %s FOR UPDATE", (quote_id,))
         row = cursor.fetchone()
         if not row:
-            raise api_error(404, "Quote not found", "QUOTE_NOT_FOUND")
+            raise api_error(404, "Cotización no encontrada", "QUOTE_NOT_FOUND")
         if row["status"] not in DELETABLE_STATUSES:
-            raise api_error(400, "Only Draft or Rejected quotes can be deleted", "QUOTE_DELETE_BLOCKED")
+            raise api_error(400, "Solo se pueden eliminar cotizaciones en Borrador o Rechazadas", "QUOTE_DELETE_BLOCKED")
 
         cursor.execute("SELECT id FROM invoices WHERE quote_id = %s", (quote_id,))
         if cursor.fetchone():
-            raise api_error(400, "Quote has an invoice and cannot be deleted", "QUOTE_DELETE_BLOCKED")
+            raise api_error(400, "La cotización tiene una factura y no se puede eliminar", "QUOTE_DELETE_BLOCKED")
 
         cursor.execute("DELETE FROM quote_items WHERE quote_id = %s", (quote_id,))
         cursor.execute("DELETE FROM quotes WHERE quote_id = %s", (quote_id,))
         conn.commit()
-        return {"message": "Quote deleted successfully"}
+        return {"message": "Cotización eliminada correctamente"}
 
     except HTTPException:
         if conn:
@@ -631,7 +631,7 @@ def delete_quote(quote_id: str) -> dict:
     except Exception as e:
         if conn:
             conn.rollback()
-        raise internal_error("Delete failed", e)
+        raise internal_error("No se pudo eliminar", e)
 
     finally:
         if conn:
@@ -668,7 +668,7 @@ def duplicate_quote(quote_id: str, created_by_user_id: Optional[str] = None) -> 
         """, (quote_id,))
         original = cursor.fetchone()
         if not original:
-            raise api_error(404, "Quote not found", "QUOTE_NOT_FOUND")
+            raise api_error(404, "Cotización no encontrada", "QUOTE_NOT_FOUND")
 
         original = dict(original)
 
@@ -759,7 +759,7 @@ def duplicate_quote(quote_id: str, created_by_user_id: Optional[str] = None) -> 
     except Exception as e:
         if conn:
             conn.rollback()
-        raise internal_error("Failed to duplicate quote", e)
+        raise internal_error("No se pudo duplicar la cotización", e)
 
     finally:
         if conn:
@@ -784,14 +784,14 @@ def finalize_quote(quote_id: str) -> dict:
         )
         quote = cursor.fetchone()
         if not quote:
-            raise api_error(404, "Quote not found", "QUOTE_NOT_FOUND")
+            raise api_error(404, "Cotización no encontrada", "QUOTE_NOT_FOUND")
         if quote["status"] != "Draft":
-            raise api_error(400, "Only Draft quotes can be finalized", "QUOTE_NOT_DRAFT")
+            raise api_error(400, "Solo las cotizaciones en Borrador se pueden finalizar", "QUOTE_NOT_DRAFT")
 
         cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id", (quote_id,))
         current_items = [dict(row) for row in cursor.fetchall()]
         if not current_items:
-            raise api_error(400, "Quote must have at least one item to finalize", "QUOTE_EMPTY")
+            raise api_error(400, "La cotización debe tener al menos un ítem para finalizarla", "QUOTE_EMPTY")
 
         raw = quote.get("included_charges") or {}
         if isinstance(raw, str):
@@ -834,7 +834,7 @@ def finalize_quote(quote_id: str) -> dict:
     except Exception as e:
         if conn:
             conn.rollback()
-        raise internal_error("Failed to finalize quote", e)
+        raise internal_error("No se pudo finalizar la cotización", e)
 
     finally:
         if conn:
@@ -852,27 +852,27 @@ def update_quote_status(quote_id: str, status: str) -> dict:
         cursor.execute("SELECT quote_id, status FROM quotes WHERE quote_id = %s FOR UPDATE", (quote_id,))
         current = cursor.fetchone()
         if not current:
-            raise api_error(404, "Quote not found", "QUOTE_NOT_FOUND")
+            raise api_error(404, "Cotización no encontrada", "QUOTE_NOT_FOUND")
 
         if status not in QUOTE_STATUSES:
-            raise api_error(400, f"Invalid status. Must be one of: {list(QUOTE_STATUSES)}", "QUOTE_STATUS_INVALID")
+            raise api_error(400, f"Estado no válido. Debe ser uno de: {list(QUOTE_STATUSES)}", "QUOTE_STATUS_INVALID")
 
         # Statuses owned by dedicated endpoints.
         if status == QUOTE_STATUS_FINAL:
-            raise api_error(400, "Use the finalize endpoint to set Final", "QUOTE_USE_FINALIZE")
+            raise api_error(400, "Use la acción de finalizar para establecer Final", "QUOTE_USE_FINALIZE")
         if status == "Sent":
-            raise api_error(400, "Use the send endpoint to mark a quote as Sent", "QUOTE_USE_SEND")
+            raise api_error(400, "Use la acción de enviar para marcar una cotización como Enviada", "QUOTE_USE_SEND")
         if status == "Invoiced":
-            raise api_error(400, "Use convert-to-invoice to invoice a quote", "QUOTE_USE_CONVERT")
+            raise api_error(400, "Use convertir a factura para facturar una cotización", "QUOTE_USE_CONVERT")
         if status == "Draft":
-            raise api_error(400, "Quotes cannot return to Draft. Duplicate the quote to rework it", "QUOTE_REOPEN_BLOCKED")
+            raise api_error(400, "Las cotizaciones no pueden volver a Borrador. Duplique la cotización para reelaborarla", "QUOTE_REOPEN_BLOCKED")
 
         if status == current["status"]:
-            return {"message": "Status unchanged", "quote_id": quote_id, "status": status}
+            return {"message": "Estado sin cambios", "quote_id": quote_id, "status": status}
 
         allowed = MANUAL_QUOTE_TRANSITIONS.get(current["status"], set())
         if status not in allowed:
-            raise api_error(400, f"Cannot change quote from {current['status']} to {status}", "QUOTE_TRANSITION_INVALID")
+            raise api_error(400, f"No se puede cambiar la cotización de {current['status']} a {status}", "QUOTE_TRANSITION_INVALID")
 
         cursor.execute(
             "UPDATE quotes SET status = %s, updated_at = CURRENT_TIMESTAMP WHERE quote_id = %s", (status, quote_id)
@@ -893,7 +893,7 @@ def update_quote_status(quote_id: str, status: str) -> dict:
 
         conn.commit()
 
-        return {"message": "Status updated successfully", "quote_id": quote_id, "status": status}
+        return {"message": "Estado actualizado correctamente", "quote_id": quote_id, "status": status}
 
     except HTTPException:
         if conn:
@@ -903,7 +903,7 @@ def update_quote_status(quote_id: str, status: str) -> dict:
     except Exception as e:
         if conn:
             conn.rollback()
-        raise internal_error("Failed to update status", e)
+        raise internal_error("No se pudo actualizar el estado", e)
 
     finally:
         if conn:
@@ -913,9 +913,9 @@ def update_quote_status(quote_id: str, status: str) -> dict:
 def assert_quote_sendable(quote: dict) -> None:
     """Called by the send route BEFORE building the PDF or emailing anything."""
     if quote.get("status") not in SENDABLE_STATUSES or not quote.get("public_token"):
-        raise api_error(400, "Only finalized quotes can be sent", "QUOTE_NOT_FINALIZED")
+        raise api_error(400, "Solo se pueden enviar cotizaciones finalizadas", "QUOTE_NOT_FINALIZED")
     if not quote.get("contact_email"):
-        raise api_error(400, "Quote contact has no email address", "QUOTE_NO_CONTACT_EMAIL")
+        raise api_error(400, "El contacto de la cotización no tiene correo electrónico", "QUOTE_NO_CONTACT_EMAIL")
 
 
 def mark_quote_sent(quote_id: str) -> str:
@@ -935,7 +935,7 @@ def mark_quote_sent(quote_id: str) -> str:
     except Exception as e:
         if conn:
             conn.rollback()
-        raise internal_error("Quote was emailed but its status could not be updated", e)
+        raise internal_error("La cotización se envió por correo, pero no se pudo actualizar su estado", e)
     finally:
         if conn:
             conn.close()
@@ -978,17 +978,17 @@ def convert_quote_to_invoice(quote_id: str, created_by_user_id: Optional[str] = 
         """, (quote_id,))
         quote = cursor.fetchone()
         if not quote:
-            raise api_error(404, "Quote not found", "QUOTE_NOT_FOUND")
+            raise api_error(404, "Cotización no encontrada", "QUOTE_NOT_FOUND")
 
         quote = dict(quote)
 
         if quote["status"] != "Approved":
-            raise api_error(400, "Only approved quotes can be converted to invoices", "QUOTE_NOT_APPROVED")
+            raise api_error(400, "Solo las cotizaciones aprobadas se pueden convertir en facturas", "QUOTE_NOT_APPROVED")
 
         # 2. Prevent duplicate invoices
         cursor.execute("SELECT id FROM invoices WHERE quote_id = %s", (quote_id,))
         if cursor.fetchone():
-            raise api_error(400, "Invoice already exists for this quote", "INVOICE_EXISTS")
+            raise api_error(400, "Ya existe una factura para esta cotización", "INVOICE_EXISTS")
 
         # 3. Load quote items (deterministic order)
         cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id", (quote_id,))
@@ -1094,7 +1094,7 @@ def convert_quote_to_invoice(quote_id: str, created_by_user_id: Optional[str] = 
     except Exception as e:
         if conn:
             conn.rollback()
-        raise internal_error("Failed to convert quote to invoice", e)
+        raise internal_error("No se pudo convertir la cotización en factura", e)
 
     finally:
         if conn:

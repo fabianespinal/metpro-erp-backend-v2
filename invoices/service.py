@@ -159,7 +159,7 @@ def create_invoice_from_quote(quote_id: str, notes: Optional[str] = None, create
         except Exception as e:
             if conn:
                 conn.rollback()
-            raise internal_error("Invoice created but notes could not be saved", e)
+            raise internal_error("La factura se creó, pero no se pudieron guardar las notas", e)
         finally:
             if conn:
                 conn.close()
@@ -226,7 +226,7 @@ def get_invoice_by_id(invoice_id: int) -> dict:
         """, (invoice_id,))
         invoice = cursor.fetchone()
         if not invoice:
-            raise api_error(404, "Invoice not found", "INVOICE_NOT_FOUND")
+            raise api_error(404, "Factura no encontrada", "INVOICE_NOT_FOUND")
 
         invoice = dict(invoice)
 
@@ -292,7 +292,7 @@ def get_invoice_by_number(invoice_number: str) -> dict:
         cursor.execute("SELECT * FROM invoices WHERE invoice_number = %s", (invoice_number,))
         invoice = cursor.fetchone()
         if not invoice:
-            raise api_error(404, "Invoice not found", "INVOICE_NOT_FOUND")
+            raise api_error(404, "Factura no encontrada", "INVOICE_NOT_FOUND")
 
         return dict(invoice)
 
@@ -320,7 +320,7 @@ def update_invoice_status(invoice_id: int, status: str) -> dict:
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
         if status not in INVOICE_STATUSES:
-            raise api_error(400, f"Invalid status. Must be one of: {list(INVOICE_STATUSES)}", "INVOICE_STATUS_INVALID")
+            raise api_error(400, f"Estado no válido. Debe ser uno de: {list(INVOICE_STATUSES)}", "INVOICE_STATUS_INVALID")
 
         cursor.execute(
             "SELECT id, status, COALESCE(amount_paid, 0) AS amount_paid FROM invoices WHERE id = %s FOR UPDATE",
@@ -328,16 +328,16 @@ def update_invoice_status(invoice_id: int, status: str) -> dict:
         )
         current = cursor.fetchone()
         if not current:
-            raise api_error(404, "Invoice not found", "INVOICE_NOT_FOUND")
+            raise api_error(404, "Factura no encontrada", "INVOICE_NOT_FOUND")
 
         if status != current["status"]:
             if status == "Paid":
-                raise api_error(400, "Invoices become Paid by recording payments", "INVOICE_PAID_VIA_PAYMENTS")
+                raise api_error(400, "Las facturas pasan a Pagada al registrar pagos", "INVOICE_PAID_VIA_PAYMENTS")
             allowed = MANUAL_INVOICE_TRANSITIONS.get(current["status"], set())
             if status not in allowed:
-                raise api_error(400, f"Cannot change invoice from {current['status']} to {status}", "INVOICE_TRANSITION_INVALID")
+                raise api_error(400, f"No se puede cambiar la factura de {current['status']} a {status}", "INVOICE_TRANSITION_INVALID")
             if status == "Cancelled" and float(current["amount_paid"]) > 0:
-                raise api_error(400, "Invoice has payments and cannot be cancelled", "INVOICE_HAS_PAYMENTS")
+                raise api_error(400, "La factura tiene pagos y no se puede cancelar", "INVOICE_HAS_PAYMENTS")
 
             cursor.execute(
                 "UPDATE invoices SET status = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
@@ -354,7 +354,7 @@ def update_invoice_status(invoice_id: int, status: str) -> dict:
     except Exception as e:
         if conn:
             conn.rollback()
-        raise internal_error("Update failed", e)
+        raise internal_error("No se pudo actualizar", e)
     finally:
         if conn:
             conn.close()
@@ -374,11 +374,11 @@ def delete_invoice(invoice_id: int) -> dict:
         cursor.execute("SELECT id, quote_id FROM invoices WHERE id = %s FOR UPDATE", (invoice_id,))
         invoice = cursor.fetchone()
         if not invoice:
-            raise api_error(404, "Invoice not found", "INVOICE_NOT_FOUND")
+            raise api_error(404, "Factura no encontrada", "INVOICE_NOT_FOUND")
 
         cursor.execute("SELECT COUNT(*) AS n FROM invoice_payments WHERE invoice_id = %s", (invoice_id,))
         if cursor.fetchone()["n"] > 0:
-            raise api_error(400, "Invoice has payments and cannot be deleted", "INVOICE_HAS_PAYMENTS")
+            raise api_error(400, "La factura tiene pagos y no se puede eliminar", "INVOICE_HAS_PAYMENTS")
 
         quote_id = invoice["quote_id"]
 
@@ -393,7 +393,7 @@ def delete_invoice(invoice_id: int) -> dict:
             quote_reverted = cursor.rowcount > 0
 
         conn.commit()
-        return {"message": "Invoice deleted successfully", "quote_reverted": quote_reverted}
+        return {"message": "Factura eliminada correctamente", "quote_reverted": quote_reverted}
 
     except HTTPException:
         if conn:
@@ -402,7 +402,7 @@ def delete_invoice(invoice_id: int) -> dict:
     except Exception as e:
         if conn:
             conn.rollback()
-        raise internal_error("Delete failed", e)
+        raise internal_error("No se pudo eliminar", e)
     finally:
         if conn:
             conn.close()
@@ -451,7 +451,7 @@ def get_invoice_with_contact(invoice_id: int) -> dict:
 
         row = cursor.fetchone()
         if not row:
-            raise api_error(404, "Invoice not found", "INVOICE_NOT_FOUND")
+            raise api_error(404, "Factura no encontrada", "INVOICE_NOT_FOUND")
 
         invoice = dict(row)
 

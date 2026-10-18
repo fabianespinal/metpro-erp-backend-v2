@@ -55,7 +55,7 @@ def send_invoice(
 
     invoice = service.get_invoice_with_contact(invoice_id)
     if not invoice:
-        raise api_error(404, "Invoice not found", "INVOICE_NOT_FOUND")
+        raise api_error(404, "Factura no encontrada", "INVOICE_NOT_FOUND")
 
     client = {
         "company_name": invoice["company_name"],
@@ -173,7 +173,7 @@ def add_payment(invoice_id: int, data: PaymentCreate, current_user: dict = Depen
         raise
     except Exception as e:
         conn.rollback()
-        raise internal_error("Failed to record payment", e)
+        raise internal_error("No se pudo registrar el pago", e)
     finally:
         conn.close()
 
@@ -209,7 +209,7 @@ def _invoice_id_for_public_token(token: str) -> int:
         conn.close()
 
     if not row:
-        raise api_error(404, "Invoice not found", "INVOICE_NOT_FOUND")
+        raise api_error(404, "Factura no encontrada", "INVOICE_NOT_FOUND")
     return row["id"]
 
 

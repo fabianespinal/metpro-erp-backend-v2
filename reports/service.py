@@ -165,7 +165,7 @@ def get_revenue_report(start_date: Optional[str], end_date: Optional[str],
         }
 
     except Exception as e:
-        raise internal_error("Revenue report failed", e)
+        raise internal_error("No se pudo generar el reporte de ingresos", e)
 
     finally:
         if conn:

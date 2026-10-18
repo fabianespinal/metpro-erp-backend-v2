@@ -57,7 +57,7 @@ def delete_contact(db: Session, contact_id: int):
         {"cid": contact_id},
     ).scalar()
     if in_use:
-        raise api_error(400, "Contact is used by quotes or invoices and cannot be deleted", "CONTACT_IN_USE")
+        raise api_error(400, "El contacto se usa en cotizaciones o facturas y no se puede eliminar", "CONTACT_IN_USE")
 
     db.delete(contact)
     db.commit()

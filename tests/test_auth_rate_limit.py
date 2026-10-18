@@ -95,7 +95,7 @@ def test_over_limit_returns_429_with_error_shape(monkeypatch):
     assert client.get("/auth/me", headers=_hdr()).status_code == 200
     resp = client.get("/auth/me", headers=_hdr())
     assert resp.status_code == 429
-    assert resp.json() == {"detail": "Too many requests", "code": "RATE_LIMITED"}
+    assert resp.json() == {"detail": "Demasiadas solicitudes", "code": "RATE_LIMITED"}
     retry = int(resp.headers["Retry-After"])
     assert retry >= 1
 

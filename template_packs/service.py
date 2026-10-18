@@ -23,7 +23,7 @@ def _check_products_exist(cursor, product_ids: Iterable[int]) -> None:
     if missing:
         raise api_error(
             400,
-            f"Products not found: {', '.join(str(m) for m in missing)}",
+            f"Productos no encontrados: {', '.join(str(m) for m in missing)}",
             "TEMPLATE_PRODUCT_NOT_FOUND",
         )
 
@@ -57,7 +57,7 @@ def _load_pack(cursor, pack_id: int) -> dict:
     )
     pack = cursor.fetchone()
     if not pack:
-        raise api_error(404, "Template pack not found", "TEMPLATE_PACK_NOT_FOUND")
+        raise api_error(404, "Paquete de plantilla no encontrado", "TEMPLATE_PACK_NOT_FOUND")
     pack = dict(pack)
 
     cursor.execute(
@@ -118,7 +118,7 @@ def list_packs() -> List[dict]:
         )
         return [dict(r) for r in cursor.fetchall()]
     except Exception as e:
-        raise internal_error("template pack list", e)
+        raise internal_error("No se pudo listar los paquetes de plantillas", e)
     finally:
         if conn:
             conn.close()
@@ -133,7 +133,7 @@ def get_pack(pack_id: int) -> dict:
     except Exception as e:
         if getattr(e, "code", None):
             raise
-        raise internal_error("template pack get", e)
+        raise internal_error("No se pudo obtener el paquete de plantilla", e)
     finally:
         if conn:
             conn.close()
@@ -169,7 +169,7 @@ def create_pack(data: PackIn) -> dict:
             conn.rollback()
         if getattr(e, "code", None):
             raise
-        raise internal_error("template pack create", e)
+        raise internal_error("No se pudo crear el paquete de plantilla", e)
     finally:
         if conn:
             conn.close()
@@ -183,7 +183,7 @@ def update_pack(pack_id: int, data: PackIn) -> dict:
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         cursor.execute("SELECT id FROM template_packs WHERE id = %s", (pack_id,))
         if not cursor.fetchone():
-            raise api_error(404, "Template pack not found", "TEMPLATE_PACK_NOT_FOUND")
+            raise api_error(404, "Paquete de plantilla no encontrado", "TEMPLATE_PACK_NOT_FOUND")
         _check_products_exist(
             cursor,
             (item.product_id for cat in data.categories for item in cat.items),
@@ -206,7 +206,7 @@ def update_pack(pack_id: int, data: PackIn) -> dict:
             conn.rollback()
         if getattr(e, "code", None):
             raise
-        raise internal_error("template pack update", e)
+        raise internal_error("No se pudo actualizar el paquete de plantilla", e)
     finally:
         if conn:
             conn.close()
@@ -220,15 +220,15 @@ def delete_pack(pack_id: int) -> dict:
         cursor.execute("DELETE FROM template_packs WHERE id = %s RETURNING id", (pack_id,))
         if not cursor.fetchone():
             conn.rollback()
-            raise api_error(404, "Template pack not found", "TEMPLATE_PACK_NOT_FOUND")
+            raise api_error(404, "Paquete de plantilla no encontrado", "TEMPLATE_PACK_NOT_FOUND")
         conn.commit()
-        return {"message": "Template pack deleted", "id": pack_id}
+        return {"message": "Paquete de plantilla eliminado", "id": pack_id}
     except Exception as e:
         if conn:
             conn.rollback()
         if getattr(e, "code", None):
             raise
-        raise internal_error("template pack delete", e)
+        raise internal_error("No se pudo eliminar el paquete de plantilla", e)
     finally:
         if conn:
             conn.close()

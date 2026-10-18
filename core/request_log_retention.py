@@ -25,7 +25,7 @@ _DELETE_SQL = 'DELETE FROM public.request_logs WHERE "timestamp" < %s'
 
 def cutoff_for(days: int, now: Optional[datetime] = None) -> datetime:
     if not isinstance(days, int) or isinstance(days, bool) or days < 1:
-        raise ValueError("days must be an integer >= 1")
+        raise ValueError("Los días deben ser un entero mayor o igual a 1")
     base = now or datetime.now(timezone.utc)
     return base - timedelta(days=days)
 

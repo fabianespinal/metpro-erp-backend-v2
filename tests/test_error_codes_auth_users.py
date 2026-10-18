@@ -20,28 +20,28 @@ FILES = ["auth/router.py", "auth/service.py", "users/router.py", "users/service.
 
 # Every (message, code) pair this module may emit. Messages are the client contract.
 EXPECTED = {
-    ("Invalid username or password", "INVALID_CREDENTIALS"),
-    ("Account is disabled", "ACCOUNT_DISABLED"),
-    ("Account disabled", "ACCOUNT_DISABLED"),
-    ("Login temporarily unavailable", "LOGIN_UNAVAILABLE"),
-    ("Registration temporarily unavailable", "REGISTRATION_UNAVAILABLE"),
-    ("Username already exists", "USERNAME_TAKEN"),
-    ("Email already exists", "EMAIL_TAKEN"),
-    ("User not found", "USER_NOT_FOUND"),
-    ("Old password incorrect", "PASSWORD_INCORRECT"),
-    ("Current password is incorrect", "PASSWORD_INCORRECT"),
-    ("Token is empty", "TOKEN_EMPTY"),
-    ("Token expired", "TOKEN_EXPIRED"),
-    ("Invalid token", "TOKEN_INVALID"),
-    ("Missing authorization token", "TOKEN_MISSING"),
-    ("Invalid authorization header format", "AUTH_HEADER_INVALID"),
-    ("Invalid authorization scheme", "AUTH_SCHEME_INVALID"),
-    ("Insufficient permissions", "INSUFFICIENT_PERMISSIONS"),
-    ("No fields to update", "NO_FIELDS_TO_UPDATE"),
-    ("Cannot delete your own account", "CANNOT_DELETE_SELF"),
-    ("Cannot remove the last active superadmin", "LAST_SUPERADMIN"),
-    ("Username or email already exists", "USER_EXISTS"),
-    ("Only a superadmin can manage superadmin accounts", "SUPERADMIN_REQUIRED"),
+    ("Usuario o contraseña incorrectos", "INVALID_CREDENTIALS"),
+    ("La cuenta está deshabilitada", "ACCOUNT_DISABLED"),
+    ("Cuenta deshabilitada", "ACCOUNT_DISABLED"),
+    ("El inicio de sesión no está disponible temporalmente", "LOGIN_UNAVAILABLE"),
+    ("El registro no está disponible temporalmente", "REGISTRATION_UNAVAILABLE"),
+    ("El nombre de usuario ya existe", "USERNAME_TAKEN"),
+    ("El correo ya existe", "EMAIL_TAKEN"),
+    ("Usuario no encontrado", "USER_NOT_FOUND"),
+    ("La contraseña anterior es incorrecta", "PASSWORD_INCORRECT"),
+    ("La contraseña actual es incorrecta", "PASSWORD_INCORRECT"),
+    ("El token está vacío", "TOKEN_EMPTY"),
+    ("El token expiró", "TOKEN_EXPIRED"),
+    ("Token no válido", "TOKEN_INVALID"),
+    ("Falta el token de autorización", "TOKEN_MISSING"),
+    ("Formato de encabezado de autorización no válido", "AUTH_HEADER_INVALID"),
+    ("Esquema de autorización no válido", "AUTH_SCHEME_INVALID"),
+    ("Permisos insuficientes", "INSUFFICIENT_PERMISSIONS"),
+    ("No hay campos para actualizar", "NO_FIELDS_TO_UPDATE"),
+    ("No puede eliminar su propia cuenta", "CANNOT_DELETE_SELF"),
+    ("No se puede quitar al último superadministrador activo", "LAST_SUPERADMIN"),
+    ("El usuario o el correo ya existe", "USER_EXISTS"),
+    ("Solo un superadministrador puede gestionar cuentas de superadministrador", "SUPERADMIN_REQUIRED"),
 }
 
 
@@ -119,7 +119,7 @@ def test_login_wrong_user_has_code(monkeypatch):
     monkeypatch.setenv("RATE_LIMIT_ENABLED", "false")
     resp = TestClient(app).post("/auth/login", json={"username": "x", "password": "y"})
     assert resp.status_code == 401
-    assert resp.json() == {"detail": "Invalid username or password", "code": "INVALID_CREDENTIALS"}
+    assert resp.json() == {"detail": "Usuario o contraseña incorrectos", "code": "INVALID_CREDENTIALS"}
 
 
 def test_login_disabled_user_has_code(monkeypatch):
@@ -127,35 +127,35 @@ def test_login_disabled_user_has_code(monkeypatch):
     monkeypatch.setattr(ar, "get_db_connection", lambda: _Conn({"is_active": False, "password_hash": "x", "username": "x", "id": 1}))
     monkeypatch.setenv("RATE_LIMIT_ENABLED", "false")
     resp = TestClient(app).post("/auth/login", json={"username": "x", "password": "y"})
-    assert resp.json() == {"detail": "Account is disabled", "code": "ACCOUNT_DISABLED"}
+    assert resp.json() == {"detail": "La cuenta está deshabilitada", "code": "ACCOUNT_DISABLED"}
 
 
 def test_missing_header_has_code():
     resp = TestClient(app).get("/auth/me")
     assert resp.status_code == 401
-    assert resp.json() == {"detail": "Missing authorization token", "code": "TOKEN_MISSING"}
+    assert resp.json() == {"detail": "Falta el token de autorización", "code": "TOKEN_MISSING"}
 
 
 def test_bad_scheme_has_code():
     resp = TestClient(app).get("/auth/me", headers={"Authorization": "Token abc"})
-    assert resp.json() == {"detail": "Invalid authorization scheme", "code": "AUTH_SCHEME_INVALID"}
+    assert resp.json() == {"detail": "Esquema de autorización no válido", "code": "AUTH_SCHEME_INVALID"}
 
 
 def test_bad_format_has_code():
     resp = TestClient(app).get("/auth/me", headers={"Authorization": "Bearer"})
-    assert resp.json() == {"detail": "Invalid authorization header format", "code": "AUTH_HEADER_INVALID"}
+    assert resp.json() == {"detail": "Formato de encabezado de autorización no válido", "code": "AUTH_HEADER_INVALID"}
 
 
 def test_expired_token_has_code(monkeypatch):
     monkeypatch.setenv("RATE_LIMIT_ENABLED", "false")
     tok = jwt.encode({"sub": "a", "exp": int(time.time()) - 5}, "test-secret-key", algorithm="HS256")
     resp = TestClient(app).get("/auth/me", headers={"Authorization": f"Bearer {tok}"})
-    assert resp.json() == {"detail": "Token expired", "code": "TOKEN_EXPIRED"}
+    assert resp.json() == {"detail": "El token expiró", "code": "TOKEN_EXPIRED"}
 
 
 def test_invalid_token_has_code():
     resp = TestClient(app).get("/auth/me", headers={"Authorization": "Bearer not.a.token"})
-    assert resp.json() == {"detail": "Invalid token", "code": "TOKEN_INVALID"}
+    assert resp.json() == {"detail": "Token no válido", "code": "TOKEN_INVALID"}
 
 
 def test_deleted_user_has_code(monkeypatch):
@@ -163,7 +163,7 @@ def test_deleted_user_has_code(monkeypatch):
     monkeypatch.setattr(database, "get_db_connection", lambda: _Conn(None))
     tok = _token({"sub": "ghost", "role": "admin"})
     resp = TestClient(app).get("/auth/me", headers={"Authorization": f"Bearer {tok}"})
-    assert resp.json() == {"detail": "User not found", "code": "USER_NOT_FOUND"}
+    assert resp.json() == {"detail": "Usuario no encontrado", "code": "USER_NOT_FOUND"}
 
 
 def test_deactivated_user_has_code(monkeypatch):
@@ -171,7 +171,7 @@ def test_deactivated_user_has_code(monkeypatch):
     monkeypatch.setattr(database, "get_db_connection", lambda: _Conn({"is_active": False}))
     tok = _token({"sub": "alice", "role": "admin"})
     resp = TestClient(app).get("/auth/me", headers={"Authorization": f"Bearer {tok}"})
-    assert resp.json() == {"detail": "Account disabled", "code": "ACCOUNT_DISABLED"}
+    assert resp.json() == {"detail": "Cuenta deshabilitada", "code": "ACCOUNT_DISABLED"}
 
 
 def test_insufficient_role_has_code(monkeypatch):
@@ -180,7 +180,7 @@ def test_insufficient_role_has_code(monkeypatch):
     tok = _token({"sub": "alice", "role": "user"})
     resp = TestClient(app).get("/auth/admin-only", headers={"Authorization": f"Bearer {tok}"})
     assert resp.status_code == 403
-    assert resp.json() == {"detail": "Insufficient permissions", "code": "INSUFFICIENT_PERMISSIONS"}
+    assert resp.json() == {"detail": "Permisos insuficientes", "code": "INSUFFICIENT_PERMISSIONS"}
 
 
 def test_api_error_helper_sets_code_and_message():

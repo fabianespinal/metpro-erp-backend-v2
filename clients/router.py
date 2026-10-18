@@ -63,7 +63,7 @@ async def import_clients_csv(
     """Import clients from CSV"""
     if not file.filename.lower().endswith('.csv'):
         from fastapi import HTTPException
-        raise api_error(400, 'File must be CSV format', "CSV_FORMAT_INVALID")
+        raise api_error(400, "El archivo debe ser formato CSV", "CSV_FORMAT_INVALID")
     
     content = await file.read()
     return await service.import_clients_from_csv(content, file.filename, skip_duplicates, current_user)

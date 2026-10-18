@@ -32,8 +32,8 @@ def _assert_generic(exc_info, expected_context):
 
 
 @pytest.mark.parametrize("func_name, args, context", [
-    ("delete_quote", ("Q-1",), "Delete failed"),
-    ("update_quote_status", ("Q-1", "Approved"), "Failed to update status"),
+    ("delete_quote", ("Q-1",), "No se pudo eliminar"),
+    ("update_quote_status", ("Q-1", "Approved"), "No se pudo actualizar el estado"),
 ])
 def test_quote_handlers_return_generic_detail(monkeypatch, func_name, args, context):
     import quotes.service as qs
@@ -48,8 +48,8 @@ def test_quote_handlers_return_generic_detail(monkeypatch, func_name, args, cont
 
 
 @pytest.mark.parametrize("func_name, args, context", [
-    ("update_invoice_status", (1, "Paid"), "Update failed"),
-    ("delete_invoice", (1,), "Delete failed"),
+    ("update_invoice_status", (1, "Paid"), "No se pudo actualizar"),
+    ("delete_invoice", (1,), "No se pudo eliminar"),
 ])
 def test_invoice_handlers_return_generic_detail(monkeypatch, func_name, args, context):
     import invoices.service as inv

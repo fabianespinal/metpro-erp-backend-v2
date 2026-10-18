@@ -89,15 +89,50 @@ def error_body(message: str, code: str) -> dict:
     return {"detail": message, "code": code}
 
 
+_VALIDATION_ES = {
+    "missing": "campo obligatorio",
+    "string_type": "debe ser texto",
+    "int_type": "debe ser un número entero",
+    "int_parsing": "debe ser un número entero",
+    "float_type": "debe ser un número",
+    "float_parsing": "debe ser un número",
+    "bool_type": "debe ser verdadero o falso",
+    "bool_parsing": "debe ser verdadero o falso",
+    "string_too_short": "el texto es demasiado corto",
+    "string_too_long": "el texto es demasiado largo",
+    "greater_than": "el valor es demasiado bajo",
+    "greater_than_equal": "el valor es demasiado bajo",
+    "less_than": "el valor es demasiado alto",
+    "less_than_equal": "el valor es demasiado alto",
+    "too_short": "la lista tiene muy pocos elementos",
+    "too_long": "la lista tiene demasiados elementos",
+    "list_type": "debe ser una lista",
+    "dict_type": "debe ser un objeto",
+    "json_invalid": "JSON no válido",
+    "literal_error": "valor no permitido",
+    "enum": "valor no permitido",
+    "string_pattern_mismatch": "formato no válido",
+    "date_from_datetime_parsing": "fecha no válida",
+    "date_parsing": "fecha no válida",
+    "date_type": "fecha no válida",
+}
+
+
 def _validation_message(exc: RequestValidationError) -> str:
     errors = exc.errors()
     if not errors:
-        return "Invalid request"
+        return "Solicitud no válida"
     first = errors[0]
     loc = [str(p) for p in first.get("loc", ()) if p not in ("body", "query", "path", "header")]
     field = ".".join(loc)
-    msg = first.get("msg", "invalid value")
-    return f"Invalid request: {field}: {msg}" if field else f"Invalid request: {msg}"
+    etype = first.get("type", "")
+    raw = str(first.get("msg", ""))
+    if etype == "value_error" or raw.startswith("Value error, "):
+        # Custom validators already raise Spanish messages.
+        msg = raw[len("Value error, "):] if raw.startswith("Value error, ") else raw
+    else:
+        msg = _VALIDATION_ES.get(etype, "valor no válido")
+    return f"Solicitud no válida: {field}: {msg}" if field else f"Solicitud no válida: {msg}"
 
 
 async def _http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
@@ -120,7 +155,7 @@ async def _unhandled_exception_handler(request: Request, exc: Exception) -> JSON
     logger.error("Unhandled error on %s %s: %s", request.method, request.url.path, type(exc).__name__)
     return JSONResponse(
         status_code=500,
-        content=error_body("Internal server error", "INTERNAL_ERROR"),
+        content=error_body("Error interno del servidor", "INTERNAL_ERROR"),
     )
 
 

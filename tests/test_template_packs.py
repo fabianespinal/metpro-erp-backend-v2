@@ -107,11 +107,11 @@ def test_get_allowed_for_any_authenticated_user(client, monkeypatch):
 
 def test_get_missing_pack_returns_404_with_code(client, monkeypatch):
     def _missing(pack_id):
-        raise api_error(404, "Template pack not found", "TEMPLATE_PACK_NOT_FOUND")
+        raise api_error(404, "Paquete de plantilla no encontrado", "TEMPLATE_PACK_NOT_FOUND")
     monkeypatch.setattr(svc, "get_pack", _missing)
     resp = client.get("/template-packs/999", headers=_auth("user"))
     assert resp.status_code == 404
-    assert resp.json()["detail"] == "Template pack not found"
+    assert resp.json()["detail"] == "Paquete de plantilla no encontrado"
 
 
 # ----------------------------
@@ -129,7 +129,7 @@ def test_non_admin_writes_forbidden(client, monkeypatch, method, path, body):
         monkeypatch.setattr(svc, name, lambda *a, **k: called.append(a) or PACK_OUT)
     resp = client.request(method, path, json=body, headers=_auth("user"))
     assert resp.status_code == 403
-    assert resp.json()["detail"] == "Insufficient permissions"
+    assert resp.json()["detail"] == "Permisos insuficientes"
     assert called == []
 
 
@@ -156,7 +156,7 @@ def test_admin_update_allowed(client, monkeypatch):
 
 
 def test_admin_delete_allowed(client, monkeypatch):
-    monkeypatch.setattr(svc, "delete_pack", lambda pack_id: {"message": "Template pack deleted", "id": pack_id})
+    monkeypatch.setattr(svc, "delete_pack", lambda pack_id: {"message": "Paquete de plantilla eliminado", "id": pack_id})
     resp = client.delete("/template-packs/1", headers=_auth("admin"))
     assert resp.status_code == 200
     assert _data(resp)["id"] == 1

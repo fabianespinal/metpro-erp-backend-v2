@@ -20,7 +20,7 @@ def create_project(project: ProjectBase, current_user: dict = Depends(require_au
     except HTTPException:
         raise
     except Exception as e:
-        raise internal_error("Create failed", e)
+        raise internal_error("No se pudo crear", e)
 
 @router.get('/', response_model=List[Project])
 def get_projects(
@@ -33,7 +33,7 @@ def get_projects(
         projects = service.get_all_projects(client_id, status)
         return [Project(**p) for p in projects]
     except Exception as e:
-        raise internal_error("Fetch failed", e)
+        raise internal_error("No se pudo obtener la información", e)
 
 @router.get('/{project_id}', response_model=Project)
 def get_project(project_id: int, current_user: dict = Depends(require_auth)):
@@ -44,7 +44,7 @@ def get_project(project_id: int, current_user: dict = Depends(require_auth)):
     except HTTPException:
         raise
     except Exception as e:
-        raise internal_error("Fetch failed", e)
+        raise internal_error("No se pudo obtener la información", e)
 
 @router.put('/{project_id}', response_model=Project)
 def update_project(
@@ -70,7 +70,7 @@ def update_project(
     except HTTPException:
         raise
     except Exception as e:
-        raise internal_error("Update failed", e)
+        raise internal_error("No se pudo actualizar", e)
 
 @router.delete('/{project_id}')
 def delete_project(project_id: int, current_user: dict = Depends(require_auth)):
@@ -80,4 +80,4 @@ def delete_project(project_id: int, current_user: dict = Depends(require_auth)):
     except HTTPException:
         raise
     except Exception as e:
-        raise internal_error("Delete failed", e)
+        raise internal_error("No se pudo eliminar", e)

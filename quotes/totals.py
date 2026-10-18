@@ -25,7 +25,7 @@ def compute_totals(items: List[dict], charges: dict, tax_rate: Optional[float] =
     """
     rate = TAX_RATE if tax_rate is None else float(tax_rate)
     if rate < 0:
-        raise ValueError("tax_rate must be >= 0")
+        raise ValueError("La tasa de impuesto debe ser mayor o igual a 0")
 
     base = _legacy_totals(items, charges)
     subtotal_general = base["subtotal_general"]

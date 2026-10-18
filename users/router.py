@@ -25,9 +25,9 @@ def _assert_self_or_admin(user_id: str, current_user: dict) -> None:
     try:
         target = service.get_user_by_id(user_id)
     except HTTPException:
-        raise api_error(403, "Insufficient permissions", "INSUFFICIENT_PERMISSIONS")
+        raise api_error(403, "Permisos insuficientes", "INSUFFICIENT_PERMISSIONS")
     if target.get("username") != current_user.get("sub"):
-        raise api_error(403, "Insufficient permissions", "INSUFFICIENT_PERMISSIONS")
+        raise api_error(403, "Permisos insuficientes", "INSUFFICIENT_PERMISSIONS")
 
 
 # ============================================================
@@ -84,7 +84,7 @@ def update_user(
 def delete_user(user_id: UserId, current_user: dict = Depends(require_role("admin"))):
     """Delete user. Admin only. Cannot delete yourself."""
     if str(current_user.get("user_id")) == str(user_id):
-        raise api_error(400, "Cannot delete your own account", "CANNOT_DELETE_SELF")
+        raise api_error(400, "No puede eliminar su propia cuenta", "CANNOT_DELETE_SELF")
     return service.delete_user(user_id, actor_role=current_user.get("role"))
 
 

@@ -34,9 +34,9 @@ def _assert_generic(exc_info, expected_context):
 
 
 @pytest.mark.parametrize("func_name, args, context", [
-    ("generate_quote_pdf", ("Q-1",), "Quote PDF generation failed"),
-    ("generate_invoice_pdf", (1,), "Invoice PDF generation failed"),
-    ("generate_conduce_pdf", (1,), "Conduce generation failed"),
+    ("generate_quote_pdf", ("Q-1",), "No se pudo generar el PDF de la cotización"),
+    ("generate_invoice_pdf", (1,), "No se pudo generar el PDF de la factura"),
+    ("generate_conduce_pdf", (1,), "No se pudo generar el conduce"),
 ])
 def test_pdf_handlers_return_generic_detail(monkeypatch, capsys, func_name, args, context):
     ps = importlib.import_module("pdf.service")
@@ -78,7 +78,7 @@ def test_revenue_report_returns_generic_detail(monkeypatch):
     with pytest.raises(HTTPException) as exc_info:
         rs.get_revenue_report(None, None, None)
 
-    _assert_generic(exc_info, "Revenue report failed")
+    _assert_generic(exc_info, "No se pudo generar el reporte de ingresos")
 
 
 def test_no_str_e_or_print_left_in_step5_files():

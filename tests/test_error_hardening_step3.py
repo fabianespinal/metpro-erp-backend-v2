@@ -35,7 +35,7 @@ def _assert_generic(exc_info, expected_context):
 # ---------- service layer ----------
 
 @pytest.mark.parametrize("func_name, args, context", [
-    ("delete_project", (1,), "Delete failed"),
+    ("delete_project", (1,), "No se pudo eliminar"),
 ])
 def test_projects_service_returns_generic_detail(monkeypatch, func_name, args, context):
     import projects.service as ps
@@ -49,7 +49,7 @@ def test_projects_service_returns_generic_detail(monkeypatch, func_name, args, c
 
 
 @pytest.mark.parametrize("func_name, args, context", [
-    ("delete_user", ("1",), "Failed to delete user"),
+    ("delete_user", ("1",), "No se pudo eliminar el usuario"),
 ])
 def test_users_service_returns_generic_detail(monkeypatch, func_name, args, context):
     import users.service as us
@@ -75,7 +75,7 @@ def test_projects_router_delete_returns_generic_detail(monkeypatch):
     with pytest.raises(HTTPException) as exc_info:
         pr.delete_project(1, current_user={"sub": "tester"})
 
-    _assert_generic(exc_info, "Delete failed")
+    _assert_generic(exc_info, "No se pudo eliminar")
 
 
 def test_projects_router_get_all_returns_generic_detail(monkeypatch):
@@ -89,7 +89,7 @@ def test_projects_router_get_all_returns_generic_detail(monkeypatch):
     with pytest.raises(HTTPException) as exc_info:
         pr.get_projects(None, None)
 
-    _assert_generic(exc_info, "Fetch failed")
+    _assert_generic(exc_info, "No se pudo obtener la información")
 
 
 def test_no_str_e_left_in_step3_files():

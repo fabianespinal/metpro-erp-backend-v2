@@ -109,7 +109,7 @@ def test_non_admin_delete_is_forbidden(client, monkeypatch, module, name, svc_mo
     )
 
     assert resp.status_code == 403
-    assert resp.json()["detail"] == "Insufficient permissions"
+    assert resp.json()["detail"] == "Permisos insuficientes"
     assert called == []
 
 

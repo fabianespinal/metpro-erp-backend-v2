@@ -41,7 +41,7 @@ def create_client(company_name: str, contact_name: Optional[str], email: Optiona
     except Exception as e:
         if conn:
             conn.rollback()
-        raise internal_error("Failed to create client", e)
+        raise internal_error("No se pudo crear el cliente", e)
 
     finally:
         if conn:
@@ -80,7 +80,7 @@ def get_client_by_id(client_id: int) -> dict:
         row = cursor.fetchone()
 
         if not row:
-            raise api_error(404, "Client not found", "CLIENT_NOT_FOUND")
+            raise api_error(404, "Cliente no encontrado", "CLIENT_NOT_FOUND")
 
         return row
 
@@ -105,11 +105,11 @@ def update_client(client_id: int, company_name: str, contact_name: Optional[str]
         # Check existence
         cursor.execute("SELECT id FROM clients WHERE id = %s", (client_id,))
         if not cursor.fetchone():
-            raise api_error(404, f"Client with ID {client_id} not found", "CLIENT_NOT_FOUND")
+            raise api_error(404, f"Cliente con ID {client_id} no encontrado", "CLIENT_NOT_FOUND")
 
         # Validate email
         if email and "@" not in email:
-            raise api_error(400, "Invalid email format", "EMAIL_INVALID")
+            raise api_error(400, "Formato de correo no válido", "EMAIL_INVALID")
 
         # Duplicate email
         if email:
@@ -118,7 +118,7 @@ def update_client(client_id: int, company_name: str, contact_name: Optional[str]
                 (email, client_id)
             )
             if cursor.fetchone():
-                raise api_error(400, f"Email {email} is already in use by another client", "CLIENT_EMAIL_TAKEN")
+                raise api_error(400, f"El correo {email} ya está en uso por otro cliente", "CLIENT_EMAIL_TAKEN")
 
         # Duplicate tax_id
         if tax_id:
@@ -127,7 +127,7 @@ def update_client(client_id: int, company_name: str, contact_name: Optional[str]
                 (tax_id, client_id)
             )
             if cursor.fetchone():
-                raise api_error(400, f"Tax ID {tax_id} is already in use by another client", "CLIENT_TAX_ID_TAKEN")
+                raise api_error(400, f"El RNC {tax_id} ya está en uso por otro cliente", "CLIENT_TAX_ID_TAKEN")
 
         # Update
         cursor.execute("""
@@ -157,7 +157,7 @@ def update_client(client_id: int, company_name: str, contact_name: Optional[str]
     except Exception as e:
         if conn:
             conn.rollback()
-        raise internal_error("Failed to update client", e)
+        raise internal_error("No se pudo actualizar el cliente", e)
 
     finally:
         if conn:
@@ -185,14 +185,14 @@ def delete_client(client_id: int) -> dict:
             (client_id, client_id, client_id),
         )
         if cursor.fetchone()["n"] > 0:
-            raise api_error(400, "Client has quotes, invoices or projects and cannot be deleted", "CLIENT_IN_USE")
+            raise api_error(400, "El cliente tiene cotizaciones, facturas o proyectos y no se puede eliminar", "CLIENT_IN_USE")
 
         cursor.execute("DELETE FROM clients WHERE id = %s", (client_id,))
         if cursor.rowcount == 0:
-            raise api_error(404, "Client not found", "CLIENT_NOT_FOUND")
+            raise api_error(404, "Cliente no encontrado", "CLIENT_NOT_FOUND")
 
         conn.commit()
-        return {"message": "Client deleted successfully"}
+        return {"message": "Cliente eliminado correctamente"}
 
     except HTTPException:
         if conn:
@@ -202,7 +202,7 @@ def delete_client(client_id: int) -> dict:
     except Exception as e:
         if conn:
             conn.rollback()
-        raise internal_error("Delete failed", e)
+        raise internal_error("No se pudo eliminar", e)
 
     finally:
         if conn:
@@ -222,15 +222,15 @@ async def import_clients_from_csv(file_content: bytes, filename: str, skip_dupli
         try:
             csv_text = file_content.decode("utf-8-sig")
         except UnicodeDecodeError:
-            raise api_error(400, "File must be UTF-8 encoded", "FILE_ENCODING_INVALID")
+            raise api_error(400, "El archivo debe estar codificado en UTF-8", "FILE_ENCODING_INVALID")
 
         rows = list(csv.DictReader(io.StringIO(csv_text)))
 
         if not rows:
-            raise api_error(400, "CSV file is empty", "CSV_EMPTY")
+            raise api_error(400, "El archivo CSV está vacío", "CSV_EMPTY")
 
         if "company_name" not in rows[0]:
-            raise api_error(400, "Missing required column: company_name", "CSV_COLUMN_MISSING")
+            raise api_error(400, "Falta la columna obligatoria: company_name", "CSV_COLUMN_MISSING")
 
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
@@ -335,7 +335,7 @@ async def import_clients_from_csv(file_content: bytes, filename: str, skip_dupli
         if conn:
             conn.rollback()
         errors.append("System error: import aborted")
-        raise internal_error("Import failed", e)
+        raise internal_error("No se pudo importar", e)
 
     finally:
         if conn:

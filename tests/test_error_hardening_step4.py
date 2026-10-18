@@ -43,7 +43,7 @@ def test_create_client_returns_generic_detail(monkeypatch):
     with pytest.raises(HTTPException) as exc_info:
         cs.create_client("Acme", None, None, None, None, None, None)
 
-    _assert_generic(exc_info, "Failed to create client")
+    _assert_generic(exc_info, "No se pudo crear el cliente")
 
 
 def test_delete_client_returns_generic_detail(monkeypatch):
@@ -53,7 +53,7 @@ def test_delete_client_returns_generic_detail(monkeypatch):
     with pytest.raises(HTTPException) as exc_info:
         cs.delete_client(1)
 
-    _assert_generic(exc_info, "Delete failed")
+    _assert_generic(exc_info, "No se pudo eliminar")
 
 
 def test_create_product_returns_generic_detail(monkeypatch):
@@ -63,7 +63,7 @@ def test_create_product_returns_generic_detail(monkeypatch):
     with pytest.raises(HTTPException) as exc_info:
         ps.create_product("Widget", "desc", 1.0)
 
-    _assert_generic(exc_info, "Failed to create product")
+    _assert_generic(exc_info, "No se pudo crear el producto")
 
 
 def test_delete_product_returns_generic_detail(monkeypatch):
@@ -73,7 +73,7 @@ def test_delete_product_returns_generic_detail(monkeypatch):
     with pytest.raises(HTTPException) as exc_info:
         ps.delete_product(1)
 
-    _assert_generic(exc_info, "Delete failed")
+    _assert_generic(exc_info, "No se pudo eliminar")
 
 
 # ---------- CSV import: row-level failure ----------
@@ -134,7 +134,7 @@ def test_client_csv_outer_failure_returns_generic_detail(monkeypatch):
     with pytest.raises(HTTPException) as exc_info:
         asyncio.run(cs.import_clients_from_csv(csv_bytes, "clients.csv", True, {"sub": "tester"}))
 
-    _assert_generic(exc_info, "Import failed")
+    _assert_generic(exc_info, "No se pudo importar")
 
 
 def test_no_str_e_left_in_step4_files():

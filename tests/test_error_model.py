@@ -34,7 +34,7 @@ def _build_app():
 
     @app.get("/not-found")
     def not_found():
-        raise HTTPException(status_code=404, detail="Client not found")
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
 
     @app.get("/custom")
     def custom():
@@ -42,7 +42,7 @@ def _build_app():
 
     @app.get("/headers")
     def with_headers():
-        raise HTTPException(status_code=429, detail="Too many requests", headers={"Retry-After": "7"})
+        raise HTTPException(status_code=429, detail="Demasiadas solicitudes", headers={"Retry-After": "7"})
 
     @app.get("/boom")
     def boom():
@@ -63,7 +63,7 @@ def client():
 def test_http_exception_has_detail_and_code(client):
     resp = client.get("/not-found")
     assert resp.status_code == 404
-    assert resp.json() == {"detail": "Client not found", "code": "NOT_FOUND"}
+    assert resp.json() == {"detail": "Cliente no encontrado", "code": "NOT_FOUND"}
 
 
 def test_explicit_code_attribute_wins(client):
@@ -75,7 +75,7 @@ def test_explicit_code_attribute_wins(client):
 def test_headers_are_preserved(client):
     resp = client.get("/headers")
     assert resp.status_code == 429
-    assert resp.json() == {"detail": "Too many requests", "code": "RATE_LIMITED"}
+    assert resp.json() == {"detail": "Demasiadas solicitudes", "code": "RATE_LIMITED"}
     assert resp.headers["Retry-After"] == "7"
 
 
@@ -94,7 +94,7 @@ def test_unhandled_exception_returns_generic_body_and_logs(caplog):
     with caplog.at_level(logging.ERROR, logger="core.errors"):
         resp = client.get("/boom")
     assert resp.status_code == 500
-    assert resp.json() == {"detail": "Internal server error", "code": "INTERNAL_ERROR"}
+    assert resp.json() == {"detail": "Error interno del servidor", "code": "INTERNAL_ERROR"}
     assert "postgres" not in resp.text
     assert "password" not in resp.text
     assert any("RuntimeError" in r.getMessage() for r in caplog.records)

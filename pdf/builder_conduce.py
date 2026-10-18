@@ -58,7 +58,7 @@ def create_conduce_pdf(doc_id, doc_date, client, project_name, notes, items, sig
     pdf.set_xy(left_x, start_y)
     pdf.set_font('Arial', 'B', 7)
     pdf.set_text_color(80, 80, 80)
-    pdf.cell(35, 4, 'Numero de Conduce:', 0, 0)
+    pdf.cell(35, 4, 'Número de Conduce:', 0, 0)
     pdf.set_font('Arial', '', 7)
     pdf.set_text_color(30, 30, 30)
     pdf.cell(0, 4, sanitize_text(doc_id), 0, 1)
@@ -102,7 +102,7 @@ def create_conduce_pdf(doc_id, doc_date, client, project_name, notes, items, sig
         pdf.set_x(right_x)
         pdf.set_font('Arial', 'B', 7)
         pdf.set_text_color(80, 80, 80)
-        pdf.cell(25, 4, 'Direccion:', 0, 0)
+        pdf.cell(25, 4, 'Dirección:', 0, 0)
         pdf.set_font('Arial', '', 7)
         pdf.set_text_color(30, 30, 30)
         pdf.cell(0, 4, sanitize_text(client["address"])[:40], 0, 1)
@@ -120,7 +120,7 @@ def create_conduce_pdf(doc_id, doc_date, client, project_name, notes, items, sig
     pdf.set_draw_color(220, 220, 220)
     pdf.set_font('Arial', 'B', 7)
     pdf.set_text_color(60, 60, 60)
-    pdf.cell(140, 6, 'DESCRIPCION', 1, 0, 'L', True)
+    pdf.cell(140, 6, 'DESCRIPCIÓN', 1, 0, 'L', True)
     pdf.cell(50, 6, 'CANTIDAD', 1, 1, 'C', True)
 
     # Table rows
@@ -153,7 +153,7 @@ def create_conduce_pdf(doc_id, doc_date, client, project_name, notes, items, sig
     pdf.set_y(-15)
     pdf.set_font('Arial', 'I', 8)
     pdf.set_text_color(180, 180, 180)
-    pdf.cell(0, 10, 'Pagina 1 de 1', 0, 0, 'C')
+    pdf.cell(0, 10, 'Página 1 de 1', 0, 0, 'C')
 
     pdf_bytes = pdf.output()
     return io.BytesIO(pdf_bytes)

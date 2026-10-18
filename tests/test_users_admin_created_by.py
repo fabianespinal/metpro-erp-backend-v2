@@ -123,7 +123,7 @@ def test_reset_password_writes_hash_only(monkeypatch, hasher):
     assert "updated_at" not in sql
     assert params == ("HASH:new-pass", UID)
     assert conn.committed is True
-    assert result == {"message": "Password reset successfully"}
+    assert result == {"message": "Contraseña restablecida correctamente"}
 
 
 def test_reset_route_passes_through_to_service(monkeypatch):
@@ -131,7 +131,7 @@ def test_reset_route_passes_through_to_service(monkeypatch):
 
     def fake_reset(user_id, new_password, actor_role=None):
         seen["args"] = (user_id, new_password)
-        return {"message": "Password reset successfully"}
+        return {"message": "Contraseña restablecida correctamente"}
 
     monkeypatch.setattr(usvc, "reset_user_password", fake_reset)
     out = urouter.reset_password(
@@ -140,7 +140,7 @@ def test_reset_route_passes_through_to_service(monkeypatch):
         _admin={"role": "admin"},
     )
     assert seen["args"] == (UID, "new-pass")
-    assert out == {"message": "Password reset successfully"}
+    assert out == {"message": "Contraseña restablecida correctamente"}
 
 
 # ============================================================
@@ -219,7 +219,7 @@ def test_delete_non_superadmin_skips_guard(monkeypatch):
         R("DELETE FROM users WHERE id", rowcount=1),
     ])
     _patch_db(monkeypatch, usvc, cur)
-    assert usvc.delete_user(UID) == {"message": "User deleted successfully"}
+    assert usvc.delete_user(UID) == {"message": "Usuario eliminado correctamente"}
     assert not cur.executed("count(*)")
 
 

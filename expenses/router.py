@@ -45,7 +45,7 @@ def get_expense_endpoint(expense_id: int, _user: dict = Depends(require_auth)):
     try:
         exp = get_expense(conn, expense_id)
         if not exp:
-            raise api_error(404, "Expense not found", "EXPENSE_NOT_FOUND")
+            raise api_error(404, "Gasto no encontrado", "EXPENSE_NOT_FOUND")
         return exp
     finally:
         conn.close()
@@ -57,7 +57,7 @@ def update_expense_endpoint(expense_id: int, data: ExpenseUpdate, _user: dict = 
     try:
         updated = update_expense(conn, expense_id, data)
         if not updated:
-            raise api_error(400, "Nothing to update", "NOTHING_TO_UPDATE")
+            raise api_error(400, "No hay nada que actualizar", "NOTHING_TO_UPDATE")
         conn.commit()
         return {"status": "updated"}
     finally:

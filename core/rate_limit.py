@@ -115,7 +115,7 @@ def rate_limit(bucket: str, limit_env: str, window_env: str, default_limit: int,
         if retry_after > 0:
             raise HTTPException(
                 status_code=429,
-                detail="Too many requests",
+                detail="Demasiadas solicitudes",
                 headers={"Retry-After": str(int(retry_after) + 1)},
             )
         return None
@@ -150,7 +150,7 @@ def enforce_user_limit(sub: str) -> None:
     window = _env_int("RATE_LIMIT_AUTH_WINDOW", 60)
     retry_after = _limiter.hit(f"user:{sub}", limit, window)
     if retry_after > 0:
-        exc = api_error(429, "Too many requests", "RATE_LIMITED")
+        exc = api_error(429, "Demasiadas solicitudes", "RATE_LIMITED")
         exc.headers = {"Retry-After": str(int(retry_after) + 1)}
         raise exc
     return None

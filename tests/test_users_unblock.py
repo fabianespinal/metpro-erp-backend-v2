@@ -170,7 +170,7 @@ def test_admin_can_manage_regular_users(monkeypatch, hasher):
         R("UPDATE users SET password_hash", rowcount=1),
     ])
     _patch(monkeypatch, cur)
-    assert usvc.reset_user_password(UID, "longenough", actor_role="admin") == {"message": "Password reset successfully"}
+    assert usvc.reset_user_password(UID, "longenough", actor_role="admin") == {"message": "Contraseña restablecida correctamente"}
 
 
 # ---------------- S3: role comes from the DB ----------------

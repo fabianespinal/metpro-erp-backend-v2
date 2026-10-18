@@ -112,7 +112,7 @@ app.include_router(terms_router)
 @app.get("/")
 def read_root():
     return {
-        "message": "METPRO ERP API is running!",
+        "message": "¡La API de METPRO ERP está en funcionamiento!",
         "version": "2.0.0",
         "architecture": "Modular",
         "database": "PostgreSQL (Supabase)",

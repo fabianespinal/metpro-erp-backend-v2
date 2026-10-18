@@ -22,7 +22,7 @@ def test_shape_for_none_payload():
 
 
 def test_payload_is_passed_through_unchanged():
-    payload = {"message": "Client deleted successfully", "nested": {"a": [1, {"b": 2}]}}
+    payload = {"message": "Cliente eliminado correctamente", "nested": {"a": [1, {"b": 2}]}}
     body = success_body(payload)
     assert body["data"] is payload
 

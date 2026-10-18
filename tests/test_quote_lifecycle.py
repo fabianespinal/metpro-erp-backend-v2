@@ -64,7 +64,7 @@ def test_full_status_matrix(monkeypatch, current, target):
             call()
         assert exc.value.code == DEDICATED[target]
     elif target == current:
-        assert call()["message"] == "Status unchanged"
+        assert call()["message"] == "Estado sin cambios"
     elif target in svc.MANUAL_QUOTE_TRANSITIONS[current]:
         assert call()["status"] == target and conn.committed
     else:
@@ -141,7 +141,7 @@ def test_delete_draft_removes_items_and_quote(monkeypatch):
     cur = Cur([{"status": "Draft"}, None])
     conn = Conn(cur)
     monkeypatch.setattr(svc, "get_db_connection", lambda: conn)
-    assert svc.delete_quote("q") == {"message": "Quote deleted successfully"}
+    assert svc.delete_quote("q") == {"message": "Cotización eliminada correctamente"}
     deletes = [s for s, _ in cur.executed if s.startswith("DELETE")]
     assert deletes == ["DELETE FROM quote_items WHERE quote_id = %s", "DELETE FROM quotes WHERE quote_id = %s"]
     assert conn.committed

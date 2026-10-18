@@ -1,7 +1,7 @@
 from core.errors import api_error
 from fastapi import APIRouter, Depends, HTTPException
 from database import get_db_connection
-from auth.service import require_auth
+from auth.service import require_auth, require_role
 from .models import ExpenseCreate, ExpenseUpdate
 from .services import (
     create_expense,
@@ -65,7 +65,7 @@ def update_expense_endpoint(expense_id: int, data: ExpenseUpdate, _user: dict = 
 
 
 @router.delete("/{expense_id}", response_model=dict)
-def delete_expense_endpoint(expense_id: int, _user: dict = Depends(require_auth)):
+def delete_expense_endpoint(expense_id: int, _admin: dict = Depends(require_role("admin"))):
     conn = get_db_connection()
     try:
         delete_expense(conn, expense_id)

@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from database import get_db
-from auth.service import require_auth
+from auth.service import require_auth, require_role
 from contacts.schemas import ContactCreate, ContactRead, ContactUpdate
 from .service import (
     create_contact,
@@ -34,7 +34,7 @@ def update_contact_endpoint(contact_id: int, contact_in: ContactUpdate, db: Sess
 
 
 @router.delete("/{contact_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_contact_endpoint(contact_id: int, db: Session = Depends(get_db), _user: dict = Depends(require_auth)):
+def delete_contact_endpoint(contact_id: int, db: Session = Depends(get_db), _admin: dict = Depends(require_role("admin"))):
     deleted = delete_contact(db, contact_id)
     if not deleted:
         raise api_error(404, "Contacto no encontrado", "CONTACT_NOT_FOUND")

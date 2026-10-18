@@ -78,3 +78,34 @@ def test_client_ip_without_real_ip_keeps_previous_rule():
     assert rl.client_ip(_Req({"x-forwarded-for": "6.6.6.6, 203.0.113.9"})) == "203.0.113.9"
     assert rl.client_ip(_Req({}, host="198.51.100.7")) == "198.51.100.7"
     assert rl.client_ip(_Req({"x-real-ip": "  "}, host="198.51.100.8")) == "198.51.100.8"
+
+
+# ---- Expenses and contacts: delete is admin only (approved 2026-10-18) ----
+
+def test_expense_and_contact_delete_forbidden_for_user(monkeypatch):
+    _active(monkeypatch)
+    for path in ("/expenses/1", "/contacts/1"):
+        assert client.delete(path, headers=_hdr("user")).status_code == 403, path
+
+
+def test_expense_and_contact_delete_reach_handler_for_admin(monkeypatch):
+    _active(monkeypatch)
+
+    class _Conn:
+        def commit(self):
+            pass
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr("expenses.router.get_db_connection", lambda: _Conn())
+    monkeypatch.setattr("expenses.router.delete_expense", lambda conn, eid: None)
+    monkeypatch.setattr("contacts.router.delete_contact", lambda db, cid: True)
+    from database import get_db
+    app.dependency_overrides[get_db] = lambda: None
+    try:
+        for role in ("admin", "superadmin"):
+            assert client.delete("/expenses/1", headers=_hdr(role)).status_code == 200
+            assert client.delete("/contacts/1", headers=_hdr(role)).status_code == 204
+    finally:
+        app.dependency_overrides.pop(get_db, None)

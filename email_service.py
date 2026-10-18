@@ -50,7 +50,7 @@ def send_quote_email(contact_email, contact_name, company_name, project_name, qu
     params = {
         "from": FROM_EMAIL,
         "to": [contact_email],
-        "subject": f"Cotización {quote_id} - {clean_title}",
+        "subject": f"Cotización Q-{quote_id} - {clean_title}",  # same Q- label as the PDF and public page
         "html": html,
         "attachments": [
             {

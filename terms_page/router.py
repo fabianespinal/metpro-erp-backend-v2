@@ -22,19 +22,24 @@ class TermsPreview(BaseModel):
     sections: Optional[Dict[str, str]] = None
 
 
-@router.get("/")
-def get_terms(_admin: dict = Depends(require_role("admin"))):
+def _with_meta(settings: dict) -> dict:
+    """GET and PUT return the same shape; the editor re-renders from either."""
     return {
-        **service.get_settings(),
+        **settings,
         "titles": dict(SECTIONS),
         "order": list(SECTION_KEYS),
         "defaults": DEFAULT_SECTIONS,
     }
 
 
+@router.get("/")
+def get_terms(_admin: dict = Depends(require_role("admin"))):
+    return _with_meta(service.get_settings())
+
+
 @router.put("/")
 def save_terms(payload: TermsSave, admin: dict = Depends(require_role("admin"))):
-    return service.save_settings(payload.sections, payload.enabled_quote, payload.enabled_invoice, admin.get("sub"))
+    return _with_meta(service.save_settings(payload.sections, payload.enabled_quote, payload.enabled_invoice, admin.get("sub")))
 
 
 @router.post("/preview")

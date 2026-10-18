@@ -5,10 +5,12 @@ Sliding-window counter per (bucket, client IP). No external store.
 Limits are per process. If the service runs more than one replica,
 the effective limit is per replica. See PR notes.
 
-Client IP comes from the RIGHTMOST X-Forwarded-For entry. The edge proxy
-appends the real client address, so the rightmost entry is the one it
-set. Leftmost entries are client-supplied and can be spoofed.
-Falls back to the socket peer when the header is absent.
+Client IP: X-Real-IP first. Railway's edge sets it to the client's remote
+address (docs: networking/public-networking/specs-and-limits). In production
+the rightmost X-Forwarded-For entry is a Railway proxy address (152.233.x),
+which would put every user in one bucket. Then the RIGHTMOST X-Forwarded-For
+entry (leftmost entries are client-supplied and can be spoofed), then the
+socket peer.
 
 Toggles (env):
   RATE_LIMIT_ENABLED        default "false" (off until client-IP check is verified).
@@ -89,6 +91,9 @@ _limiter = SlidingWindowLimiter()
 
 
 def client_ip(request: Request) -> str:
+    real = (request.headers.get("x-real-ip") or "").strip()
+    if real:
+        return real
     xff = request.headers.get("x-forwarded-for")
     if xff:
         parts = [p.strip() for p in xff.split(",") if p.strip()]

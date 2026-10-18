@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Optional
 from .models import Project, ProjectBase, ProjectUpdate
 from . import service
-from auth.service import require_auth
+from auth.service import require_auth, require_role
 from core.errors import internal_error
 
 router = APIRouter(prefix='/projects', tags=['projects'])
@@ -73,8 +73,8 @@ def update_project(
         raise internal_error("No se pudo actualizar", e)
 
 @router.delete('/{project_id}')
-def delete_project(project_id: int, current_user: dict = Depends(require_auth)):
-    """Eliminar proyecto"""
+def delete_project(project_id: int, current_user: dict = Depends(require_role("admin"))):
+    """Eliminar proyecto. Admin only, same rule as quotes, invoices, clients and products."""
     try:
         return service.delete_project(project_id)
     except HTTPException:

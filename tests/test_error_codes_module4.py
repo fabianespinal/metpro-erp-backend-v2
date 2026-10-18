@@ -31,6 +31,7 @@ EXPECTED = {
     ("pdf/service.py", 404, "Factura no encontrada", "INVOICE_NOT_FOUND"),
     ("quotes/service.py", 404, "Cliente no encontrado", "CLIENT_NOT_FOUND"),
     ("quotes/service.py", 400, "El contacto {contact_id} no pertenece al cliente {client_id}", "CONTACT_CLIENT_MISMATCH"),
+    ("quotes/service.py", 400, "Seleccione un contacto del cliente", "CONTACT_REQUIRED"),
     ("quotes/service.py", 404, "Cotización no encontrada", "QUOTE_NOT_FOUND"),
     ("quotes/service.py", 400, "Solo las cotizaciones en Borrador se pueden editar", "QUOTE_NOT_DRAFT"),
     ("quotes/service.py", 400, "Solo las cotizaciones aprobadas se pueden convertir en facturas", "QUOTE_NOT_APPROVED"),

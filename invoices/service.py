@@ -434,6 +434,10 @@ def get_invoice_with_contact(invoice_id: int) -> dict:
                 i.updated_at,
                 (SELECT COALESCE(u.full_name, u.username) FROM users u WHERE u.id = i.created_by_user_id) AS created_by_name,
                 i.public_token,
+                -- Same source as the internal invoice PDF (pdf/service.py): the quote, then the invoice.
+                q.project_name,
+                COALESCE(q.payment_terms, i.payment_terms) AS payment_terms,
+                COALESCE(q.valid_until, i.valid_until) AS valid_until,
 
                 c.company_name,
                 c.address AS company_address,

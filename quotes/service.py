@@ -222,6 +222,8 @@ def create_quote(
             raise api_error(404, "Cliente no encontrado", "CLIENT_NOT_FOUND")
 
         # Validate that the contact belongs to the selected client
+        if contact_id is None:
+            raise api_error(400, "Seleccione un contacto del cliente", "CONTACT_REQUIRED")
         cursor.execute(
             "SELECT id FROM contacts WHERE id = %s AND company_id = %s",
             (contact_id, client_id),

@@ -146,7 +146,7 @@ def build_quote_invoice_pdf(
     pdf.set_xy(left_x, start_y)
     pdf.set_font('Arial', 'B', 7)
     pdf.set_text_color(80, 80, 80)
-    label = 'Numero de Cotizacion:' if doc_type == 'COTIZACION' else 'Numero de Factura:'
+    label = 'Número de Cotización:' if doc_type == 'COTIZACION' else 'Número de Factura:'
     pdf.cell(35, 4, label, 0, 0)
     pdf.set_font('Arial', '', 7)
     pdf.set_text_color(30, 30, 30)

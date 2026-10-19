@@ -2,6 +2,7 @@ import io
 import os
 from fpdf import FPDF
 from pdf.utils.text_utils import sanitize_text
+from core.dates import fmt_day  # E-03
 import logging
 
 logger = logging.getLogger(__name__)
@@ -69,7 +70,7 @@ def create_conduce_pdf(doc_id, doc_date, client, project_name, notes, items, sig
     pdf.cell(35, 4, 'Fecha:', 0, 0)
     pdf.set_font('Arial', '', 7)
     pdf.set_text_color(30, 30, 30)
-    pdf.cell(0, 4, sanitize_text(doc_date), 0, 1)
+    pdf.cell(0, 4, sanitize_text(fmt_day(doc_date)), 0, 1)
 
     if project_name:
         pdf.set_x(left_x)

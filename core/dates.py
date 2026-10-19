@@ -59,3 +59,21 @@ def sql_local_date(column: str) -> str:
     Use with one bind parameter for the zone name: params.append(business_tz_name()).
     """
     return f"(({column} AT TIME ZONE 'UTC') AT TIME ZONE %s)::date"
+
+
+_ISO_DAY = __import__("re").compile(r"^(\d{4})-(\d{2})-(\d{2})")
+
+
+def fmt_day(value) -> str:
+    """Printed date format dd/mm/aaaa (debug E-03, approved 2026-10-18).
+
+    YYYY-MM-DD (optionally followed by a time) -> DD/MM/YYYY. date/datetime use their calendar
+    day as given (convert timestamps with local_date first). Anything else is printed unchanged,
+    so an already formatted DD/MM/YYYY passes through.
+    """
+    if value is None or value == "":
+        return ""
+    if isinstance(value, (date, datetime)):
+        value = value.isoformat()
+    m = _ISO_DAY.match(str(value))
+    return f"{m.group(3)}/{m.group(2)}/{m.group(1)}" if m else str(value)

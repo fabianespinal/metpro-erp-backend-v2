@@ -2,6 +2,7 @@ import io
 import os
 from fpdf import FPDF
 from pdf.utils.text_utils import sanitize_text
+from core.dates import fmt_day  # E-03: every printed date is dd/mm/aaaa
 from quotes.dynamic_charges import dynamic_charge_lines
 import logging
 
@@ -158,7 +159,7 @@ def build_quote_invoice_pdf(
     pdf.cell(35, 4, 'Fecha:', 0, 0)
     pdf.set_font('Arial', '', 7)
     pdf.set_text_color(30, 30, 30)
-    pdf.cell(0, 4, sanitize_text(doc_date), 0, 1)
+    pdf.cell(0, 4, sanitize_text(fmt_day(doc_date)), 0, 1)
 
     if payment_terms:
         pdf.set_x(left_x)
@@ -176,7 +177,7 @@ def build_quote_invoice_pdf(
         pdf.cell(35, 4, 'Válida Hasta:', 0, 0)
         pdf.set_font('Arial', '', 7)
         pdf.set_text_color(30, 30, 30)
-        pdf.cell(0, 4, sanitize_text(str(valid_until)), 0, 1)
+        pdf.cell(0, 4, sanitize_text(fmt_day(valid_until)), 0, 1)
 
     if project_name:
         pdf.set_x(left_x)
@@ -445,7 +446,7 @@ def build_quote_invoice_pdf(
             pdf.set_text_color(30, 30, 30)
 
             for p in payments:
-                pay_date = str(p.get("payment_date") or p.get("date") or "")
+                pay_date = fmt_day(p.get("payment_date") or p.get("date") or "")
                 pay_method = sanitize_text(str(p.get("method") or ""))
                 pay_amount = float(p.get("amount") or 0)
                 pay_notes = sanitize_text(str(p.get("notes") or ""))[:60]

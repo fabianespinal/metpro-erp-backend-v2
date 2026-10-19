@@ -100,6 +100,6 @@ def test_csv_skips_nan_inf_and_negative_prices(monkeypatch):
         "Cero,0,ok\n"
     ).encode()
     out = asyncio.run(psvc.import_products_from_csv(csv_bytes, "p.csv"))
-    assert out == {"imported": 2, "skipped": 4, "total": 6}
+    assert out == {"imported": 2, "updated": 0, "skipped": 4, "total": 6}
     assert [p[0] for p in cur.inserted] == ["Valido", "Cero"]
     assert [p[2] for p in cur.inserted] == [95.5, 0.0]

@@ -1,14 +1,14 @@
 from core.errors import api_error
 from fastapi import Form, APIRouter, Depends, File, UploadFile
 from typing import List
-from .models import Client, ClientBase
+from .models import Client, ClientInput
 from . import service
 from auth.service import require_auth, require_role
 
 router = APIRouter(prefix='/clients', tags=['clients'])
 
 @router.post('/', response_model=Client)
-def create_client(client: ClientBase, current_user: dict = Depends(require_auth)):
+def create_client(client: ClientInput, current_user: dict = Depends(require_auth)):
     """Create a new client"""
     result = service.create_client(
         client.company_name,
@@ -34,7 +34,7 @@ def get_client(client_id: int, current_user: dict = Depends(require_auth)):
     return Client(**result)
 
 @router.put('/{client_id}', response_model=Client)
-def update_client(client_id: int, client: ClientBase, current_user: dict = Depends(require_auth)):
+def update_client(client_id: int, client: ClientInput, current_user: dict = Depends(require_auth)):
     """Update an existing client"""
     result = service.update_client(
         client_id,

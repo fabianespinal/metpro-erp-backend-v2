@@ -20,6 +20,10 @@ FILES = ["invoices/router.py", "invoices/service.py", "pdf/service.py", "quotes/
 # (file, status, message literal without quotes or f-prefix, code)
 EXPECTED = {
     ("invoices/router.py", 404, "Factura no encontrada", "INVOICE_NOT_FOUND"),
+    ("invoices/router.py", 400, "No se puede enviar una factura cancelada", "INVOICE_CANCELLED"),  # B-10
+    ("invoices/router.py", 400, "El contacto de la factura no tiene correo electrónico", "INVOICE_NO_CONTACT_EMAIL"),  # B-10
+    ("invoices/router.py", 404, "No disponible", "NOT_FOUND"),  # B-14 toggle off
+    ("invoices/router.py", 403, "Permisos insuficientes", "INSUFFICIENT_PERMISSIONS"),  # B-14 admin only
     ("invoices/service.py", 404, "Factura no encontrada", "INVOICE_NOT_FOUND"),
     ("invoices/service.py", 400, "Estado no válido. Debe ser uno de: {list(INVOICE_STATUSES)}", "INVOICE_STATUS_INVALID"),
     ("invoices/service.py", 400, "Las facturas pasan a Pagada al registrar pagos", "INVOICE_PAID_VIA_PAYMENTS"),

@@ -14,12 +14,29 @@ from psycopg2.extras import RealDictCursor
 
 
 def _cell(row: dict, key: str) -> str:
-    """CSV cell as stripped text. Rows shorter than the header give None (debug B-09)."""
+    """CSV cell as stripped text. Rows shorter than the header give None (debug B-09).
+    Optional columns are stored as NULL when blank: `_cell(...) or None` (debug B-21)."""
     return (row.get(key) or "").strip()
 
 # ============================================================
 # CREATE CLIENT
 # ============================================================
+
+def _check_email_and_tax_id(cursor, email: Optional[str], tax_id: Optional[str], exclude_id: Optional[int] = None) -> None:
+    """Same rules on create and update (debug B-12): email format, unique email, unique RNC."""
+    if email and "@" not in email:
+        raise api_error(400, "Formato de correo no válido", "EMAIL_INVALID")
+    other = " AND id != %s" if exclude_id is not None else ""
+    extra = (exclude_id,) if exclude_id is not None else ()
+    if email:
+        cursor.execute("SELECT id FROM clients WHERE email = %s" + other, (email,) + extra)
+        if cursor.fetchone():
+            raise api_error(400, f"El correo {email} ya está en uso por otro cliente", "CLIENT_EMAIL_TAKEN")
+    if tax_id:
+        cursor.execute("SELECT id FROM clients WHERE tax_id = %s" + other, (tax_id,) + extra)
+        if cursor.fetchone():
+            raise api_error(400, f"El RNC {tax_id} ya está en uso por otro cliente", "CLIENT_TAX_ID_TAKEN")
+
 
 def create_client(company_name: str, contact_name: Optional[str], email: Optional[str],
                   phone: Optional[str], address: Optional[str], tax_id: Optional[str],
@@ -29,6 +46,7 @@ def create_client(company_name: str, contact_name: Optional[str], email: Optiona
     try:
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
+        _check_email_and_tax_id(cursor, email, tax_id)
 
         cursor.execute("""
             INSERT INTO clients
@@ -43,6 +61,10 @@ def create_client(company_name: str, contact_name: Optional[str], email: Optiona
         cursor.execute("SELECT * FROM clients WHERE id = %s", (new_id,))
         return cursor.fetchone()
 
+    except HTTPException:
+        if conn:
+            conn.rollback()
+        raise
     except Exception as e:
         if conn:
             conn.rollback()
@@ -112,27 +134,7 @@ def update_client(client_id: int, company_name: str, contact_name: Optional[str]
         if not cursor.fetchone():
             raise api_error(404, f"Cliente con ID {client_id} no encontrado", "CLIENT_NOT_FOUND")
 
-        # Validate email
-        if email and "@" not in email:
-            raise api_error(400, "Formato de correo no válido", "EMAIL_INVALID")
-
-        # Duplicate email
-        if email:
-            cursor.execute(
-                "SELECT id FROM clients WHERE email = %s AND id != %s",
-                (email, client_id)
-            )
-            if cursor.fetchone():
-                raise api_error(400, f"El correo {email} ya está en uso por otro cliente", "CLIENT_EMAIL_TAKEN")
-
-        # Duplicate tax_id
-        if tax_id:
-            cursor.execute(
-                "SELECT id FROM clients WHERE tax_id = %s AND id != %s",
-                (tax_id, client_id)
-            )
-            if cursor.fetchone():
-                raise api_error(400, f"El RNC {tax_id} ya está en uso por otro cliente", "CLIENT_TAX_ID_TAKEN")
+        _check_email_and_tax_id(cursor, email, tax_id, exclude_id=client_id)
 
         # Update
         cursor.execute("""
@@ -281,10 +283,10 @@ async def import_clients_from_csv(file_content: bytes, filename: str, skip_dupli
                         SET contact_name = %s, phone = %s, address = %s, notes = %s
                         WHERE id = %s
                     """, (
-                        _cell(row, "contact_name"),
-                        _cell(row, "phone"),
-                        _cell(row, "address"),
-                        _cell(row, "notes"),
+                        _cell(row, "contact_name") or None,
+                        _cell(row, "phone") or None,
+                        _cell(row, "address") or None,
+                        _cell(row, "notes") or None,
                         existing_id
                     ))
                     updated += 1
@@ -298,12 +300,12 @@ async def import_clients_from_csv(file_content: bytes, filename: str, skip_dupli
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """, (
                     company,
-                    _cell(row, "contact_name"),
-                    email,
-                    _cell(row, "phone"),
-                    _cell(row, "address"),
-                    _cell(row, "tax_id"),
-                    _cell(row, "notes")
+                    _cell(row, "contact_name") or None,
+                    email or None,
+                    _cell(row, "phone") or None,
+                    _cell(row, "address") or None,
+                    _cell(row, "tax_id") or None,
+                    _cell(row, "notes") or None
                 ))
                 inserted += 1
 

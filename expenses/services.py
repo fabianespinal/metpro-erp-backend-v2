@@ -118,4 +118,6 @@ def update_expense(conn, expense_id: int, data: ExpenseUpdate):
 def delete_expense(conn, expense_id: int):
     with conn.cursor() as cur:
         cur.execute("DELETE FROM expenses WHERE expense_id = %s;", (expense_id,))
+        if cur.rowcount == 0:  # debug B-20: was 200 for a missing id
+            raise api_error(404, "Gasto no encontrado", "EXPENSE_NOT_FOUND")
         return True

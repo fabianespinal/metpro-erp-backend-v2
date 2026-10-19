@@ -78,47 +78,20 @@ def generate_quote_pdf(quote_id: str, current_user: dict = None) -> StreamingRes
         else:
             charges = raw_charges
 
-        charges.setdefault('supervision', True)
-        charges.setdefault('admin', True)
-        charges.setdefault('insurance', True)
-        charges.setdefault('transport', True)
-        charges.setdefault('contingency', True)
-        charges.setdefault('supervision_percentage', 10.0)
-        charges.setdefault('admin_percentage', 4.0)
-        charges.setdefault('insurance_percentage', 1.0)
-        charges.setdefault('transport_percentage', 3.0)
-        charges.setdefault('contingency_percentage', 3.0)
-
-        items_total = sum(float(item.get('quantity') or 0) * float(item.get('unit_price') or 0) for item in items)
-
-        total_discounts = 0
-        for item in items:
-            subtotal = float(item.get('quantity') or 0) * float(item.get('unit_price') or 0)
-            if item.get('discount_type') == 'percentage':
-                total_discounts += subtotal * (float(item.get('discount_value', 0)) / 100)
-            elif item.get('discount_type') == 'fixed':
-                total_discounts += float(item.get('discount_value', 0))
-
-        items_after_discount = items_total - total_discounts
-
+        # Debug B-13: the same totals as the emailed and public PDFs (stored totals win).
+        # Charge flags are no longer defaulted to ON here: missing flags mean OFF everywhere.
+        from quotes.service import quote_document_totals
+        t = quote_document_totals(quote, items, charges)
+        items_total, total_discounts = t['items_total'], t['total_discounts']
+        items_after_discount = t['items_after_discount']
+        supervision, admin, insurance = t['supervision'], t['admin'], t['insurance']
+        transport, contingency = t['transport'], t['contingency']
+        subtotal_general, itbis, grand_total = t['subtotal_general'], t['itbis'], t['grand_total']
         supervision_pct = float(charges.get('supervision_percentage', 10.0))
         admin_pct = float(charges.get('admin_percentage', 4.0))
         insurance_pct = float(charges.get('insurance_percentage', 1.0))
         transport_pct = float(charges.get('transport_percentage', 3.0))
         contingency_pct = float(charges.get('contingency_percentage', 3.0))
-
-        supervision = items_after_discount * (supervision_pct / 100) if charges.get('supervision') else 0
-        admin = items_after_discount * (admin_pct / 100) if charges.get('admin') else 0
-        insurance = items_after_discount * (insurance_pct / 100) if charges.get('insurance') else 0
-        transport = items_after_discount * (transport_pct / 100) if charges.get('transport') else 0
-        contingency = items_after_discount * (contingency_pct / 100) if charges.get('contingency') else 0
-
-        subtotal_general = (
-            items_after_discount + supervision + admin + insurance + transport + contingency
-            + dynamic_charges_total(charges, items_after_discount)
-        )
-        itbis = subtotal_general * 0.18
-        grand_total = subtotal_general + itbis
 
         raw_date = quote.get('created_at') or quote.get('updated_at') or ''
         # B-04: quotes.created_at is naive UTC; print the Santo Domingo date (same DD/MM/YYYY format).
@@ -258,7 +231,7 @@ def generate_invoice_pdf(invoice_id: int, current_user: dict = None) -> Streamin
 
         # Fetch payments
         cursor.execute(
-            'SELECT * FROM invoice_payments WHERE invoice_id = %s ORDER BY id ASC',
+            'SELECT * FROM invoice_payments WHERE invoice_id = %s AND voided_at IS NULL ORDER BY id ASC',
             (invoice_id,)
         )
         payments = [dict(row) for row in cursor.fetchall()]

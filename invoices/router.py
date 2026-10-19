@@ -7,12 +7,14 @@ from typing import Annotated, List, Optional
 
 from .models import Invoice, InvoiceCreate, InvoiceStatusUpdate
 from . import service
-from auth.service import require_auth, require_role
+from auth.service import require_auth, require_role, _allowed_roles
 from core.rate_limit import public_rate_limit
 from core.email_attachments import read_extra_attachments
+from core.public_payload import public_payload
 
 from invoices.payments.models import PaymentCreate
-from invoices.payments.service import create_payment, get_payments_for_invoice
+from invoices.payments.service import create_payment, get_payments_for_invoice, void_payment, payment_void_enabled
+from pydantic import BaseModel
 from core.errors import internal_error
 
 from database import get_db_connection
@@ -56,6 +58,11 @@ def send_invoice(
     invoice = service.get_invoice_with_contact(invoice_id)
     if not invoice:
         raise api_error(404, "Factura no encontrada", "INVOICE_NOT_FOUND")
+    # Debug B-10: checked before any PDF is built or email is sent (same order as quotes).
+    if invoice.get("status") == "Cancelled":
+        raise api_error(400, "No se puede enviar una factura cancelada", "INVOICE_CANCELLED")
+    if not invoice.get("contact_email"):
+        raise api_error(400, "El contacto de la factura no tiene correo electrónico", "INVOICE_NO_CONTACT_EMAIL")
 
     client = {
         "company_name": invoice["company_name"],
@@ -78,7 +85,7 @@ def send_invoice(
     try:
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         cursor.execute(
-            "SELECT * FROM invoice_payments WHERE invoice_id = %s ORDER BY id ASC",
+            "SELECT * FROM invoice_payments WHERE invoice_id = %s AND voided_at IS NULL ORDER BY id ASC",
             (invoice_id,),
         )
         payments = [dict(row) for row in cursor.fetchall()]
@@ -179,6 +186,35 @@ def add_payment(invoice_id: int, data: PaymentCreate, current_user: dict = Depen
         conn.close()
 
 
+class PaymentVoidIn(BaseModel):
+    reason: str
+
+
+@router.post("/{invoice_id}/payments/{payment_id}/void")
+def void_invoice_payment(
+    invoice_id: int,
+    payment_id: int,
+    body: PaymentVoidIn,
+    current_user: dict = Depends(require_auth),
+):
+    """Anular un pago registrado por error (admin). El registro se conserva; los saldos se recalculan."""
+    if not payment_void_enabled():
+        raise api_error(404, "No disponible", "NOT_FOUND")
+    if current_user.get("role") not in _allowed_roles("admin"):  # admin and superadmin, as require_role("admin")
+        raise api_error(403, "Permisos insuficientes", "INSUFFICIENT_PERMISSIONS")
+    conn = get_db_connection()
+    try:
+        return void_payment(conn, invoice_id, payment_id, body.reason, current_user.get("user_id"))
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise internal_error("No se pudo anular el pago", e)
+    finally:
+        conn.close()
+
+
 @router.get("/{invoice_id}/payments")
 def list_payments(invoice_id: int, current_user: dict = Depends(require_auth)):
     """Payments for one invoice, oldest first. 404 if the invoice does not exist."""
@@ -219,8 +255,7 @@ def get_public_invoice(token: Annotated[str, Path(pattern=PUBLIC_TOKEN_PATTERN)]
     """Public invoice view. Access is by unguessable token only."""
     invoice_id = _invoice_id_for_public_token(token)
     invoice = service.get_invoice_with_contact(invoice_id)
-    invoice.pop("public_token", None)  # never echo the token back
-    return invoice
+    return public_payload(invoice)  # B-22: no internal ids, UUIDs, token or creator name
 
 
 def _render_public_invoice_pdf(invoice_id: int) -> Response:
@@ -238,7 +273,7 @@ def _render_public_invoice_pdf(invoice_id: int) -> Response:
     try:
         cursor = conn.cursor(cursor_factory=RealDictCursor)
         cursor.execute(
-            "SELECT * FROM invoice_payments WHERE invoice_id = %s ORDER BY id ASC",
+            "SELECT * FROM invoice_payments WHERE invoice_id = %s AND voided_at IS NULL ORDER BY id ASC",
             (invoice_id,),
         )
         payments = [dict(row) for row in cursor.fetchall()]
@@ -291,7 +326,7 @@ def _render_public_invoice_pdf(invoice_id: int) -> Response:
         content=pdf_bytes,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": f"attachment; filename=factura_{invoice_id}.pdf"
+            "Content-Disposition": f"attachment; filename=factura_{invoice['invoice_number']}.pdf"  # B-22
         },
     )
 

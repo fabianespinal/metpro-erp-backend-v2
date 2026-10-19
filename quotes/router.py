@@ -16,6 +16,7 @@ from pdf.builder_quote import create_quote_pdf
 from pdf.utils.signer import resolve_signer_name
 from core.numbering import quote_label_for
 from core.dates import local_date
+from core.public_payload import public_payload
 from core.email_attachments import read_extra_attachments
 
 # Email sending
@@ -65,8 +66,7 @@ def get_quote_public(token: Annotated[str, Path(pattern=PUBLIC_TOKEN_PATTERN)]):
     """Public quote view. Access is by unguessable token only."""
     quote_id = service.quote_id_for_public_token(token)
     quote = service.get_quote_with_contact(quote_id)
-    quote.pop("public_token", None)
-    return quote
+    return public_payload(quote)  # B-22: no internal ids, UUIDs or creator name
 
 
 @router.get("/public/{token}/pdf", dependencies=[Depends(public_rate_limit)])
@@ -89,19 +89,7 @@ def get_quote_public_pdf(token: Annotated[str, Path(pattern=PUBLIC_TOKEN_PATTERN
         raw_charges = json.loads(raw_charges)
 
     items = quote.get("items", [])
-    # Stored totals (set at finalize) are the source of truth for the PDF summary.
-    # Per-charge lines are derived from items and match the stored totals.
-    # Legacy rows with no stored totals fall back to recomputation.
-    breakdown = calculate_quote_totals(items, raw_charges)
-    if all(quote.get(k) is not None for k in ("subtotal", "discount_total", "tax_amount", "grand_total")):
-        totals = dict(breakdown)
-        totals["total_discounts"] = float(quote["discount_total"])
-        totals["items_after_discount"] = breakdown["items_total"] - float(quote["discount_total"])
-        totals["subtotal_general"] = float(quote["subtotal"])
-        totals["itbis"] = float(quote["tax_amount"])
-        totals["grand_total"] = float(quote["grand_total"])
-    else:
-        totals = breakdown
+    totals = service.quote_document_totals(quote, items, raw_charges)  # B-13: same totals on every PDF
 
     pdf_stream = create_quote_pdf(
         doc_type="COTIZACION",
@@ -136,7 +124,7 @@ def get_quote_public_pdf(token: Annotated[str, Path(pattern=PUBLIC_TOKEN_PATTERN
     return StreamingResponse(
         pdf_stream,
         media_type="application/pdf",
-        headers={"Content-Disposition": f"inline; filename=quote_{quote_id}.pdf"},
+        headers={"Content-Disposition": f"inline; filename=cotizacion_{quote_label_for(quote)}.pdf"},  # B-22
     )
 
 
@@ -171,7 +159,7 @@ def send_quote(
         raw_charges = json.loads(raw_charges)
 
     items = quote.get("items", [])
-    totals = calculate_quote_totals(items, raw_charges)
+    totals = service.quote_document_totals(quote, items, raw_charges)  # B-13: same totals on every PDF
 
     pdf_stream = create_quote_pdf(
         doc_type="COTIZACION",
@@ -248,7 +236,7 @@ def get_quote_pdf(quote_id: str, current_user: dict = Depends(require_auth)):
         raw_charges = json.loads(raw_charges)
 
     items = quote.get("items", [])
-    totals = calculate_quote_totals(items, raw_charges)
+    totals = service.quote_document_totals(quote, items, raw_charges)  # B-13: same totals on every PDF
 
     pdf_stream = create_quote_pdf(
         doc_type="COTIZACION",

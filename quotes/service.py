@@ -103,6 +103,25 @@ def calculate_quote_totals(items: List[dict], charges: dict) -> dict:
     }
 
 
+def quote_document_totals(quote: dict, items: List[dict], charges: dict) -> dict:
+    """Totals printed on every quote PDF: internal download, email and public link (debug B-13).
+
+    Per-charge lines come from calculate_quote_totals. When the quote has stored totals
+    (set at create/update/finalize), they are the source of truth for discounts, subtotal,
+    ITBIS and grand total, so all four PDF paths print the same numbers.
+    """
+    breakdown = calculate_quote_totals(items, charges or {})
+    if all(quote.get(k) is not None for k in ("subtotal", "discount_total", "tax_amount", "grand_total")):
+        totals = dict(breakdown)
+        totals["total_discounts"] = float(quote["discount_total"])
+        totals["items_after_discount"] = breakdown["items_total"] - float(quote["discount_total"])
+        totals["subtotal_general"] = float(quote["subtotal"])
+        totals["itbis"] = float(quote["tax_amount"])
+        totals["grand_total"] = float(quote["grand_total"])
+        return totals
+    return breakdown
+
+
 def generate_quote_id() -> str:
     """Random UUID4. Not guessable, no same-second collisions."""
     return str(uuid.uuid4())
@@ -475,7 +494,8 @@ def update_quote(quote_id: str, quote_update) -> dict:
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        cursor.execute("SELECT * FROM quotes WHERE quote_id = %s", (quote_id,))
+        # Row lock (debug B-23): a save cannot interleave with finalize or another save.
+        cursor.execute("SELECT * FROM quotes WHERE quote_id = %s FOR UPDATE", (quote_id,))
         quote = cursor.fetchone()
         if not quote:
             raise api_error(404, "Cotización no encontrada", "QUOTE_NOT_FOUND")
@@ -689,8 +709,13 @@ def duplicate_quote(quote_id: str, created_by_user_id: Optional[str] = None) -> 
         elif not isinstance(included_charges, str):
             included_charges = ""
 
-        # 5. valid_until — serialize date to string if needed
-        valid_until = _serialize_date(original.get("valid_until"))
+        # 5. valid_until — a date already past is not copied (debug B-23, approved 2026-10-18);
+        #    the user sets a new one before finalizing.
+        from core.dates import business_today
+        original_valid = original.get("valid_until")
+        if isinstance(original_valid, date) and original_valid < business_today():
+            original_valid = None
+        valid_until = _serialize_date(original_valid)
 
         # 6. Insert duplicated quote
         cursor.execute("""

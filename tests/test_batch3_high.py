@@ -194,7 +194,7 @@ def test_client_csv_short_rows_import(monkeypatch):
     out = asyncio.run(csvc.import_clients_from_csv(data.encode(), "c.csv", True, {}))
     assert out["summary"]["inserted"] == 2 and out["summary"]["skipped"] == 0
     assert [p[0] for p in cur.inserted] == ["Corta SRL", "Completa SRL"]
-    assert cur.inserted[0][1:] == ("", "", "", "", "", "")
+    assert cur.inserted[0][1:] == (None, None, None, None, None, None)  # B-21: blanks stored as NULL
 
 
 def test_product_csv_short_rows_import(monkeypatch):
@@ -202,7 +202,7 @@ def test_product_csv_short_rows_import(monkeypatch):
     monkeypatch.setattr(psvc, "get_db_connection", lambda: _Conn(cur))
     data = "name,unit_price,description\nCorto,10\nSinPrecio\nCompleto,20,desc\n"
     out = asyncio.run(psvc.import_products_from_csv(data.encode(), "p.csv"))
-    assert out == {"imported": 2, "skipped": 1, "total": 3}
+    assert out == {"imported": 2, "updated": 0, "skipped": 1, "total": 3}
     assert [(p[0], p[1], p[2]) for p in cur.inserted] == [("Corto", "", 10.0), ("Completo", "desc", 20.0)]
 
 

@@ -6,10 +6,20 @@ from models.contact import Contact
 from contacts.schemas import ContactCreate, ContactUpdate
 
 
+def _clean_name(name) -> str:
+    name = (name or "").strip()
+    if not name:
+        raise api_error(400, "El nombre del contacto es obligatorio", "CONTACT_NAME_REQUIRED")
+    return name
+
+
 def create_contact(db: Session, contact_in: ContactCreate):
+    # Debug B-12: unknown company was an unhandled FK error (500).
+    if not db.execute(text("SELECT 1 FROM clients WHERE id = :cid"), {"cid": contact_in.company_id}).first():
+        raise api_error(404, "Cliente no encontrado", "CLIENT_NOT_FOUND")
     contact = Contact(
         company_id=contact_in.company_id,
-        name=contact_in.name,
+        name=_clean_name(contact_in.name),
         email=contact_in.email,
         phone=contact_in.phone,
     )
@@ -33,7 +43,7 @@ def update_contact(db: Session, contact_id: int, contact_in: ContactUpdate):
     if not contact:
         return None
 
-    contact.name = contact_in.name
+    contact.name = _clean_name(contact_in.name)
     contact.email = contact_in.email
     contact.phone = contact_in.phone
 

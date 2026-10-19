@@ -90,7 +90,12 @@ def update_project(
             end_date=project.end_date,
             estimated_budget=project.estimated_budget,
             notes=project.notes,
-            job_site_address=project.job_site_address
+            job_site_address=project.job_site_address,
+            # Debug B-20: an explicit null clears these optional columns.
+            clear_fields=frozenset(
+                k for k in ("end_date", "estimated_budget")
+                if k in project.model_fields_set and getattr(project, k) is None
+            ),
         )
         return Project(**result)
     except HTTPException:

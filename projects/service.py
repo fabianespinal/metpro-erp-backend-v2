@@ -199,8 +199,11 @@ def update_project(
     end_date: Optional[date] = None,
     estimated_budget: Optional[float] = None,
     notes: Optional[str] = None,
-    job_site_address: Optional[str] = None
+    job_site_address: Optional[str] = None,
+    clear_fields: frozenset = frozenset(),
 ) -> dict:
+    """clear_fields: optional columns sent as an explicit null, which are cleared (debug B-20).
+    Omitted fields keep their stored value, as before."""
     conn = None
     try:
         conn = get_db_connection()
@@ -246,8 +249,9 @@ def update_project(
         final_description = norm_str(description) if description is not None else current_project["description"]
         final_status = status if status is not None else current_project["status"]
         final_start_date = norm_date(start_date, current_project["start_date"])
-        final_end_date = norm_date(end_date, current_project["end_date"])
-        final_estimated_budget = norm_float(estimated_budget, current_project["estimated_budget"])
+        final_end_date = None if "end_date" in clear_fields else norm_date(end_date, current_project["end_date"])
+        final_estimated_budget = (None if "estimated_budget" in clear_fields
+                                  else norm_float(estimated_budget, current_project["estimated_budget"]))
         final_notes = norm_str(notes) if notes is not None else current_project["notes"]
         final_address = norm_str(job_site_address) if job_site_address is not None else current_project["job_site_address"]
 

@@ -70,8 +70,9 @@ def test_public_token_known_returns_200_and_hides_token(monkeypatch):
         lambda quote_id: {"quote_id": quote_id, "public_token": TOKEN, "status": "Final"},
     )
     body = router_mod.get_quote_public(TOKEN)
-    assert body["quote_id"] == "q-1"
+    assert body["status"] == "Final"
     assert "public_token" not in body
+    assert "quote_id" not in body  # B-22: no internal UUID on the public payload
 
 
 def test_public_token_unknown_returns_404(monkeypatch):

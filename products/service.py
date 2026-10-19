@@ -202,6 +202,7 @@ async def import_products_from_csv(file_content: bytes, filename: str) -> dict:
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
         imported = 0
+        updated = 0
         skipped = 0
 
         for row in rows:
@@ -222,17 +223,18 @@ async def import_products_from_csv(file_content: bytes, filename: str) -> dict:
 
             description = _cell(row, "description")
 
-            # Check if product exists
-            cursor.execute("SELECT id FROM products WHERE name = %s", (name,))
+            # Check if product exists (oldest row with that exact name)
+            cursor.execute("SELECT id FROM products WHERE name = %s ORDER BY id LIMIT 1", (name,))
             existing = cursor.fetchone()
 
             if existing:
-                # Update existing
+                # Debug B-20: update that one row by id (was every same-name row) and count it.
                 cursor.execute("""
                     UPDATE products
                     SET description = %s, unit_price = %s
-                    WHERE name = %s
-                """, (description, unit_price, name))
+                    WHERE id = %s
+                """, (description, unit_price, existing["id"]))
+                updated += 1
 
             else:
                 # Insert new
@@ -246,6 +248,7 @@ async def import_products_from_csv(file_content: bytes, filename: str) -> dict:
 
         return {
             "imported": imported,
+            "updated": updated,
             "skipped": skipped,
             "total": len(rows)
         }

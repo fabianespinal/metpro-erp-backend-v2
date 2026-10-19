@@ -129,7 +129,7 @@ def get_revenue_report(start_date: Optional[str], end_date: Optional[str],
         p2 = []
         cursor.execute(scoped(
             "SELECT COALESCE(SUM(p.amount), 0) AS amount, COUNT(*) AS n "
-            "FROM invoice_payments p JOIN invoices i ON i.id = p.invoice_id WHERE 1=1",
+            "FROM invoice_payments p JOIN invoices i ON i.id = p.invoice_id WHERE p.voided_at IS NULL",
             "p.payment_date", "i.client_id", p2), p2)
         collected = cursor.fetchone()
 
@@ -182,7 +182,8 @@ def get_revenue_report(start_date: Optional[str], end_date: Optional[str],
 # CLIENT ACTIVITY REPORT
 # ============================================================
 
-def get_client_activity(start_date: Optional[str], end_date: Optional[str]) -> dict:
+def get_client_activity(start_date: Optional[str], end_date: Optional[str],
+                        client_id: Optional[int] = None) -> dict:
 
     conn = None
     try:
@@ -207,6 +208,10 @@ def get_client_activity(start_date: Optional[str], end_date: Optional[str]) -> d
             query += f" AND {sql_local_date('q.created_at')} BETWEEN %s AND %s"  # B-03: inclusive
             params.extend([business_tz_name(), start_date, end_date])
 
+        if client_id:  # debug B-11: the ERP sends it; it was ignored
+            query += " AND c.id = %s"
+            params.append(client_id)
+
         query += " GROUP BY c.id, c.company_name ORDER BY total_quoted DESC"
 
         cursor.execute(query, params)
@@ -228,7 +233,8 @@ def get_client_activity(start_date: Optional[str], end_date: Optional[str]) -> d
                 "total_clients": len(clients_data),
                 "filters": {
                     "start_date": start_date,
-                    "end_date": end_date
+                    "end_date": end_date,
+                    "client_id": client_id
                 }
             },
             "clients": clients_data
@@ -296,7 +302,7 @@ def get_project_profitability(start_date=None, end_date=None, client_id: Optiona
                                             THEN (i.total_amount - COALESCE(i.itbis_total, 0)) / i.total_amount
                                             ELSE 1 END) AS paid_net
                 FROM invoice_payments ip JOIN invoices i ON i.id = ip.invoice_id
-                WHERE p.quote_id IS NOT NULL AND i.quote_id = p.quote_id{pay_dates}
+                WHERE p.quote_id IS NOT NULL AND i.quote_id = p.quote_id AND ip.voided_at IS NULL{pay_dates}
             ) pay ON TRUE
             LEFT JOIN LATERAL (
                 SELECT SUM(e.amount) AS expenses, COUNT(*) AS n

@@ -9,32 +9,36 @@ router = APIRouter(prefix='/reports', tags=['reports'])
 
 @router.get('/quotes-summary')
 def get_quotes_summary(
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
     client_id: Optional[int] = None,
     current_user: dict = Depends(require_auth)
 ):
     """Quotes summary report: totals + status breakdown"""
+    _check_range(start_date, end_date)  # debug B-12: typed dates, 422 instead of a 500
     return service.get_quotes_summary(start_date, end_date, client_id)
 
 @router.get('/revenue')
 def get_revenue_report(
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
     client_id: Optional[int] = None,
     current_user: dict = Depends(require_auth)
 ):
     """Revenue report: approved + invoiced totals"""
+    _check_range(start_date, end_date)
     return service.get_revenue_report(start_date, end_date, client_id)
 
 @router.get('/client-activity')
 def get_client_activity(
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    client_id: Optional[int] = None,
     current_user: dict = Depends(require_auth)
 ):
-    """Client activity report"""
-    return service.get_client_activity(start_date, end_date)
+    """Client activity report. client_id narrows it to one client (debug B-11)."""
+    _check_range(start_date, end_date)
+    return service.get_client_activity(start_date, end_date, client_id)
 
 
 @router.get('/project-profitability')

@@ -12,6 +12,7 @@ os.environ.setdefault("DATABASE_URL", "postgresql://test:test@localhost:5432/tes
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+import quotes  # noqa: F401,E402  (import order: avoids the pdf/quotes cycle when run alone)
 import invoices.service as isvc  # noqa: E402
 import email_service  # noqa: E402
 

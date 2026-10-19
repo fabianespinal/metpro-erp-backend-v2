@@ -1,0 +1,47 @@
+# Debug pass 5d: run the full test suite, including the database tests, on every push and PR.
+# Informational: Railway still deploys main on push. A red run means "do not trust this deploy".
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: metpro_test
+          POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      SECRET_KEY: ci-only-secret-not-used-anywhere
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/metpro_test
+      APP_ENV: test
+      RATE_LIMIT_ENABLED: "false"
+      METPRO_LEDGER_TEST_DB: "host=localhost port=5432 user=postgres password=postgres dbname=metpro_test"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: Load production schema (structure only)
+        run: |
+          psql "postgresql://postgres:postgres@localhost:5432/metpro_test" -v ON_ERROR_STOP=1 -q -f tests/fixtures/ci_schema.sql
+          psql "postgresql://postgres:postgres@localhost:5432/metpro_test" -c "ALTER DATABASE metpro_test SET lock_timeout = '10s'"
+      - name: Tests
+        run: python -m pytest -q -p no:cacheprovider -rs

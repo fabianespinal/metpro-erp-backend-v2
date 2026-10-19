@@ -96,6 +96,7 @@ _VALIDATION_ES = {
     "int_parsing": "debe ser un número entero",
     "float_type": "debe ser un número",
     "float_parsing": "debe ser un número",
+    "finite_number": "debe ser un número válido",
     "bool_type": "debe ser verdadero o falso",
     "bool_parsing": "debe ser verdadero o falso",
     "string_too_short": "el texto es demasiado corto",

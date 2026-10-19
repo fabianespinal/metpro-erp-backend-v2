@@ -3,6 +3,7 @@ from typing import List, Optional
 from fastapi import HTTPException
 import csv
 import io
+import math
 from database import get_db_connection
 from core.errors import internal_error
 from psycopg2.extras import RealDictCursor
@@ -207,6 +208,10 @@ async def import_products_from_csv(file_content: bytes, filename: str) -> dict:
             try:
                 unit_price = float(row.get("unit_price", 0))
             except ValueError:
+                skipped += 1
+                continue
+            # "nan", "inf" and negative prices are skipped (debug B-01).
+            if not math.isfinite(unit_price) or unit_price < 0:
                 skipped += 1
                 continue
 

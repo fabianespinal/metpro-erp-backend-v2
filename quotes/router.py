@@ -4,7 +4,10 @@ from fastapi.responses import StreamingResponse
 from typing import List, Optional
 import json
 
-from .models import QuoteCreate, StatusUpdate, QuoteUpdate, TotalsPreviewIn
+from .models import QuoteCreate, StatusUpdate, QuoteUpdate, TotalsPreviewIn, CostPreviewIn
+from . import costing
+from database import get_db_connection
+from psycopg2.extras import RealDictCursor
 from . import service
 from auth.service import require_auth, require_role
 from core.errors import api_error
@@ -286,6 +289,28 @@ def preview_quote_totals(body: TotalsPreviewIn, current_user: dict = Depends(req
     items = [item.dict() for item in body.items]
     charges = body.included_charges.dict()
     return service.preview_totals(items, charges)
+
+
+@router.post("/cost-estimate/preview")
+def preview_cost_estimate(body: CostPreviewIn, current_user: dict = Depends(require_auth)):
+    """Costo estimado y margen estimado de líneas sin guardar. No afecta el total de la cotización."""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        return costing.preview_estimate(cur, [i.dict() for i in body.items], body.included_charges.dict())
+    finally:
+        conn.close()
+
+
+@router.get("/{quote_id}/cost-estimate")
+def get_cost_estimate(quote_id: str, current_user: dict = Depends(require_auth)):
+    """Costo estimado y margen estimado de una cotización guardada. Solo lectura."""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        return costing.quote_estimate(cur, quote_id)
+    finally:
+        conn.close()
 
 
 @router.post("/draft")

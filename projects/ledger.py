@@ -87,3 +87,52 @@ def get_project_expenses(project_id: int, start_date: Optional[date] = None, end
         }
     finally:
         conn.close()
+
+
+def get_project_cost_estimate(project_id: int) -> dict:
+    """Product Cost module: estimated cost (from the project's quote) vs actual expenses.
+
+    - estimated_cost / estimated_margin: quotes.costing.quote_estimate of the originating quote.
+    - expenses_total: all expenses linked to the project.
+    - actual_margin: billed (sin ITBIS) - expenses, same definition as Rentabilidad del Proyecto.
+    - variance = estimated_cost - expenses_total; margin_accuracy_pct = actual / estimated * 100,
+      only once something has been billed (otherwise None).
+    """
+    from quotes import costing
+    from reports.service import get_project_profitability
+
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("SELECT id, name, quote_id FROM projects WHERE id = %s", (project_id,))
+        project = cur.fetchone()
+        if not project:
+            raise api_error(404, "Proyecto no encontrado", "PROJECT_NOT_FOUND")
+        cur.execute("SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS n FROM expenses WHERE project_id = %s",
+                    (project_id,))
+        exp = cur.fetchone()
+        estimate = costing.quote_estimate(cur, project["quote_id"]) if project["quote_id"] else None
+    finally:
+        conn.close()
+
+    prof = get_project_profitability(project_id=project_id)["projects"]
+    p = prof[0] if prof else {}
+    billed_net = float(p.get("billed_net") or 0)
+    expenses_total = round(float(exp["total"]), 2)
+    actual_margin = round(billed_net - expenses_total, 2)
+    est_cost = estimate["estimated_cost"] if estimate else 0.0
+    est_margin = estimate["estimated_margin"] if estimate else None
+    v = costing.variance(est_cost, expenses_total, est_margin, actual_margin if billed_net > 0 else None)
+    return {
+        "project_id": project["id"],
+        "project_name": project["name"],
+        "has_quote": bool(project["quote_id"]),
+        "estimate": estimate,
+        "estimated_cost": est_cost,
+        "estimated_margin": est_margin,
+        "expenses_total": expenses_total,
+        "expense_count": int(exp["n"]),
+        "billed_net": round(billed_net, 2),
+        "actual_margin": actual_margin if billed_net > 0 else None,
+        **v,
+    }

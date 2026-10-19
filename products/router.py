@@ -13,7 +13,8 @@ def create_product(product: ProductBase, current_user: dict = Depends(require_au
     result = service.create_product(
         product.name,
         product.description,
-        product.unit_price
+        product.unit_price,
+        product.cost,
     )
     return Product(**result)
 
@@ -32,11 +33,14 @@ def get_product(product_id: int, current_user: dict = Depends(require_auth)):
 @router.put('/{product_id}', response_model=Product)
 def update_product(product_id: int, product: ProductBase, current_user: dict = Depends(require_auth)):
     """Update an existing product"""
+    # Older clients that omit "cost" keep the stored cost (no silent wipe).
     result = service.update_product(
         product_id,
         product.name,
         product.description,
-        product.unit_price
+        product.unit_price,
+        product.cost,
+        cost_set="cost" in product.model_fields_set,
     )
     return Product(**result)
 

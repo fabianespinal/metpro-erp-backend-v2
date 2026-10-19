@@ -65,3 +65,19 @@ def get_expenses_by_category(
 def _check_range(start_date, end_date):
     if start_date and end_date and start_date > end_date:
         raise api_error(400, "La fecha de fin debe ser posterior a la fecha de inicio", "DATE_RANGE_INVALID")
+
+
+@router.get('/product-profitability')
+def get_product_profitability(only_with_cost: bool = False, current_user: dict = Depends(require_auth)):
+    """Rentabilidad de Productos: precio, costo, margen y margen % por producto."""
+    return service.get_product_profitability(only_with_cost)
+
+
+@router.get('/project-variance')
+def get_project_variance(
+    client_id: Optional[int] = None,
+    project_id: Optional[int] = None,
+    current_user: dict = Depends(require_auth)
+):
+    """Variación del Proyecto: costo estimado vs gastos reales, margen estimado vs real."""
+    return service.get_project_variance(client_id, project_id)

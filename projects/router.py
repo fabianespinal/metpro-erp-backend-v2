@@ -51,6 +51,16 @@ def get_project_expenses(
     except Exception as e:
         raise internal_error("No se pudo obtener la información", e)
 
+@router.get('/{project_id}/cost-estimate')
+def get_project_cost_estimate(project_id: int, current_user: dict = Depends(require_auth)):
+    """Costo estimado vs gastos reales, variación y precisión del margen. Solo lectura."""
+    try:
+        return ledger.get_project_cost_estimate(project_id)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise internal_error("No se pudo obtener la información", e)
+
 @router.get('/{project_id}', response_model=Project)
 def get_project(project_id: int, current_user: dict = Depends(require_auth)):
     """Obtener un proyecto"""

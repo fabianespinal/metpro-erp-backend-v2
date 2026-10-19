@@ -1,5 +1,5 @@
 from core.errors import api_error
-from typing import List
+from typing import List, Optional
 from fastapi import HTTPException
 import csv
 import io
@@ -12,17 +12,17 @@ from psycopg2.extras import RealDictCursor
 # CREATE PRODUCT
 # ============================================================
 
-def create_product(name: str, description: str, unit_price: float) -> dict:
+def create_product(name: str, description: str, unit_price: float, cost: Optional[float] = None) -> dict:
     conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
         cursor.execute("""
-            INSERT INTO products (name, description, unit_price)
-            VALUES (%s, %s, %s)
+            INSERT INTO products (name, description, unit_price, cost)
+            VALUES (%s, %s, %s, %s)
             RETURNING id
-        """, (name, description, unit_price))
+        """, (name, description, unit_price, cost))
 
         new_id = cursor.fetchone()["id"]
         conn.commit()
@@ -85,7 +85,8 @@ def get_product_by_id(product_id: int) -> dict:
 # UPDATE PRODUCT
 # ============================================================
 
-def update_product(product_id: int, name: str, description: str, unit_price: float) -> dict:
+def update_product(product_id: int, name: str, description: str, unit_price: float,
+                   cost: Optional[float] = None, cost_set: bool = False) -> dict:
     conn = None
     try:
         conn = get_db_connection()
@@ -95,11 +96,18 @@ def update_product(product_id: int, name: str, description: str, unit_price: flo
         if not cursor.fetchone():
             raise api_error(404, "Producto no encontrado", "PRODUCT_NOT_FOUND")
 
-        cursor.execute("""
-            UPDATE products
-            SET name = %s, description = %s, unit_price = %s
-            WHERE id = %s
-        """, (name, description, unit_price, product_id))
+        if cost_set:
+            cursor.execute("""
+                UPDATE products
+                SET name = %s, description = %s, unit_price = %s, cost = %s
+                WHERE id = %s
+            """, (name, description, unit_price, cost, product_id))
+        else:
+            cursor.execute("""
+                UPDATE products
+                SET name = %s, description = %s, unit_price = %s
+                WHERE id = %s
+            """, (name, description, unit_price, product_id))
 
         conn.commit()
 

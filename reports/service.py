@@ -439,3 +439,135 @@ def get_expenses_by_category(start_date=None, end_date=None, project_id: Optiona
     finally:
         if conn:
             conn.close()
+
+
+# ============================================================
+# PRODUCT PROFITABILITY (Product Cost module)
+# ============================================================
+
+def get_product_profitability(only_with_cost: bool = False) -> dict:
+    """Catalog margin per product: unit price, current cost, unit margin, margin % (on price).
+    Products without cost are listed with margin None unless only_with_cost is set."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        sql = "SELECT id, name, description, unit_price, cost FROM products"
+        if only_with_cost:
+            sql += " WHERE cost IS NOT NULL"
+        cur.execute(sql + " ORDER BY name, id")
+        rows = cur.fetchall()
+        products = []
+        for r in rows:
+            price = round(float(r["unit_price"] or 0), 2)
+            cost = round(float(r["cost"]), 2) if r["cost"] is not None else None
+            margin = round(price - cost, 2) if cost is not None else None
+            products.append({
+                "product_id": r["id"],
+                "name": r["name"],
+                "description": r["description"],
+                "unit_price": price,
+                "cost": cost,
+                "margin": margin,
+                "margin_pct": round(margin / price * 100, 2) if margin is not None and price else None,
+            })
+        with_cost = [p for p in products if p["cost"] is not None]
+        neg = [p for p in with_cost if p["margin"] is not None and p["margin"] < 0]
+        return {
+            "summary": {
+                "product_count": len(products),
+                "with_cost": len(with_cost),
+                "without_cost": len(products) - len(with_cost),
+                "negative_margin": len(neg),
+                "only_with_cost": only_with_cost,
+            },
+            "products": products,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise internal_error("No se pudo generar el reporte de productos", e)
+    finally:
+        if conn:
+            conn.close()
+
+
+# ============================================================
+# PROJECT VARIANCE (Product Cost module)
+# ============================================================
+
+def get_project_variance(client_id: Optional[int] = None, project_id: Optional[int] = None) -> dict:
+    """Per project: estimated cost (current product costs x quote lines), actual expenses, variance,
+    estimated vs actual margin (sin ITBIS) and margin accuracy. All-time; no date filter."""
+    from quotes import costing
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        sql = ("SELECT p.id, p.name, p.quote_id, p.quote_number, c.company_name AS client_name "
+               "FROM projects p JOIN clients c ON c.id = p.client_id WHERE 1=1")
+        params = []
+        if client_id:
+            sql += " AND p.client_id = %s"
+            params.append(client_id)
+        if project_id:
+            sql += " AND p.id = %s"
+            params.append(project_id)
+        cur.execute(sql + " ORDER BY p.id", params)
+        projects = cur.fetchall()
+        estimates = {}
+        for p in projects:
+            if p["quote_id"]:
+                e = costing.quote_estimate(cur, p["quote_id"])
+                e.pop("lines", None)
+                estimates[p["id"]] = e
+    finally:
+        if conn:
+            conn.close()
+
+    prof = {p["project_id"]: p for p in get_project_profitability(client_id=client_id, project_id=project_id)["projects"]}
+    rows = []
+    tot = {"estimated_cost": 0.0, "expenses": 0.0}
+    for p in projects:
+        e = estimates.get(p["id"])
+        pr = prof.get(p["id"], {})
+        billed_net = float(pr.get("billed_net") or 0)
+        expenses = float(pr.get("expenses") or 0)
+        actual_margin = round(billed_net - expenses, 2) if billed_net > 0 else None
+        est_cost = e["estimated_cost"] if e else 0.0
+        est_margin = e["estimated_margin"] if e else None
+        v = costing.variance(est_cost, expenses, est_margin, actual_margin)
+        rows.append({
+            "project_id": p["id"],
+            "project_number": f"P-{int(p['id']):04d}",
+            "name": p["name"],
+            "client_name": p["client_name"],
+            "quote_label": f"Q-{p['quote_number']}" if p["quote_number"] else None,
+            "has_quote": e is not None,
+            "estimated_cost": est_cost,
+            "expenses": round(expenses, 2),
+            "estimated_margin": est_margin,
+            "estimated_margin_pct": e["estimated_margin_pct"] if e else None,
+            "billed_net": round(billed_net, 2),
+            "actual_margin": actual_margin,
+            "lines_total": e["lines_total"] if e else 0,
+            "lines_costed": e["lines_costed"] if e else 0,
+            "coverage_pct": e["coverage_pct"] if e else None,
+            **v,
+        })
+        tot["estimated_cost"] += est_cost
+        tot["expenses"] += expenses
+    est_t = round(tot["estimated_cost"], 2)
+    exp_t = round(tot["expenses"], 2)
+    return {
+        "summary": {
+            "project_count": len(rows),
+            "total_estimated_cost": est_t,
+            "total_expenses": exp_t,
+            "total_variance": round(est_t - exp_t, 2),
+            "incomplete_estimates": sum(1 for r in rows if r["has_quote"] and r["lines_costed"] < r["lines_total"]),
+            "filters": {"client_id": client_id, "project_id": project_id},
+        },
+        "projects": rows,
+    }

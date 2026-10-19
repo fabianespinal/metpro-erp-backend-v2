@@ -148,6 +148,12 @@ class TotalsItemIn(BaseModel):
     description: Optional[str] = None
 
 
+class CostPreviewIn(BaseModel):
+    """Unsaved lines for the estimated-cost preview (Product Cost module). Nothing is stored."""
+    items: List[QuoteItemBase] = []
+    included_charges: IncludedCharges = IncludedCharges()
+
+
 class TotalsPreviewIn(BaseModel):
     items: List[TotalsItemIn] = []
     included_charges: IncludedCharges = IncludedCharges()

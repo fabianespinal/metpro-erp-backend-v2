@@ -93,7 +93,7 @@ def test_lines_from_invoice_items_and_billed_total(monkeypatch):
     assert totals["items_after_discount"] == 95
     assert totals["grand_total"] == 112.10  # billed amount, ITBIS 18% on 95 = 112.10
     assert totals["lines_source"] == "invoice_items"
-    assert "ORDER BY ctid" in cur.sql[0]
+    assert "ORDER BY line_no NULLS LAST, ctid" in cur.sql[0]
     assert not any("quote_items" in s for s in cur.sql)
 
 

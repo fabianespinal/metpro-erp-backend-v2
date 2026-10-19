@@ -75,12 +75,11 @@ def _invoice_lines(cursor, invoice: dict):
     Lines for an invoice document.
     Source of truth: invoice_items (written at conversion).
     Legacy fallback: quote_items, only when the invoice has no items.
-    invoice_items has no line-order column; ctid keeps insertion order because
-    these rows are never updated. A line_no column is prepared in migrations.
+    Order: line_no (written at conversion, B-19), then ctid for any legacy row without it.
     """
     cursor.execute(
         "SELECT description, quantity, unit_price, discount, total, product_id, category "
-        "FROM invoice_items WHERE invoice_id = %s ORDER BY ctid",
+        "FROM invoice_items WHERE invoice_id = %s ORDER BY line_no NULLS LAST, ctid",
         (invoice["id"],),
     )
     rows = cursor.fetchall()
@@ -241,7 +240,7 @@ def get_invoice_by_id(invoice_id: int) -> dict:
         # Lines: invoice_items (written at conversion). Legacy fallback: quote_items.
         cursor.execute(
             "SELECT description, quantity, unit_price, discount, total FROM invoice_items "
-            "WHERE invoice_id = %s ORDER BY ctid",
+            "WHERE invoice_id = %s ORDER BY line_no NULLS LAST, ctid",
             (invoice_id,),
         )
         rows = cursor.fetchall()

@@ -271,7 +271,7 @@ def get_quote_pdf(quote_id: str, current_user: dict = Depends(require_auth)):
     return StreamingResponse(
         pdf_stream,
         media_type="application/pdf",
-        headers={"Content-Disposition": f"inline; filename=quote_{quote_id}.pdf"},
+        headers={"Content-Disposition": f"inline; filename={quote_label_for(quote)}_cotizacion.pdf"}  # E-11: same name as the other PDF paths,
     )
 
 

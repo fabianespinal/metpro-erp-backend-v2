@@ -1098,13 +1098,13 @@ def convert_quote_to_invoice(quote_id: str, created_by_user_id: Optional[str] = 
 
         # 5. Insert invoice items
         invoice_item_rows = [
-            (invoice_id, item["product_id"], item["product_name"], *_invoice_line_amounts(item), item.get("category"))
-            for item in items
+            (invoice_id, item["product_id"], item["product_name"], *_invoice_line_amounts(item), item.get("category"), n)
+            for n, item in enumerate(items, start=1)   # B-19: line_no keeps the quote's line order
         ]
         if invoice_item_rows:
             execute_values(
                 cursor,
-                "INSERT INTO invoice_items (invoice_id, product_id, description, quantity, unit_price, discount, total, category) VALUES %s",
+                "INSERT INTO invoice_items (invoice_id, product_id, description, quantity, unit_price, discount, total, category, line_no) VALUES %s",
                 invoice_item_rows,
             )
 

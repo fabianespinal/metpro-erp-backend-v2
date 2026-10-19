@@ -22,7 +22,11 @@ app = FastAPI(
 # PROXY HEADERS (Railway / reverse proxy support)
 # ============================================================
 
-app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
+# Default "*" is kept on purpose: Railway proxy addresses change, and client IP for rate limits
+# and logs is read from X-Real-IP / X-Forwarded-For by core.rate_limit, not from this middleware.
+# TRUSTED_PROXY_HOSTS (comma list of IPs/CIDRs) narrows it without a code change (B-15).
+_trusted = [h.strip() for h in os.environ.get("TRUSTED_PROXY_HOSTS", "*").split(",") if h.strip()] or ["*"]
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=_trusted if _trusted != ["*"] else "*")
 
 # Unified error model: {"detail": ..., "code": ...} for every error.
 from core.errors import register_error_handlers  # noqa: E402
@@ -34,22 +38,23 @@ from core.error_middleware import UnhandledErrorMiddleware  # noqa: E402
 app.add_middleware(UnhandledErrorMiddleware)
 
 # ============================================================
-# CORS CONFIGURATION — LOCAL + PRODUCTION + STAGING
+# CORS CONFIGURATION
 # ============================================================
 
+# B-15: production allows only the production ERP and the public site.
+# Staging and local development add their origins with CORS_EXTRA_ORIGINS (comma list) on their own
+# service. CORS_LEGACY_ORIGINS=true restores the previous list (staging + localhost) as a rollback.
 allowed_origins = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-
-    # Production frontend
-    "https://app.metprord.com",
-
-    # Staging frontend
-    "https://metpro-erp-frontend-staging-production.up.railway.app",
-
-    # Public quotes/invoices site
-    "https://metprord.site",
+    "https://app.metprord.com",   # production ERP
+    "https://metprord.site",      # public quotes/invoices site
 ]
+if os.environ.get("CORS_LEGACY_ORIGINS", "").strip().lower() in ("1", "true", "yes", "on"):
+    allowed_origins += [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "https://metpro-erp-frontend-staging-production.up.railway.app",
+    ]
+allowed_origins += [o.strip().rstrip("/") for o in os.environ.get("CORS_EXTRA_ORIGINS", "").split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,

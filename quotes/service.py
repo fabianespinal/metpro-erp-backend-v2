@@ -881,6 +881,14 @@ def update_quote_status(quote_id: str, status: str) -> dict:
             "UPDATE quotes SET status = %s, updated_at = CURRENT_TIMESTAMP WHERE quote_id = %s", (status, quote_id)
         )
 
+        # X-02 (approved 2026-10-18): rejecting a quote cancels its project. Completed projects are kept.
+        if status == "Rejected":
+            cursor.execute(
+                "UPDATE projects SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP "
+                "WHERE quote_id = %s AND status NOT IN ('completed', 'cancelled')",
+                (quote_id,),
+            )
+
         # Approval creates the project (Phase 2). Savepoint: a project failure never blocks the approval.
         if status == "Approved":
             cursor.execute("SAVEPOINT project_from_quote")
@@ -1080,6 +1088,17 @@ def convert_quote_to_invoice(quote_id: str, created_by_user_id: Optional[str] = 
             "UPDATE quotes SET status = 'Invoiced' WHERE quote_id = %s AND status = 'Approved'",
             (quote_id,),
         )
+
+        # X-01: an invoiced quote always has a project. Quotes approved before Phase 2 had none.
+        # Idempotent (one project per quote). Savepoint: a project failure never blocks the invoice.
+        cursor.execute("SAVEPOINT project_on_invoice")
+        try:
+            from projects.service import create_project_from_quote  # local: avoids import cycle
+            create_project_from_quote(cursor, quote_id)
+            cursor.execute("RELEASE SAVEPOINT project_on_invoice")
+        except Exception:
+            cursor.execute("ROLLBACK TO SAVEPOINT project_on_invoice")
+            logger.exception("Project creation failed for invoiced quote %s", quote_id)
         conn.commit()
 
         # 6. Return invoice with items

@@ -159,7 +159,7 @@ def test_convert_uses_stored_grand_total_and_marks_invoiced_in_same_transaction(
     }
     # fetchone: quote, duplicate-invoice check (None), earlier-invoice count, INSERT RETURNING id, final SELECT
     cursor = LogCursor(
-        fetchone_queue=[quote_row, None, {"n": 0}, {"id": 7}, invoice_row],  # B-06: count of earlier invoices
+        fetchone_queue=[quote_row, None, {"n": 0}, {"id": 7}, None, invoice_row],  # None: X-01 project lookup  # B-06: count of earlier invoices
         fetchall_queue=[[], []],  # quote_items (none), invoice_items after commit
     )
     conn = LogConn(cursor)
@@ -188,7 +188,7 @@ def test_convert_legacy_quote_without_stored_total_falls_back_to_computation(mon
                    "status": "Pending", "total_amount": 0, "invoice_date": "2026-10-16",
                    "payment_terms": None, "valid_until": None}
     cursor = LogCursor(
-        fetchone_queue=[quote_row, None, {"n": 0}, {"id": 8}, invoice_row],  # B-06: count of earlier invoices
+        fetchone_queue=[quote_row, None, {"n": 0}, {"id": 8}, None, invoice_row],  # None: X-01 project lookup  # B-06: count of earlier invoices
         fetchall_queue=[[], []],
     )
     monkeypatch.setattr(svc, "get_db_connection", lambda: LogConn(cursor))

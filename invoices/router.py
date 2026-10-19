@@ -60,6 +60,7 @@ def send_invoice(
     client = {
         "company_name": invoice["company_name"],
         "address": invoice.get("company_address", ""),
+        "tax_id": invoice.get("company_tax_id") or "",  # B-07: client RNC on the emailed PDF
         "contact_name": invoice.get("contact_name", ""),
         "email": invoice.get("contact_email", ""),
         "phone": invoice.get("contact_phone", ""),
@@ -252,6 +253,7 @@ def _render_public_invoice_pdf(invoice_id: int) -> Response:
         client={
             "company_name": invoice["company_name"],
             "address": invoice.get("company_address", ""),
+            "tax_id": invoice.get("company_tax_id") or "",  # B-07: client RNC on the public PDF
             "contact_name": invoice.get("contact_name", ""),
             "email": invoice.get("contact_email", ""),
             "phone": invoice.get("contact_phone", ""),

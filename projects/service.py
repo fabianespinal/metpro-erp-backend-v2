@@ -7,6 +7,7 @@ from core.errors import internal_error
 from psycopg2.extras import RealDictCursor
 import logging
 from core.numbering import quote_label
+from core.dates import business_today
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +17,12 @@ PROJECT_SELECT = """
            inv.id AS invoice_id, inv.invoice_number AS invoice_number
     FROM projects p
     JOIN clients c ON p.client_id = c.id
-    LEFT JOIN invoices inv ON inv.quote_id = p.quote_id AND p.quote_id IS NOT NULL
+    -- One row per project: the newest non-cancelled invoice of its quote (re-invoice, B-06).
+    LEFT JOIN LATERAL (
+        SELECT i.id, i.invoice_number FROM invoices i
+        WHERE p.quote_id IS NOT NULL AND i.quote_id = p.quote_id AND i.status <> 'Cancelled'
+        ORDER BY i.id DESC LIMIT 1
+    ) inv ON TRUE
 """
 
 
@@ -66,10 +72,10 @@ def create_project_from_quote(cursor, quote_id: str):
     cursor.execute("""
         INSERT INTO projects
             (client_id, name, description, status, start_date, job_site_address, quote_id, quote_number)
-        VALUES (%s, %s, %s, 'pending', CURRENT_DATE, %s, %s, %s)
+        VALUES (%s, %s, %s, 'pending', %s, %s, %s, %s)
         ON CONFLICT (quote_id) WHERE quote_id IS NOT NULL DO NOTHING
         RETURNING id
-    """, (q["client_id"], name, description, q.get("client_address"), q["quote_id"], q.get("quote_number")))
+    """, (q["client_id"], name, description, business_today(), q.get("client_address"), q["quote_id"], q.get("quote_number")))
     row = cursor.fetchone()
     return row["id"] if row else None
 

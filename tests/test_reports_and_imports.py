@@ -57,7 +57,10 @@ def test_revenue_filters_apply_to_every_query(monkeypatch):
     _, cur = _run(monkeypatch, "2026-10-01", "2026-10-31", 7)
     for sql, params in cur.sql:
         assert "BETWEEN %s AND %s" in sql
-        assert params == ["2026-10-01", "2026-10-31", 7]
+        if "FROM quotes" in sql:  # pipeline: quotes.created_at by the Santo Domingo date (B-03/B-04)
+            assert params == ["America/Santo_Domingo", "2026-10-01", "2026-10-31", 7]
+        else:
+            assert params == ["2026-10-01", "2026-10-31", 7]
 
 
 def test_client_import_skip_duplicates_is_form_field():

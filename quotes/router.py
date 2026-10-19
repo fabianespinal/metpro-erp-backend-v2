@@ -15,6 +15,7 @@ from core.rate_limit import public_rate_limit
 from pdf.builder_quote import create_quote_pdf
 from pdf.utils.signer import resolve_signer_name
 from core.numbering import quote_label_for
+from core.dates import local_date
 from core.email_attachments import read_extra_attachments
 
 # Email sending
@@ -77,6 +78,7 @@ def get_quote_public_pdf(token: Annotated[str, Path(pattern=PUBLIC_TOKEN_PATTERN
     client = {
         "company_name": quote["company_name"],
         "address":      quote.get("company_address", ""),
+        "tax_id":       quote.get("company_tax_id") or "",  # B-07: client RNC on the emailed/public PDF
         "contact_name": quote.get("contact_name", ""),
         "email":        quote.get("contact_email", ""),
         "phone":        quote.get("contact_phone", ""),
@@ -105,7 +107,7 @@ def get_quote_public_pdf(token: Annotated[str, Path(pattern=PUBLIC_TOKEN_PATTERN
         doc_type="COTIZACION",
         signer_name=resolve_signer_name(None, quote.get("created_by_name")),
         doc_id=quote_label_for(quote),
-        doc_date=str(quote["created_at"])[:10] if quote.get("created_at") else "",
+        doc_date=local_date(quote.get("created_at")),
         client=client,
         project_name=quote.get("project_name", ""),
         notes=quote.get("notes", ""),
@@ -158,6 +160,7 @@ def send_quote(
     client = {
         "company_name": quote["company_name"],
         "address": quote.get("company_address", ""),
+        "tax_id": quote.get("company_tax_id") or "",  # B-07: client RNC on the emailed/public PDF
         "contact_name": quote.get("contact_name", ""),
         "email": quote.get("contact_email", ""),
         "phone": quote.get("contact_phone", ""),
@@ -174,7 +177,7 @@ def send_quote(
         doc_type="COTIZACION",
         signer_name=resolve_signer_name(current_user, quote.get("created_by_name")),
         doc_id=quote_label_for(quote),
-        doc_date=str(quote["created_at"])[:10] if quote.get("created_at") else "",
+        doc_date=local_date(quote.get("created_at")),
         client=client,
         project_name=quote.get("project_name", ""),
         notes=quote.get("notes", ""),
@@ -234,6 +237,7 @@ def get_quote_pdf(quote_id: str, current_user: dict = Depends(require_auth)):
     client = {
         "company_name": quote["company_name"],
         "address": quote.get("company_address", ""),
+        "tax_id": quote.get("company_tax_id") or "",  # B-07: client RNC on the emailed/public PDF
         "contact_name": quote.get("contact_name", ""),
         "email": quote.get("contact_email", ""),
         "phone": quote.get("contact_phone", ""),
@@ -250,7 +254,7 @@ def get_quote_pdf(quote_id: str, current_user: dict = Depends(require_auth)):
         doc_type="COTIZACION",
         signer_name=resolve_signer_name(current_user, quote.get("created_by_name")),
         doc_id=quote_label_for(quote),
-        doc_date=str(quote["created_at"])[:10] if quote.get("created_at") else "",
+        doc_date=local_date(quote.get("created_at")),
         client=client,
         project_name=quote.get("project_name", ""),
         notes=quote.get("notes", ""),

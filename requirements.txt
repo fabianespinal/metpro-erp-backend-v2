@@ -21,4 +21,6 @@ httpx==0.28.1
 typing_extensions==4.12.2
 # Date utilities
 python-dateutil==2.9.0
+# Time zone data for core.dates (Dominican business dates)
+tzdata==2024.2
 resend==2.49.0

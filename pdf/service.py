@@ -7,6 +7,7 @@ from database import get_db_connection
 from psycopg2.extras import RealDictCursor
 from datetime import datetime
 from pdf.utils.date_utils import format_date
+from core.dates import local_date
 from pdf.builder_quote import create_quote_pdf
 from invoices.service import invoice_lines_and_totals
 from quotes.dynamic_charges import dynamic_charges_total
@@ -120,7 +121,9 @@ def generate_quote_pdf(quote_id: str, current_user: dict = None) -> StreamingRes
         grand_total = subtotal_general + itbis
 
         raw_date = quote.get('created_at') or quote.get('updated_at') or ''
-        doc_date = format_date(raw_date)
+        # B-04: quotes.created_at is naive UTC; print the Santo Domingo date (same DD/MM/YYYY format).
+        local = local_date(raw_date)
+        doc_date = f"{local[8:10]}/{local[5:7]}/{local[0:4]}" if len(local) == 10 and local[4] == '-' else format_date(raw_date)
 
         payment_terms = quote.get('payment_terms') or ''
         valid_until = quote.get('valid_until') or ''
@@ -413,7 +416,10 @@ def generate_conduce_pdf(invoice_id: int, current_user: dict = None) -> Streamin
 
         # Same numeric suffix as the quote and invoice: Q-10002 -> F-10002 -> C-10002.
         # Legacy invoices with no quote number keep the old derived label.
-        if quote_number:
+        # A re-invoice after a cancel (B-06) is F-10002-2, so its conduce is C-10002-2.
+        if str(invoice.get('invoice_number') or '').startswith('F-'):
+            conduce_number = conduce_label_from_invoice_number(invoice['invoice_number'])
+        elif quote_number:
             conduce_number = conduce_label(quote_number)
         else:
             conduce_number = conduce_label_from_invoice_number(invoice['invoice_number'])

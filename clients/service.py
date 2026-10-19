@@ -12,6 +12,11 @@ logger = logging.getLogger("metpro.clients")
 from psycopg2.extras import RealDictCursor
 
 
+
+def _cell(row: dict, key: str) -> str:
+    """CSV cell as stripped text. Rows shorter than the header give None (debug B-09)."""
+    return (row.get(key) or "").strip()
+
 # ============================================================
 # CREATE CLIENT
 # ============================================================
@@ -238,13 +243,13 @@ async def import_clients_from_csv(file_content: bytes, filename: str, skip_dupli
         inserted = updated = skipped = 0
 
         for idx, row in enumerate(rows, start=2):
-            company = row.get("company_name", "").strip()
+            company = _cell(row, "company_name")
             if not company:
                 errors.append(f"Row {idx}: Skipped (empty company_name)")
                 skipped += 1
                 continue
 
-            email = row.get("email", "").strip()
+            email = _cell(row, "email")
             if email and "@" not in email:
                 errors.append(f"Row {idx} ({company}): Invalid email format")
                 skipped += 1
@@ -253,8 +258,8 @@ async def import_clients_from_csv(file_content: bytes, filename: str, skip_dupli
             # Check duplicates
             existing_id = None
 
-            if row.get("tax_id"):
-                cursor.execute("SELECT id FROM clients WHERE tax_id = %s", (row["tax_id"].strip(),))
+            if _cell(row, "tax_id"):  # a blank RNC never matches the clients stored with ''
+                cursor.execute("SELECT id FROM clients WHERE tax_id = %s", (_cell(row, "tax_id"),))
                 result = cursor.fetchone()
                 if result:
                     existing_id = result["id"]
@@ -276,10 +281,10 @@ async def import_clients_from_csv(file_content: bytes, filename: str, skip_dupli
                         SET contact_name = %s, phone = %s, address = %s, notes = %s
                         WHERE id = %s
                     """, (
-                        row.get("contact_name", "").strip(),
-                        row.get("phone", "").strip(),
-                        row.get("address", "").strip(),
-                        row.get("notes", "").strip(),
+                        _cell(row, "contact_name"),
+                        _cell(row, "phone"),
+                        _cell(row, "address"),
+                        _cell(row, "notes"),
                         existing_id
                     ))
                     updated += 1
@@ -293,12 +298,12 @@ async def import_clients_from_csv(file_content: bytes, filename: str, skip_dupli
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """, (
                     company,
-                    row.get("contact_name", "").strip(),
+                    _cell(row, "contact_name"),
                     email,
-                    row.get("phone", "").strip(),
-                    row.get("address", "").strip(),
-                    row.get("tax_id", "").strip(),
-                    row.get("notes", "").strip()
+                    _cell(row, "phone"),
+                    _cell(row, "address"),
+                    _cell(row, "tax_id"),
+                    _cell(row, "notes")
                 ))
                 inserted += 1
 

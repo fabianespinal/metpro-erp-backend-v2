@@ -313,6 +313,24 @@ MANUAL_INVOICE_TRANSITIONS = {
 }
 
 
+def _release_quote_if_no_active_invoice(cursor, quote_id) -> bool:
+    """Invoiced -> Approved when the quote has no other non-cancelled invoice (B-06).
+
+    The quote can then be invoiced again. Returns True when the quote was released.
+    """
+    if not quote_id:
+        return False
+    cursor.execute(
+        """
+        UPDATE quotes SET status = 'Approved', updated_at = CURRENT_TIMESTAMP
+        WHERE quote_id = %s AND status = 'Invoiced'
+          AND NOT EXISTS (SELECT 1 FROM invoices WHERE quote_id = %s AND status <> 'Cancelled')
+        """,
+        (quote_id, quote_id),
+    )
+    return cursor.rowcount > 0
+
+
 def update_invoice_status(invoice_id: int, status: str) -> dict:
     conn = None
     try:
@@ -323,7 +341,7 @@ def update_invoice_status(invoice_id: int, status: str) -> dict:
             raise api_error(400, f"Estado no válido. Debe ser uno de: {list(INVOICE_STATUSES)}", "INVOICE_STATUS_INVALID")
 
         cursor.execute(
-            "SELECT id, status, COALESCE(amount_paid, 0) AS amount_paid FROM invoices WHERE id = %s FOR UPDATE",
+            "SELECT id, quote_id, status, COALESCE(amount_paid, 0) AS amount_paid FROM invoices WHERE id = %s FOR UPDATE",
             (invoice_id,),
         )
         current = cursor.fetchone()
@@ -343,6 +361,9 @@ def update_invoice_status(invoice_id: int, status: str) -> dict:
                 "UPDATE invoices SET status = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
                 (status, invoice_id),
             )
+            if status == "Cancelled":
+                # B-06: the quote returns to Approved so it can be invoiced again.
+                _release_quote_if_no_active_invoice(cursor, current["quote_id"])
             conn.commit()
 
         return get_invoice_by_id(invoice_id)
@@ -383,14 +404,12 @@ def delete_invoice(invoice_id: int) -> dict:
         quote_id = invoice["quote_id"]
 
         cursor.execute("DELETE FROM invoice_items WHERE invoice_id = %s", (invoice_id,))
+        # B-05: conduce records belong to the invoice (like its items). Without this the FK
+        # made any invoice with a previewed conduce impossible to delete.
+        cursor.execute("DELETE FROM conduces WHERE invoice_id = %s", (invoice_id,))
         cursor.execute("DELETE FROM invoices WHERE id = %s", (invoice_id,))
-        quote_reverted = False
-        if quote_id:
-            cursor.execute(
-                "UPDATE quotes SET status = 'Approved' WHERE quote_id = %s AND status = 'Invoiced'",
-                (quote_id,),
-            )
-            quote_reverted = cursor.rowcount > 0
+        # Back to Approved only when no other active invoice remains (B-06 re-invoices).
+        quote_reverted = _release_quote_if_no_active_invoice(cursor, quote_id)
 
         conn.commit()
         return {"message": "Factura eliminada correctamente", "quote_reverted": quote_reverted}
@@ -441,6 +460,7 @@ def get_invoice_with_contact(invoice_id: int) -> dict:
 
                 c.company_name,
                 c.address AS company_address,
+                c.tax_id AS company_tax_id,
 
                 ct.name  AS contact_name,
                 ct.email AS contact_email,

@@ -37,7 +37,7 @@ def test_create_project_from_quote_fields():
     assert psvc.create_project_from_quote(cur, "u1") == 7
     sql, params = cur.log[-1]
     assert sql.startswith("INSERT INTO projects") and "'pending'" in sql and "ON CONFLICT (quote_id)" in sql
-    assert params == (5, "Nave A", "Viga, Pintura", "Calle 1", "u1", 10002)
+    assert params == (5, "Nave A", "Viga, Pintura", psvc.business_today(), "Calle 1", "u1", 10002)  # B-04 start date
 
 
 def test_name_falls_back_to_quote_label_and_second_call_is_noop():

@@ -292,6 +292,7 @@ def test_convert_quote_to_invoice_writes_created_by(monkeypatch):
             "valid_until": None,
         }),
         R("SELECT id FROM invoices WHERE quote_id", one=None),
+        R("SELECT COUNT(*) AS n FROM invoices WHERE quote_id", one={"n": 0}),  # B-06: earlier (cancelled) invoices
         R("SELECT * FROM quote_items", many=[]),
         R("INSERT INTO invoices", one={"id": 5}),
         R("UPDATE quotes SET status = 'Invoiced'"),

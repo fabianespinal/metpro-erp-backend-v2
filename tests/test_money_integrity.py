@@ -198,6 +198,7 @@ def test_delete_removes_items_then_invoice_and_reverts_only_invoiced_quote(monke
         R("SELECT id, quote_id FROM invoices WHERE id = %s FOR UPDATE", one={"id": 5, "quote_id": "q1"}),
         R("COUNT(*) AS n FROM invoice_payments", one={"n": 0}),
         R("DELETE FROM invoice_items WHERE invoice_id"),
+        R("DELETE FROM conduces WHERE invoice_id"),
         R("DELETE FROM invoices WHERE id"),
         R("UPDATE quotes SET status = 'Approved'", rowcount=1),
     ])
@@ -206,7 +207,8 @@ def test_delete_removes_items_then_invoice_and_reverts_only_invoiced_quote(monke
     out = isvc.delete_invoice(5)
     deletes = [s for s, _ in cur.calls if s.startswith("DELETE")]
     assert deletes[0].startswith("DELETE FROM invoice_items WHERE invoice_id")
-    assert deletes[1].startswith("DELETE FROM invoices WHERE id")
+    assert deletes[1].startswith("DELETE FROM conduces WHERE invoice_id")  # B-05
+    assert deletes[2].startswith("DELETE FROM invoices WHERE id")
     assert not any("invoice_payments" in d for d in deletes)
     revert, _ = cur.sql_with("UPDATE quotes")[0]
     assert "AND status = 'Invoiced'" in revert
@@ -219,7 +221,7 @@ def test_delete_removes_items_then_invoice_and_reverts_only_invoiced_quote(monke
 
 def _status_cursor(current, amount_paid=0):
     return Scripted([
-        R("FROM invoices WHERE id = %s FOR UPDATE", one={"id": 5, "status": current, "amount_paid": amount_paid}),
+        R("FROM invoices WHERE id = %s FOR UPDATE", one={"id": 5, "quote_id": "q1", "status": current, "amount_paid": amount_paid}),
         R("UPDATE invoices SET status"),
     ])
 
@@ -276,6 +278,7 @@ def test_convert_writes_header_totals(monkeypatch):
     cur = Scripted([
         R("included_charges, total_amount, grand_total, payment_terms, valid_until", one=quote),
         R("SELECT id FROM invoices WHERE quote_id", one=None),
+        R("SELECT COUNT(*) AS n FROM invoices WHERE quote_id", one={"n": 0}),  # B-06: earlier (cancelled) invoices
         R("SELECT * FROM quote_items", many=items),
         R("INSERT INTO invoices", one={"id": 5}),
         R("UPDATE quotes SET status = 'Invoiced'"),

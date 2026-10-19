@@ -1,6 +1,7 @@
 from core.errors import api_error
 from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from users.models import MIN_PASSWORD_LENGTH  # same rule as /users (debug B-02)
 from .service import (
     verify_password,
     create_access_token,
@@ -28,7 +29,7 @@ class LoginRequest(BaseModel):
 
 class RegisterRequest(BaseModel):
     username: str
-    password: str
+    password: str = Field(min_length=MIN_PASSWORD_LENGTH)
     email: str
     full_name: str
 
@@ -39,7 +40,7 @@ class LoginResponse(BaseModel):
 
 class ChangePasswordRequest(BaseModel):
     old_password: str
-    new_password: str
+    new_password: str = Field(min_length=MIN_PASSWORD_LENGTH)
 
 
 # ============================

@@ -3,6 +3,7 @@ from fastapi import HTTPException
 from database import get_db_connection
 from psycopg2.extras import RealDictCursor
 from core.errors import internal_error
+from core.dates import business_tz_name, sql_local_date
 
 
 # ============================================================
@@ -28,9 +29,10 @@ def get_quotes_summary(start_date: Optional[str], end_date: Optional[str],
         params = []
 
         # Date filter
+        # B-03: whole days, inclusive, by the Santo Domingo calendar date of created_at.
         if start_date and end_date:
-            query += " AND q.created_at BETWEEN %s AND %s"
-            params.extend([start_date, end_date])
+            query += f" AND {sql_local_date('q.created_at')} BETWEEN %s AND %s"
+            params.extend([business_tz_name(), start_date, end_date])
 
         # Client filter
         if client_id:
@@ -48,8 +50,8 @@ def get_quotes_summary(start_date: Optional[str], end_date: Optional[str],
         total_params = []
 
         if start_date and end_date:
-            total_query += " AND q.created_at BETWEEN %s AND %s"
-            total_params.extend([start_date, end_date])
+            total_query += f" AND {sql_local_date('q.created_at')} BETWEEN %s AND %s"
+            total_params.extend([business_tz_name(), start_date, end_date])
 
         if client_id:
             total_query += " AND q.client_id = %s"
@@ -103,11 +105,15 @@ def get_revenue_report(start_date: Optional[str], end_date: Optional[str],
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        def scoped(base, date_col, client_col, params):
+        def scoped(base, date_col, client_col, params, naive_utc=False):
             q = base
             if start_date and end_date:
-                q += f" AND {date_col}::date BETWEEN %s AND %s"
-                params.extend([start_date, end_date])
+                if naive_utc:  # quotes.created_at: compare by the Santo Domingo date (B-03/B-04)
+                    q += f" AND {sql_local_date(date_col)} BETWEEN %s AND %s"
+                    params.extend([business_tz_name(), start_date, end_date])
+                else:
+                    q += f" AND {date_col}::date BETWEEN %s AND %s"
+                    params.extend([start_date, end_date])
             if client_id:
                 q += f" AND {client_col} = %s"
                 params.append(client_id)
@@ -138,8 +144,8 @@ def get_revenue_report(start_date: Optional[str], end_date: Optional[str],
         cursor.execute(scoped(
             "SELECT COALESCE(SUM(COALESCE(q.grand_total, q.total_amount)), 0) AS amount, COUNT(*) AS n "
             "FROM quotes q WHERE q.status = 'Approved' "
-            "AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.quote_id = q.quote_id)",
-            "q.created_at", "q.client_id", p4), p4)
+            "AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.quote_id = q.quote_id AND i.status <> 'Cancelled')",
+            "q.created_at", "q.client_id", p4, naive_utc=True), p4)
         pipeline = cursor.fetchone()
 
         def row(key, label, r):
@@ -198,8 +204,8 @@ def get_client_activity(start_date: Optional[str], end_date: Optional[str]) -> d
 
         # Date filter
         if start_date and end_date:
-            query += " AND q.created_at BETWEEN %s AND %s"
-            params.extend([start_date, end_date])
+            query += f" AND {sql_local_date('q.created_at')} BETWEEN %s AND %s"  # B-03: inclusive
+            params.extend([business_tz_name(), start_date, end_date])
 
         query += " GROUP BY c.id, c.company_name ORDER BY total_quoted DESC"
 

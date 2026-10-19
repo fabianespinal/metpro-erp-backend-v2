@@ -394,6 +394,7 @@ def get_quote_with_contact(quote_id: str) -> dict:
 
                 c.company_name,
                 c.address        AS company_address,
+                c.tax_id         AS company_tax_id,
 
                 ct.name          AS contact_name,
                 ct.email         AS contact_email,
@@ -977,6 +978,7 @@ def convert_quote_to_invoice(quote_id: str, created_by_user_id: Optional[str] = 
                    included_charges, total_amount, grand_total, payment_terms, valid_until
             FROM quotes
             WHERE quote_id = %s
+            FOR UPDATE
         """, (quote_id,))
         quote = cursor.fetchone()
         if not quote:
@@ -987,10 +989,13 @@ def convert_quote_to_invoice(quote_id: str, created_by_user_id: Optional[str] = 
         if quote["status"] != "Approved":
             raise api_error(400, "Solo las cotizaciones aprobadas se pueden convertir en facturas", "QUOTE_NOT_APPROVED")
 
-        # 2. Prevent duplicate invoices
-        cursor.execute("SELECT id FROM invoices WHERE quote_id = %s", (quote_id,))
+        # 2. Prevent duplicate invoices. A cancelled invoice does not count (B-06):
+        #    the quote can be invoiced again and the cancelled one stays for the record.
+        cursor.execute("SELECT id FROM invoices WHERE quote_id = %s AND status <> 'Cancelled'", (quote_id,))
         if cursor.fetchone():
             raise api_error(400, "Ya existe una factura para esta cotización", "INVOICE_EXISTS")
+        cursor.execute("SELECT COUNT(*) AS n FROM invoices WHERE quote_id = %s", (quote_id,))
+        previous_invoices = int(cursor.fetchone()["n"])
 
         # 3. Load quote items (deterministic order)
         cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id", (quote_id,))
@@ -1019,9 +1024,12 @@ def convert_quote_to_invoice(quote_id: str, created_by_user_id: Optional[str] = 
         quote_number = quote.get("quote_number")
         if quote_number:
             invoice_number = invoice_label(quote_number)
+            if previous_invoices:  # re-invoice after a cancel: F-10002 -> F-10002-2
+                invoice_number = f"{invoice_number}-{previous_invoices + 1}"
         else:
             invoice_number = f"INV-{datetime.now().strftime('%Y%m%d%H%M%S')}"
-        invoice_date = datetime.now().strftime("%Y-%m-%d")
+        from core.dates import business_today  # B-04: DR calendar date, not server UTC
+        invoice_date = business_today().isoformat()
 
         cursor.execute("""
             INSERT INTO invoices

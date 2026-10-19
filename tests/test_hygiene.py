@@ -84,7 +84,7 @@ def test_change_password_closes_connection_on_error(monkeypatch):
     conn = _Conn({"password_hash": "h"})
     monkeypatch.setattr(auth_router, "get_db_connection", lambda: conn)
     monkeypatch.setattr(auth_router, "verify_password", lambda a, b: False)
-    data = auth_router.ChangePasswordRequest(old_password="x", new_password="y")
+    data = auth_router.ChangePasswordRequest(old_password="x", new_password="nueva-clave-1")
     with pytest.raises(HTTPException):
         auth_router.change_password(data, {"sub": "alice"})
     assert conn.closed and conn.rolled_back

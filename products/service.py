@@ -9,6 +9,11 @@ from core.errors import internal_error
 from psycopg2.extras import RealDictCursor
 
 
+
+def _cell(row: dict, key: str) -> str:
+    """CSV cell as stripped text. Rows shorter than the header give None (debug B-09)."""
+    return (row.get(key) or "").strip()
+
 # ============================================================
 # CREATE PRODUCT
 # ============================================================
@@ -200,13 +205,13 @@ async def import_products_from_csv(file_content: bytes, filename: str) -> dict:
         skipped = 0
 
         for row in rows:
-            name = row.get("name", "").strip()
+            name = _cell(row, "name")
             if not name:
                 skipped += 1
                 continue
 
             try:
-                unit_price = float(row.get("unit_price", 0))
+                unit_price = float(_cell(row, "unit_price"))
             except ValueError:
                 skipped += 1
                 continue
@@ -215,7 +220,7 @@ async def import_products_from_csv(file_content: bytes, filename: str) -> dict:
                 skipped += 1
                 continue
 
-            description = row.get("description", "").strip()
+            description = _cell(row, "description")
 
             # Check if product exists
             cursor.execute("SELECT id FROM products WHERE name = %s", (name,))

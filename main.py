@@ -28,6 +28,11 @@ app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 from core.errors import register_error_handlers  # noqa: E402
 register_error_handlers(app)
 
+# Unhandled errors become the unified 500 body inside CORS, so the browser can read it (B-08).
+# Must be added BEFORE CORSMiddleware: later add_middleware calls wrap earlier ones.
+from core.error_middleware import UnhandledErrorMiddleware  # noqa: E402
+app.add_middleware(UnhandledErrorMiddleware)
+
 # ============================================================
 # CORS CONFIGURATION — LOCAL + PRODUCTION + STAGING
 # ============================================================

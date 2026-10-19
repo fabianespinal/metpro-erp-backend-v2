@@ -16,6 +16,7 @@ class Invoice(BaseModel):
     invoice_date: datetime
     client_id: int
     total_amount: float
+    itbis_total: Optional[float] = None  # X-04: lets the dashboard show collected money without ITBIS
     amount_paid: float = 0.0
     amount_due: float = 0.0
     status: str

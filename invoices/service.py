@@ -182,6 +182,7 @@ def get_all_invoices(client_id: Optional[int] = None, status: Optional[str] = No
                 i.client_id,
                 c.company_name AS client_name,
                 i.total_amount,
+                i.itbis_total,
                 COALESCE(i.amount_paid, 0) AS amount_paid,
                 COALESCE(i.amount_due, i.total_amount) AS amount_due,
                 i.status,

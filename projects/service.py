@@ -255,6 +255,11 @@ def update_project(
         final_notes = norm_str(notes) if notes is not None else current_project["notes"]
         final_address = norm_str(job_site_address) if job_site_address is not None else current_project["job_site_address"]
 
+        # X-03: a project created from a quote keeps the quote's client (quote, invoice and project agree).
+        if (client_id is not None and current_project.get("quote_id")
+                and int(client_id) != int(current_project["client_id"])):
+            raise api_error(400, "El cliente de un proyecto creado desde una cotización no se puede cambiar", "PROJECT_CLIENT_LOCKED")
+
         # Validate client if changed
         if client_id is not None:
             cursor.execute("SELECT 1 FROM clients WHERE id = %s", (final_client_id,))

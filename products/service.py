@@ -56,7 +56,7 @@ def get_all_products() -> List[dict]:
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        cursor.execute("SELECT * FROM products ORDER BY name")
+        cursor.execute("SELECT * FROM products WHERE archived_at IS NULL ORDER BY name")  # X-05
         return cursor.fetchall()
 
     finally:
@@ -149,17 +149,26 @@ def delete_product(product_id: int) -> dict:
         if cursor.fetchone()["n"] > 0:
             raise api_error(400, "El producto se usa en un paquete de plantilla y no se puede eliminar", "PRODUCT_IN_USE")
 
-        # Quote and invoice lines keep their name and price; only the catalog link is cleared,
-        # so editing a Draft that used this product does not fail product validation.
-        cursor.execute("UPDATE quote_items SET product_id = NULL WHERE product_id = %s", (product_id,))
-        cursor.execute("UPDATE invoice_items SET product_id = NULL WHERE product_id = %s", (product_id,))
-
-        cursor.execute("DELETE FROM products WHERE id = %s", (product_id,))
-        if cursor.rowcount == 0:
+        cursor.execute("SELECT id FROM products WHERE id = %s AND archived_at IS NULL", (product_id,))
+        if not cursor.fetchone():
             raise api_error(404, "Producto no encontrado", "PRODUCT_NOT_FOUND")
 
+        # X-05: a product used on quote or invoice lines is archived, not deleted. The lines keep
+        # their product link, so cost estimates and the variance report keep their coverage.
+        # Archived products leave the catalog (list, picker, CSV match, product report).
+        cursor.execute(
+            "SELECT EXISTS (SELECT 1 FROM quote_items WHERE product_id = %s) "
+            "OR EXISTS (SELECT 1 FROM invoice_items WHERE product_id = %s) AS used",
+            (product_id, product_id),
+        )
+        if cursor.fetchone()["used"]:
+            cursor.execute("UPDATE products SET archived_at = now() WHERE id = %s", (product_id,))
+            conn.commit()
+            return {"message": "Producto archivado: se usa en cotizaciones o facturas", "archived": True}
+
+        cursor.execute("DELETE FROM products WHERE id = %s", (product_id,))
         conn.commit()
-        return {"message": "Producto eliminado correctamente"}
+        return {"message": "Producto eliminado correctamente", "archived": False}
 
     except HTTPException:
         if conn:
@@ -224,7 +233,7 @@ async def import_products_from_csv(file_content: bytes, filename: str) -> dict:
             description = _cell(row, "description")
 
             # Check if product exists (oldest row with that exact name)
-            cursor.execute("SELECT id FROM products WHERE name = %s ORDER BY id LIMIT 1", (name,))
+            cursor.execute("SELECT id FROM products WHERE name = %s AND archived_at IS NULL ORDER BY id LIMIT 1", (name,))
             existing = cursor.fetchone()
 
             if existing:

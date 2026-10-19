@@ -464,9 +464,9 @@ def get_product_profitability(only_with_cost: bool = False) -> dict:
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
-        sql = "SELECT id, name, description, unit_price, cost FROM products"
+        sql = "SELECT id, name, description, unit_price, cost FROM products WHERE archived_at IS NULL"  # X-05
         if only_with_cost:
-            sql += " WHERE cost IS NOT NULL"
+            sql += " AND cost IS NOT NULL"
         cur.execute(sql + " ORDER BY name, id")
         rows = cur.fetchall()
         products = []

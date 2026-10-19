@@ -74,18 +74,25 @@ def test_product_in_template_pack_is_kept(monkeypatch):
     assert not any(s.startswith(("DELETE", "UPDATE")) for s in cur.sql)
 
 
-def test_product_delete_detaches_lines_first(monkeypatch):
-    cur = Cur([{"n": 0}])
+def test_product_delete_unused_product_is_deleted(monkeypatch):
+    """X-05: a product no document uses is deleted; lines are never detached any more."""
+    cur = Cur([{"n": 0}, {"id": 3}, {"used": False}])
     conn = Conn(cur)
     monkeypatch.setattr(psvc, "get_db_connection", lambda: conn)
-    psvc.delete_product(3)
+    assert psvc.delete_product(3)["archived"] is False
     writes = [s for s in cur.sql if s.startswith(("UPDATE", "DELETE"))]
-    assert writes == [
-        "UPDATE quote_items SET product_id = NULL WHERE product_id = %s",
-        "UPDATE invoice_items SET product_id = NULL WHERE product_id = %s",
-        "DELETE FROM products WHERE id = %s",
-    ]
+    assert writes == ["DELETE FROM products WHERE id = %s"]
     assert conn.committed
+
+
+def test_product_delete_used_product_is_archived(monkeypatch):
+    """X-05: a product used on quote/invoice lines is archived; its lines keep product_id."""
+    cur = Cur([{"n": 0}, {"id": 3}, {"used": True}])
+    conn = Conn(cur)
+    monkeypatch.setattr(psvc, "get_db_connection", lambda: conn)
+    assert psvc.delete_product(3)["archived"] is True
+    writes = [s for s in cur.sql if s.startswith(("UPDATE", "DELETE"))]
+    assert writes == ["UPDATE products SET archived_at = now() WHERE id = %s"]
 
 
 class FakeQuery:

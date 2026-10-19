@@ -25,9 +25,9 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+    # SECRET_KEY and DATABASE_URL are not set here: the tests set their own (some sign tokens with
+    # the fixed test key), and database tests use METPRO_LEDGER_TEST_DB only.
     env:
-      SECRET_KEY: ci-only-secret-not-used-anywhere
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/metpro_test
       APP_ENV: test
       RATE_LIMIT_ENABLED: "false"
       METPRO_LEDGER_TEST_DB: "host=localhost port=5432 user=postgres password=postgres dbname=metpro_test"

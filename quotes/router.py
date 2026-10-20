@@ -1,5 +1,5 @@
 from typing import Annotated
-from fastapi import APIRouter, Depends, File, HTTPException, Path, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Path, UploadFile
 from fastapi.responses import StreamingResponse
 from typing import List, Optional
 import json
@@ -18,6 +18,7 @@ from core.numbering import quote_label_for
 from core.dates import local_date
 from core.public_payload import public_payload
 from core.email_attachments import read_extra_attachments
+from company_settings.service import seal_for_pdf
 
 # Email sending
 from email_service import send_quote_email
@@ -132,12 +133,15 @@ def get_quote_public_pdf(token: Annotated[str, Path(pattern=PUBLIC_TOKEN_PATTERN
 def send_quote(
     quote_id: str,
     files: List[UploadFile] = File(default=[]),
+    print_seal: bool = Form(False),
     current_user: dict = Depends(require_auth),
 ):
-    """Send quote PDF to client via email. Optional extra files are attached and discarded."""
+    """Send quote PDF to client via email. Optional extra files are attached and discarded.
+    print_seal=true prints the company seal on the emailed PDF (default: no seal)."""
 
     # Validate uploads first. Nothing is stored.
     extra_attachments = read_extra_attachments(files)
+    seal = seal_for_pdf(print_seal)  # fails before anything is emailed if the seal was asked for and cannot load
 
     quote = service.get_quote_with_contact(quote_id)
 
@@ -164,6 +168,7 @@ def send_quote(
     pdf_stream = create_quote_pdf(
         doc_type="COTIZACION",
         signer_name=resolve_signer_name(current_user, quote.get("created_by_name")),
+        seal=seal,
         doc_id=quote_label_for(quote),
         doc_date=local_date(quote.get("created_at")),
         client=client,
@@ -217,8 +222,9 @@ def get_quote(quote_id: str, current_user: dict = Depends(require_auth)):
 
 
 @router.get("/{quote_id}/pdf")
-def get_quote_pdf(quote_id: str, current_user: dict = Depends(require_auth)):
-    """Generate and stream a quote PDF"""
+def get_quote_pdf(quote_id: str, print_seal: bool = False, current_user: dict = Depends(require_auth)):
+    """Generate and stream a quote PDF. print_seal=true adds the company seal (default: no seal)."""
+    seal = seal_for_pdf(print_seal)
 
     quote = service.get_quote_with_contact(quote_id)
 
@@ -241,6 +247,7 @@ def get_quote_pdf(quote_id: str, current_user: dict = Depends(require_auth)):
     pdf_stream = create_quote_pdf(
         doc_type="COTIZACION",
         signer_name=resolve_signer_name(current_user, quote.get("created_by_name")),
+        seal=seal,
         doc_id=quote_label_for(quote),
         doc_date=local_date(quote.get("created_at")),
         client=client,

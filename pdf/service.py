@@ -17,6 +17,7 @@ from pdf.utils.layout_utils import build_quote_invoice_pdf
 from pdf.utils.signer import resolve_signer_name
 from core.numbering import quote_label_for, conduce_label, conduce_label_from_invoice_number
 from core.errors import internal_error
+from company_settings.service import seal_for_pdf
 import logging
 
 logger = logging.getLogger("metpro.pdf")
@@ -25,7 +26,8 @@ logger = logging.getLogger("metpro.pdf")
 # ============================================================
 # QUOTE PDF GENERATION
 # ============================================================
-def generate_quote_pdf(quote_id: str, current_user: dict = None) -> StreamingResponse:
+def generate_quote_pdf(quote_id: str, current_user: dict = None, print_seal: bool = False) -> StreamingResponse:
+    seal = seal_for_pdf(print_seal)  # None unless the request asks for it
     conn = None
     try:
         conn = get_db_connection()
@@ -128,7 +130,8 @@ def generate_quote_pdf(quote_id: str, current_user: dict = None) -> StreamingRes
             subtotal_general=subtotal_general,
             itbis=itbis,
             grand_total=grand_total,
-            signer_name=resolve_signer_name(current_user, quote.get('created_by_name'))
+            signer_name=resolve_signer_name(current_user, quote.get('created_by_name')),
+            seal=seal
         )
 
         return StreamingResponse(
@@ -150,7 +153,8 @@ def generate_quote_pdf(quote_id: str, current_user: dict = None) -> StreamingRes
 # ============================================================
 # INVOICE PDF GENERATION
 # ============================================================
-def generate_invoice_pdf(invoice_id: int, current_user: dict = None) -> StreamingResponse:
+def generate_invoice_pdf(invoice_id: int, current_user: dict = None, print_seal: bool = False) -> StreamingResponse:
+    seal = seal_for_pdf(print_seal)  # None unless the request asks for it
     conn = None
     try:
         conn = get_db_connection()
@@ -295,7 +299,8 @@ def generate_invoice_pdf(invoice_id: int, current_user: dict = None) -> Streamin
             payments=payments,
             amount_paid=amount_paid,
             amount_due=amount_due,
-            signer_name=resolve_signer_name(current_user, invoice.get('created_by_name'))
+            signer_name=resolve_signer_name(current_user, invoice.get('created_by_name')),
+            seal=seal
         )
 
         return StreamingResponse(
@@ -334,7 +339,8 @@ def _record_conduce(conn, cursor, conduce_number, invoice_id, quote_number):
 # ============================================================
 # CONDUCE PDF GENERATION (NO PRICES)
 # ============================================================
-def generate_conduce_pdf(invoice_id: int, current_user: dict = None) -> StreamingResponse:
+def generate_conduce_pdf(invoice_id: int, current_user: dict = None, print_seal: bool = False) -> StreamingResponse:
+    seal = seal_for_pdf(print_seal)  # None unless the request asks for it
     conn = None
     try:
         conn = get_db_connection()
@@ -407,7 +413,8 @@ def generate_conduce_pdf(invoice_id: int, current_user: dict = None) -> Streamin
             project_name=project_name,
             notes=invoice.get('notes'),
             items=items,
-            signer_name=resolve_signer_name(current_user, invoice.get('created_by_name'))
+            signer_name=resolve_signer_name(current_user, invoice.get('created_by_name')),
+            seal=seal
         )
 
         return StreamingResponse(

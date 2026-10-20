@@ -17,7 +17,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 LOGO_PATH = os.path.join(BASE_DIR, "assets", "logo.png")
 
 
-def create_conduce_pdf(doc_id, doc_date, client, project_name, notes, items, signer_name=None):
+def create_conduce_pdf(doc_id, doc_date, client, project_name, notes, items, signer_name=None, seal=None):
     """Generate PDF bytes for a conduce (delivery note)."""
     pdf = FPDF()
     pdf.add_page()
@@ -148,7 +148,7 @@ def create_conduce_pdf(doc_id, doc_date, client, project_name, notes, items, sig
     pdf.ln(12)
 
     # ==================== SIGNATURES ====================
-    add_footer_with_signature(pdf, signer_name)
+    add_footer_with_signature(pdf, signer_name, seal=seal)
 
     # ==================== FOOTER ====================
     pdf.set_y(-15)

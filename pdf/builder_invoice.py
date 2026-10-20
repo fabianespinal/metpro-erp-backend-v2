@@ -14,7 +14,8 @@ def create_invoice_pdf(
     payments=None,
     amount_paid=0,
     amount_due=0,
-    signer_name=None
+    signer_name=None,
+    seal=None
 ):
     try:
         pdf_stream = build_quote_invoice_pdf(
@@ -47,7 +48,8 @@ def create_invoice_pdf(
             payments=payments or [],
             amount_paid=amount_paid or 0,
             amount_due=amount_due or 0,
-            signer_name=signer_name
+            signer_name=signer_name,
+            seal=seal
         )
     except Exception as e:
         raise RuntimeError(f"PDF layout generation failed: {e}")

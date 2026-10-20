@@ -2,7 +2,7 @@ from core.errors import api_error
 import json
 import base64
 
-from fastapi import APIRouter, Depends, File, HTTPException, Path, Response, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Path, Response, UploadFile
 from typing import Annotated, List, Optional
 
 from .models import Invoice, InvoiceCreate, InvoiceStatusUpdate
@@ -24,6 +24,7 @@ from email_service import send_invoice_email
 from invoices.service import calculate_invoice_totals
 from pdf.builder_invoice import create_invoice_pdf
 from pdf.utils.signer import resolve_signer_name
+from company_settings.service import seal_for_pdf
 
 router = APIRouter(prefix="/invoices", tags=["invoices"])
 
@@ -48,12 +49,15 @@ def get_invoices(
 def send_invoice(
     invoice_id: int,
     files: List[UploadFile] = File(default=[]),
+    print_seal: bool = Form(False),
     current_user: dict = Depends(require_auth),
 ):
-    """Send invoice PDF to client via email. Optional extra files are attached and discarded."""
+    """Send invoice PDF to client via email. Optional extra files are attached and discarded.
+    print_seal=true prints the company seal on the emailed PDF (default: no seal)."""
 
     # Validate uploads first. Nothing is stored.
     extra_attachments = read_extra_attachments(files)
+    seal = seal_for_pdf(print_seal)  # fails before anything is emailed if the seal was asked for and cannot load
 
     invoice = service.get_invoice_with_contact(invoice_id)
     if not invoice:
@@ -124,6 +128,7 @@ def send_invoice(
         amount_paid=sum(float(pm.get("amount") or 0) for pm in payments),
         amount_due=round(float(totals["grand_total"]) - sum(float(pm.get("amount") or 0) for pm in payments), 2),
         payments=payments,  # ✅ now the PDF has the full payment history
+        seal=seal,
     )
 
     pdf_bytes = pdf_stream.read()

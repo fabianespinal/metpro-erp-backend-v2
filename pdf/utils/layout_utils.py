@@ -4,6 +4,7 @@ from fpdf import FPDF
 from pdf.utils.text_utils import sanitize_text
 from core.dates import fmt_day  # E-03: every printed date is dd/mm/aaaa
 from quotes.dynamic_charges import dynamic_charge_lines
+from pdf.utils.seal_utils import SEAL_OVERLAP_MM, draw_seal
 import logging
 
 logger = logging.getLogger(__name__)
@@ -12,13 +13,20 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 LOGO_PATH = os.path.join(BASE_DIR, "assets", "logo.png")
 
 
-def add_footer_with_signature(pdf, signer_name=None):
-    """Add signature section with two columns to PDF"""
+def add_footer_with_signature(pdf, signer_name=None, seal=None):
+    """Add signature section with two columns to PDF.
+
+    seal: optional pdf.utils.seal_utils.PreparedSeal. None (the default) leaves the layout exactly as before.
+    With a seal, room is made above the signature line and the seal is drawn first, so the typed signature
+    and the line print over it.
+    """
 
     sig_y = pdf.get_y() + 10
+    if seal is not None:
+        sig_y = max(sig_y, pdf.get_y() + seal.height_mm - SEAL_OVERLAP_MM + 2)  # keep the stamp clear of the content above
     if sig_y > 260:
         pdf.add_page()
-        sig_y = 20
+        sig_y = 20 if seal is None else 15 + seal.height_mm - SEAL_OVERLAP_MM
 
     FONT_PATH = os.path.join(BASE_DIR, "fonts", "GreatVibes-Regular.ttf")
 
@@ -28,6 +36,13 @@ def add_footer_with_signature(pdf, signer_name=None):
         font_loaded = True
     except Exception as e:
         logger.error("Font load failed: %s", e)
+
+    # Company seal (optional). Drawn before the signature text so the signature sits over it.
+    if seal is not None:
+        try:
+            draw_seal(pdf, seal, center_x=15 + 75 / 2, sig_y=sig_y)
+        except Exception:
+            logger.exception("Seal drawing failed; continuing without it")
 
     # Left — METPRO signature
     pdf.set_xy(15, sig_y)
@@ -88,7 +103,8 @@ def build_quote_invoice_pdf(
     payments=None,
     amount_paid=0,
     amount_due=0,
-    signer_name=None
+    signer_name=None,
+    seal=None
 ):
     payments = payments or []
     amount_paid = amount_paid or 0
@@ -470,7 +486,7 @@ def build_quote_invoice_pdf(
         pdf.ln(6)
 
     # ==================== SIGNATURES ====================
-    add_footer_with_signature(pdf, signer_name)
+    add_footer_with_signature(pdf, signer_name, seal=seal)
 
     # Final page: Terms and Conditions (off until an admin enables it). Never blocks the document.
     try:

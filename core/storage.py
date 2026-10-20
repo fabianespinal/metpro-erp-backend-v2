@@ -46,7 +46,20 @@ def _object_url(url: str, bucket: str, path: str) -> str:
 
 
 def _auth(key: str, extra: Optional[dict] = None) -> dict:
-    return {"Authorization": f"Bearer {key}", "apikey": key, **(extra or {})}
+    """Headers for a Storage call.
+
+    Legacy service_role keys are JWTs (start with "eyJ") and go in both headers. The newer sb_secret_ keys
+    are not JWTs: sent as a Bearer token they are rejected ("Invalid Compact JWS"), so they go in apikey only.
+    """
+    headers = {"apikey": key}
+    if key.startswith("eyJ"):
+        headers["Authorization"] = f"Bearer {key}"
+    return {**headers, **(extra or {})}
+
+
+def _reason(res: httpx.Response) -> str:
+    """Short reason from a Storage error body. Error bodies carry no credentials."""
+    return (res.text or "")[:200].replace("\n", " ")
 
 
 def _require_config() -> tuple:
@@ -73,7 +86,7 @@ def upload_object(bucket: str, path: str, data: bytes, content_type: str, client
         if own:
             http.close()
     if res.status_code >= 400:
-        logger.error("Storage upload rejected: status=%s bucket=%s path=%s", res.status_code, bucket, path)
+        logger.error("Storage upload rejected: status=%s bucket=%s path=%s reason=%s", res.status_code, bucket, path, _reason(res))
         raise StorageError(f"Storage upload failed: HTTP {res.status_code}")
 
 
@@ -92,6 +105,6 @@ def download_object(bucket: str, path: str, client: Optional[httpx.Client] = Non
     if res.status_code == 404 or (res.status_code == 400 and "not_found" in res.text.lower()):
         raise StorageObjectNotFound(f"{bucket}/{path}")
     if res.status_code >= 400:
-        logger.error("Storage download rejected: status=%s bucket=%s path=%s", res.status_code, bucket, path)
+        logger.error("Storage download rejected: status=%s bucket=%s path=%s reason=%s", res.status_code, bucket, path, _reason(res))
         raise StorageError(f"Storage download failed: HTTP {res.status_code}")
     return res.content

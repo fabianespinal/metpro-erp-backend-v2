@@ -326,7 +326,8 @@ def test_storage_needs_both_variables(monkeypatch):
     assert storage.storage_configured() is False
 
 
-def test_upload_posts_with_upsert_and_bearer(env):
+def test_upload_posts_with_upsert_and_bearer(env, monkeypatch):
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "eyJ-service-key-123")
     seen = {}
 
     def handler(request):
@@ -337,8 +338,31 @@ def test_upload_posts_with_upsert_and_bearer(env):
     storage.upload_object("company-seals", "metpro/seal.png", b"PNGDATA", "image/png", client=_client(handler))
     assert seen["method"] == "POST"
     assert seen["url"] == "https://abc.supabase.co/storage/v1/object/company-seals/metpro/seal.png"
-    assert seen["auth"] == "Bearer service-key-123" and seen["upsert"] == "true" and seen["ctype"] == "image/png"
+    assert seen["auth"] == "Bearer eyJ-service-key-123" and seen["upsert"] == "true" and seen["ctype"] == "image/png"
     assert seen["body"] == b"PNGDATA"
+
+
+def test_legacy_jwt_key_goes_in_both_headers(monkeypatch):
+    monkeypatch.setenv("SUPABASE_URL", "https://abc.supabase.co")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "eyJhbGciOi.payload.sig")
+    seen = {}
+    storage.upload_object("b", "p.png", b"x", "image/png", client=_client(lambda r: (seen.update(r.headers), httpx.Response(200))[1]))
+    assert seen["authorization"] == "Bearer eyJhbGciOi.payload.sig" and seen["apikey"] == "eyJhbGciOi.payload.sig"
+
+
+def test_new_style_secret_key_is_sent_in_apikey_only(monkeypatch):
+    monkeypatch.setenv("SUPABASE_URL", "https://abc.supabase.co")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "sb_secret_abc123")
+    seen = {}
+    storage.upload_object("b", "p.png", b"x", "image/png", client=_client(lambda r: (seen.update(r.headers), httpx.Response(200))[1]))
+    assert seen["apikey"] == "sb_secret_abc123" and "authorization" not in seen
+
+
+def test_rejection_reason_is_logged_without_the_key(env, caplog):
+    body = '{"statusCode":"400","error":"Bucket not found"}'
+    with pytest.raises(storage.StorageError):
+        storage.upload_object("b", "p.png", b"x", "image/png", client=_client(lambda r: httpx.Response(400, text=body)))
+    assert "Bucket not found" in caplog.text and "service-key-123" not in caplog.text
 
 
 def test_download_returns_bytes_and_uses_the_private_route(env):

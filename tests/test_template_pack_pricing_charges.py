@@ -180,7 +180,8 @@ def test_load_pack_returns_effective_price_and_charges():
 def test_migration_is_additive_and_keeps_rls_on():
     """The migration only adds. It never drops or rewrites, and the new table gets RLS like every public table."""
     path = os.path.join(os.path.dirname(__file__), "..", "migrations", "2026-10-17_pack_pricing_and_charges.sql")
-    sql = open(path, encoding="utf-8").read().upper()
+    lines = open(path, encoding="utf-8").read().splitlines()
+    sql = "\n".join(l.split("--")[0] for l in lines).upper()  # statements only, no comments
     assert "ALTER TABLE PUBLIC.TEMPLATE_PACK_CHARGES ENABLE ROW LEVEL SECURITY" in sql
-    for forbidden in ("DROP ", "DELETE ", "UPDATE ", "TRUNCATE", "ALTER COLUMN", "RENAME"):
+    for forbidden in ("DROP ", "DELETE FROM", "UPDATE ", "TRUNCATE", "ALTER COLUMN", "RENAME"):  # ON DELETE CASCADE on the new table is fine
         assert forbidden not in sql, forbidden

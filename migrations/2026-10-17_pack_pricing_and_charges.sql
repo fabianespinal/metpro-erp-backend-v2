@@ -24,4 +24,7 @@ CREATE TABLE IF NOT EXISTS public.template_pack_charges (
 CREATE INDEX IF NOT EXISTS template_pack_charges_pack_idx
     ON public.template_pack_charges (pack_id);
 
+-- Same posture as every other public table: RLS on, no policies. The backend connects as owner.
+ALTER TABLE public.template_pack_charges ENABLE ROW LEVEL SECURITY;
+
 COMMIT;

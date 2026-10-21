@@ -175,3 +175,12 @@ def test_load_pack_returns_effective_price_and_charges():
     assert items[1]["unit_price"] == 3.0 and items[1]["pack_price_override"] is None
     assert pack["charges"][0]["name"] == "Izaje"
     assert any("FROM template_pack_charges" in q for q, _ in cur.sql)
+
+
+def test_migration_is_additive_and_keeps_rls_on():
+    """The migration only adds. It never drops or rewrites, and the new table gets RLS like every public table."""
+    path = os.path.join(os.path.dirname(__file__), "..", "migrations", "2026-10-17_pack_pricing_and_charges.sql")
+    sql = open(path, encoding="utf-8").read().upper()
+    assert "ALTER TABLE PUBLIC.TEMPLATE_PACK_CHARGES ENABLE ROW LEVEL SECURITY" in sql
+    for forbidden in ("DROP ", "DELETE ", "UPDATE ", "TRUNCATE", "ALTER COLUMN", "RENAME"):
+        assert forbidden not in sql, forbidden

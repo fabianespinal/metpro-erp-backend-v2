@@ -157,11 +157,30 @@ def test_public_payload_removes_hidden_lines_and_ships_full_totals():
     assert "print_on_pdf" not in out["items"][0] and "Costo indirecto secreto" not in str(out)
 
 
-def test_public_payload_is_unchanged_when_nothing_is_hidden():
+def test_public_payload_never_carries_the_indirect_breakdown():
     from core.public_payload import public_payload
-    doc = {"id": 1, "items": [dict(SHOWN, id=1, product_id=None)]}
-    out = public_payload(doc, lambda: pytest.fail("totals must not be computed when nothing is hidden"))
-    assert "display_totals" not in out and len(out["items"]) == 1
+    doc = {"id": 1, "items": [dict(SHOWN, id=1, product_id=None)],
+           "included_charges": {"supervision": True, "dynamic_charges": [{"name": "Secreto"}]}}
+    totals = {"items_total": 1000.0, "supervision": 100.0, "admin": 40.0, "subtotal_general": 1140.0, "itbis": 20.52,
+              "grand_total": 1160.52, "tax_label": "Construcción (Ley 17-2017)", "tax_rate": 0.018}
+    out = public_payload(doc, lambda: totals)
+    assert "included_charges" not in out and "Secreto" not in str(out)
+    assert set(out["display_totals"]) == {"items_total", "subtotal_general", "itbis", "grand_total", "tax_label", "tax_rate"}
+    assert "supervision" not in str(out["display_totals"]) and len(out["items"]) == 1
+
+
+def test_pdf_never_prints_the_indirect_breakdown(monkeypatch):
+    from pdf.builder_quote import create_quote_pdf
+    texts = _capture_text(monkeypatch)
+    charges = dict(NO_CHARGES, supervision=True, admin=True)
+    t = calculate_quote_totals([SHOWN], charges, 0.018)
+    _, kw = _pdf_kwargs([SHOWN])
+    kw.update(charges=charges, supervision=t["supervision"], admin=t["admin"], subtotal_general=t["subtotal_general"],
+              itbis=t["itbis"], grand_total=t["grand_total"], tax_label="Construcción (Ley 17-2017)")
+    create_quote_pdf(doc_type="COTIZACION", **kw)
+    joined = "\n".join(texts)
+    assert "Cargos Indirectos" not in joined and "Supervisi" not in joined and "Administraci" not in joined
+    assert f"${t['grand_total']:,.2f}" in joined and f"${t['subtotal_general']:,.2f}" in joined  # totals unchanged
 
 
 # ---------------- integration ----------------

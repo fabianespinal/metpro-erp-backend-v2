@@ -249,11 +249,13 @@ def test_public_route_success_body_unchanged_under_limit(monkeypatch):
         qs, "get_quote_with_contact",
         lambda qid: {"quote_id": "Q-7", "public_token": "x", "company_name": "Acme"},
     )
+    monkeypatch.setattr(qs, "quote_document_totals", lambda quote, items, charges: {"grand_total": 1.0, "supervision": 9.0})
     resp = TestClient(app).get(
         f"/quotes/public/{QUOTE_TOKEN}", headers={"X-Forwarded-For": "203.0.113.80"}
     )
     assert resp.status_code == 200
-    assert resp.json() == {"data": {"company_name": "Acme"}, "success": True}  # B-22: quote_id is internal
+    # B-22: quote_id is internal. A3: the totals are allowlisted (no per-charge amounts).
+    assert resp.json() == {"data": {"company_name": "Acme", "display_totals": {"grand_total": 1.0}}, "success": True}
 
 
 def test_public_limit_disabled_by_toggle(monkeypatch):

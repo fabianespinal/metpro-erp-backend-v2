@@ -108,8 +108,10 @@ def build_quote_invoice_pdf(
     amount_due=0,
     signer_name=None,
     seal=None,
-    tax_label=None
+    tax_label=None,
+    show_indirect_breakdown=False
 ):
+    # A3 (approved 2026-10-22): the indirect-cost breakdown is never printed for customers. Totals still include it.
     payments = payments or []
     amount_paid = amount_paid or 0
     amount_due = amount_due or 0
@@ -334,43 +336,43 @@ def build_quote_invoice_pdf(
         pdf.cell(25, 4, f'${items_after_discount:,.2f}', 0, 1, 'R')
         pdf.ln(1)
 
-    dynamic_lines = list(dynamic_charge_lines(charges, items_after_discount))
-    if any(charges.get(k) for k in ('supervision', 'admin', 'insurance', 'transport', 'contingency')) or dynamic_lines:
+    dynamic_lines = list(dynamic_charge_lines(charges, items_after_discount)) if show_indirect_breakdown else []
+    if show_indirect_breakdown and any(charges.get(k) for k in ('supervision', 'admin', 'insurance', 'transport', 'contingency')) or dynamic_lines:
         pdf.set_x(summary_x)
         pdf.set_font('Arial', 'B', 7)
         pdf.set_text_color(30, 30, 30)
         pdf.cell(70, 5, 'Cargos Indirectos', 0, 1, 'L')
         pdf.set_font('Arial', '', 7)
 
-    if charges.get('supervision'):
+    if show_indirect_breakdown and charges.get('supervision'):
         pdf.set_x(summary_x)
         pdf.set_text_color(100, 100, 100)
         pdf.cell(45, 4, f'Supervisión ({supervision_pct:.1f}%):', 0, 0, 'L')
         pdf.set_text_color(60, 60, 60)
         pdf.cell(25, 4, f'${supervision:,.2f}', 0, 1, 'R')
 
-    if charges.get('admin'):
+    if show_indirect_breakdown and charges.get('admin'):
         pdf.set_x(summary_x)
         pdf.set_text_color(100, 100, 100)
         pdf.cell(45, 4, f'Administración ({admin_pct:.1f}%):', 0, 0, 'L')
         pdf.set_text_color(60, 60, 60)
         pdf.cell(25, 4, f'${admin:,.2f}', 0, 1, 'R')
 
-    if charges.get('insurance'):
+    if show_indirect_breakdown and charges.get('insurance'):
         pdf.set_x(summary_x)
         pdf.set_text_color(100, 100, 100)
         pdf.cell(45, 4, f'Seguro ({insurance_pct:.1f}%):', 0, 0, 'L')
         pdf.set_text_color(60, 60, 60)
         pdf.cell(25, 4, f'${insurance:,.2f}', 0, 1, 'R')
 
-    if charges.get('transport'):
+    if show_indirect_breakdown and charges.get('transport'):
         pdf.set_x(summary_x)
         pdf.set_text_color(100, 100, 100)
         pdf.cell(45, 4, f'Transporte ({transport_pct:.1f}%):', 0, 0, 'L')
         pdf.set_text_color(60, 60, 60)
         pdf.cell(25, 4, f'${transport:,.2f}', 0, 1, 'R')
 
-    if charges.get('contingency'):
+    if show_indirect_breakdown and charges.get('contingency'):
         pdf.set_x(summary_x)
         pdf.set_text_color(100, 100, 100)
         pdf.cell(45, 4, f'Contingencia ({contingency_pct:.1f}%):', 0, 0, 'L')

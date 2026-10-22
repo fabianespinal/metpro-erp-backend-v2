@@ -1,9 +1,10 @@
--- A2b (OPTIONAL, separate approval): database-level immutability for payments.
--- Blocks, for any client including manual SQL:
---   - changing invoice_id, amount, payment_date, method or notes of a payment;
---   - un-voiding, or changing the void reason / voider of a voided payment;
---   - deleting a payment row.
--- Allowed: the one-time void (voided_at, void_reason, voided_by_user_id set on a live payment).
+-- A2b (APPROVED 2026-10-22): database-level immutability for payments.
+-- Enforced for every client, including manual SQL:
+--   - no DELETE of a payment row;
+--   - no UPDATE of any column, EXCEPT the one-time void: voided_at, void_reason and voided_by_user_id may go from
+--     empty to filled on a live payment (a void needs a reason and a user). A voided payment never changes again.
+-- Consequence: deleting a user who created or voided a payment fails (the FK would null the audit column).
+--   Deactivate such users instead.
 -- Cascade from deleting an invoice still fails, which matches the app rule (an invoice with payments cannot be deleted).
 -- TRUNCATE is not blocked (test databases use it).
 -- Rollback: 2026-10-22_payment_immutability.rollback.sql (drops the triggers; no data change).
@@ -16,19 +17,17 @@ BEGIN
         RAISE EXCEPTION 'invoice_payments rows are never deleted (payment %)', OLD.id
             USING ERRCODE = 'integrity_constraint_violation';
     END IF;
-    IF NEW.invoice_id   IS DISTINCT FROM OLD.invoice_id
-    OR NEW.amount       IS DISTINCT FROM OLD.amount
-    OR NEW.payment_date IS DISTINCT FROM OLD.payment_date
-    OR NEW.method       IS DISTINCT FROM OLD.method
-    OR NEW.notes        IS DISTINCT FROM OLD.notes THEN
+    IF OLD.voided_at IS NOT NULL THEN
+        RAISE EXCEPTION 'a voided payment cannot be changed (payment %)', OLD.id
+            USING ERRCODE = 'integrity_constraint_violation';
+    END IF;
+    IF (to_jsonb(NEW) - ARRAY['voided_at', 'void_reason', 'voided_by_user_id'])
+       IS DISTINCT FROM (to_jsonb(OLD) - ARRAY['voided_at', 'void_reason', 'voided_by_user_id']) THEN
         RAISE EXCEPTION 'invoice_payments rows are not edited; void and record a corrected payment (payment %)', OLD.id
             USING ERRCODE = 'integrity_constraint_violation';
     END IF;
-    IF OLD.voided_at IS NOT NULL
-       AND (NEW.voided_at          IS DISTINCT FROM OLD.voided_at
-         OR NEW.void_reason        IS DISTINCT FROM OLD.void_reason
-         OR NEW.voided_by_user_id  IS DISTINCT FROM OLD.voided_by_user_id) THEN
-        RAISE EXCEPTION 'a voided payment cannot be changed (payment %)', OLD.id
+    IF NEW.voided_at IS NULL OR btrim(coalesce(NEW.void_reason, '')) = '' OR NEW.voided_by_user_id IS NULL THEN
+        RAISE EXCEPTION 'a void needs a timestamp, a reason and a user (payment %)', OLD.id
             USING ERRCODE = 'integrity_constraint_violation';
     END IF;
     RETURN NEW;

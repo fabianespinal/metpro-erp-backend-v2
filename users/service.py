@@ -354,6 +354,14 @@ def delete_user(user_id: str, actor_role: Optional[str] = None) -> dict:
         if target and target["role"] == "superadmin" and target["is_active"]:
             _assert_other_active_superadmin(cursor, user_id)
 
+        # A2: payments are immutable and keep who created or voided them, so such a user is deactivated, not deleted.
+        cursor.execute(
+            "SELECT 1 FROM invoice_payments WHERE created_by_user_id = %s OR voided_by_user_id = %s LIMIT 1",
+            (user_id, user_id),
+        )
+        if cursor.fetchone():
+            raise api_error(400, "El usuario registró o anuló pagos; desactívelo en lugar de eliminarlo", "USER_HAS_PAYMENTS")
+
         cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
 
         if cursor.rowcount == 0:

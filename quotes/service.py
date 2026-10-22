@@ -18,7 +18,7 @@ INS_SQL = "INSERT INTO quote_items (quote_id, product_name, quantity, unit_price
 # Create and update paths. Requires quoting_v1 migration (item_type, description).
 INS_ITEMS_SQL = (
     "INSERT INTO quote_items (quote_id, product_name, quantity, unit_price, discount_type, "
-    "discount_value, item_type, description, product_id, category) VALUES %s"
+    "discount_value, item_type, description, product_id, category, print_on_pdf) VALUES %s"
 )
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,7 @@ DELETABLE_STATUSES = ("Draft", "Rejected")
 # Duplicate path only. Requires quoting_v1 migration (item_type, description).
 INS_DUP_SQL = (
     "INSERT INTO quote_items (quote_id, product_id, product_name, quantity, unit_price, "
-    "discount_type, discount_value, item_type, description, category) VALUES %s"
+    "discount_type, discount_value, item_type, description, category, print_on_pdf) VALUES %s"
 )
 
 
@@ -167,6 +167,23 @@ def _compute_quote_totals(items: List[dict], charges: dict, tax_rate: float) -> 
     """
     from quotes.totals import compute_totals
     return compute_totals(items, charges, tax_rate)
+
+
+def _check_print_flags(cursor, quote_id, items: List[dict]) -> None:
+    """A3. Hiding a line needs PRINT_CONTROLS_ENABLED. A quote that already has hidden lines may be
+    edited while the switch is off, as long as it does not hide MORE lines than it already hides.
+    A client that sends no flag cannot silently un-hide lines: refused (409) when the quote has hidden lines."""
+    from core.visibility import print_controls_enabled
+    hide_count = sum(1 for i in items if i.get("print_on_pdf") is False)
+    unset = any(i.get("print_on_pdf") is None for i in items)
+    existing = 0
+    if quote_id:
+        cursor.execute("SELECT COUNT(*) AS n FROM quote_items WHERE quote_id = %s AND print_on_pdf = false", (quote_id,))
+        existing = cursor.fetchone()["n"]
+    if unset and existing:
+        raise api_error(409, "Esta cotización tiene líneas ocultas; actualice la pantalla antes de guardar", "PRINT_FLAG_REQUIRED")
+    if hide_count and not print_controls_enabled() and hide_count > existing:
+        raise api_error(400, "El control de impresión no está habilitado", "PRINT_CONTROLS_DISABLED")
 
 
 def _item_as_dict(item) -> dict:
@@ -316,6 +333,7 @@ def create_quote(
             tax["tax_label"],
         ))
 
+        _check_print_flags(cursor, None, [_item_as_dict(i) for i in items])
         rows = [
             (
                 quote_id,
@@ -328,6 +346,7 @@ def create_quote(
                 item.get("description"),
                 item.get("product_id"),
                 item.get("category"),
+                _print_flag(item),
             )
             for item in items
         ]
@@ -582,8 +601,6 @@ def update_quote(quote_id: str, quote_update) -> dict:
         if items is not None:
             _validate_product_ids(cursor, [_item_as_dict(i) for i in items])
             _validate_item_discounts([_item_as_dict(i) for i in items])
-            cursor.execute("DELETE FROM quote_items WHERE quote_id = %s", (quote_id,))
-
             normalized = []
             for item in items:
                 # Normalize — item may be a dict or a Pydantic model
@@ -592,6 +609,8 @@ def update_quote(quote_id: str, quote_update) -> dict:
                 elif isinstance(item, str):
                     item = json.loads(item)
                 normalized.append(item)
+            _check_print_flags(cursor, quote_id, normalized)  # reads the old rows, so it runs before the delete
+            cursor.execute("DELETE FROM quote_items WHERE quote_id = %s", (quote_id,))
 
             rows = [
                 (
@@ -605,6 +624,7 @@ def update_quote(quote_id: str, quote_update) -> dict:
                     item.get("description"),
                     item.get("product_id"),
                     item.get("category"),
+                    _print_flag(item),
                 )
                 for item in normalized
             ]
@@ -817,6 +837,7 @@ def duplicate_quote(quote_id: str, created_by_user_id: Optional[str] = None) -> 
                 item.get("item_type") or "product",
                 item.get("description"),
                 item.get("category"),
+                item.get("print_on_pdf", True) is not False,  # the copy keeps the original's visibility
             )
             for item in original_items
         ]
@@ -1040,6 +1061,11 @@ def mark_quote_sent(quote_id: str) -> str:
             conn.close()
 
 
+def _print_flag(item: dict) -> bool:
+    """A3: only a literal False hides a line (missing or None prints)."""
+    return item.get("print_on_pdf", True) is not False
+
+
 def _invoice_line_amounts(item: dict) -> tuple:
     """
     (quantity, unit_price, discount_amount, line_total) for one invoice line.
@@ -1166,13 +1192,14 @@ def convert_quote_to_invoice(quote_id: str, created_by_user_id: Optional[str] = 
 
         # 5. Insert invoice items
         invoice_item_rows = [
-            (invoice_id, item["product_id"], item["product_name"], *_invoice_line_amounts(item), item.get("category"), n)
+            (invoice_id, item["product_id"], item["product_name"], *_invoice_line_amounts(item), item.get("category"), n,
+             item.get("print_on_pdf", True) is not False)  # A3: visibility travels quote -> invoice
             for n, item in enumerate(items, start=1)   # B-19: line_no keeps the quote's line order
         ]
         if invoice_item_rows:
             execute_values(
                 cursor,
-                "INSERT INTO invoice_items (invoice_id, product_id, description, quantity, unit_price, discount, total, category, line_no) VALUES %s",
+                "INSERT INTO invoice_items (invoice_id, product_id, description, quantity, unit_price, discount, total, category, line_no, print_on_pdf) VALUES %s",
                 invoice_item_rows,
             )
 

@@ -148,7 +148,7 @@ def test_insert_writes_override_and_charges():
     svc._insert_categories(cur, 1, data.categories)
     svc._insert_charges(cur, 1, data.charges)
     item_inserts = [p for q, p in cur.sql if q.startswith("INSERT INTO template_pack_items")]
-    assert item_inserts[0][-1] == 99.5 and item_inserts[1][-1] is None
+    assert item_inserts[0][-2] == 99.5 and item_inserts[1][-2] is None and item_inserts[0][-1] is True
     charge_inserts = [p for q, p in cur.sql if q.startswith("INSERT INTO template_pack_charges")]
     assert charge_inserts == [(1, "Izaje", "percentage", 5.0, True, 0),
                               (1, "Permisos", "percentage", 2.5, False, 1)]

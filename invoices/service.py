@@ -81,7 +81,7 @@ def _invoice_lines(cursor, invoice: dict):
     Order: line_no (written at conversion, B-19), then ctid for any legacy row without it.
     """
     cursor.execute(
-        "SELECT description, quantity, unit_price, discount, total, product_id, category "
+        "SELECT description, quantity, unit_price, discount, total, product_id, category, print_on_pdf "
         "FROM invoice_items WHERE invoice_id = %s ORDER BY line_no NULLS LAST, ctid",
         (invoice["id"],),
     )
@@ -98,6 +98,7 @@ def _invoice_lines(cursor, invoice: dict):
                 "discount_value": float(r["discount"] or 0),
                 "product_id": r.get("product_id"),
                 "category": r.get("category"),
+                "print_on_pdf": r.get("print_on_pdf", True),
             }
             for r in rows
         ], "invoice_items"

@@ -28,6 +28,25 @@ def _check_products_exist(cursor, product_ids: Iterable[int]) -> None:
         )
 
 
+def _check_print_flags(cursor, pack_id, categories: List) -> None:
+    """A3. Same rules as quotes: hiding needs PRINT_CONTROLS_ENABLED (unless the pack already hides at least as many),
+    and a client that omits the flag may not silently un-hide lines of a pack that has hidden ones."""
+    from core.visibility import print_controls_enabled
+    items = [i for c in categories for i in c.items]
+    hide_count = sum(1 for i in items if i.print_on_pdf is False)
+    unset = any(i.print_on_pdf is None for i in items)
+    existing = 0
+    if pack_id:
+        cursor.execute(
+            "SELECT COUNT(*) AS n FROM template_pack_items i JOIN template_pack_categories c ON c.id = i.category_id "
+            "WHERE c.pack_id = %s AND i.print_on_pdf = false", (pack_id,))
+        existing = cursor.fetchone()["n"]
+    if unset and existing:
+        raise api_error(409, "Esta plantilla tiene líneas ocultas; actualice la pantalla antes de guardar", "PRINT_FLAG_REQUIRED")
+    if hide_count and not print_controls_enabled() and hide_count > existing:
+        raise api_error(400, "El control de impresión no está habilitado", "PRINT_CONTROLS_DISABLED")
+
+
 def _insert_categories(cursor, pack_id: int, categories: List) -> None:
     for cat in categories:
         cursor.execute(
@@ -43,11 +62,11 @@ def _insert_categories(cursor, pack_id: int, categories: List) -> None:
             cursor.execute(
                 """
                 INSERT INTO template_pack_items
-                    (category_id, product_id, default_qty, optional, sort_order, pack_price_override)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                    (category_id, product_id, default_qty, optional, sort_order, pack_price_override, print_on_pdf)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """,
                 (category_id, item.product_id, item.default_qty, item.optional, item.sort_order,
-                 item.pack_price_override),
+                 item.pack_price_override, item.print_on_pdf is not False),
             )
 
 
@@ -97,7 +116,7 @@ def _load_pack(cursor, pack_id: int) -> dict:
             """
             SELECT i.id, i.category_id, i.product_id, p.name AS product_name,
                    p.unit_price AS catalog_price, i.pack_price_override,
-                   i.default_qty, i.optional, i.sort_order
+                   i.default_qty, i.optional, i.sort_order, i.print_on_pdf
             FROM template_pack_items i
             JOIN template_pack_categories c ON c.id = i.category_id
             LEFT JOIN products p ON p.id = i.product_id
@@ -194,6 +213,7 @@ def create_pack(data: PackIn) -> dict:
             (data.name, data.description),
         )
         pack_id = cursor.fetchone()["id"]
+        _check_print_flags(cursor, None, data.categories)
         _insert_categories(cursor, pack_id, data.categories)
         _insert_charges(cursor, pack_id, data.charges)
         conn.commit()
@@ -230,6 +250,7 @@ def update_pack(pack_id: int, data: PackIn) -> dict:
             """,
             (data.name, data.description, pack_id),
         )
+        _check_print_flags(cursor, pack_id, data.categories)  # reads the old rows, so before the delete
         # Categories cascade-delete their items.
         cursor.execute("DELETE FROM template_pack_categories WHERE pack_id = %s", (pack_id,))
         _insert_categories(cursor, pack_id, data.categories)

@@ -18,6 +18,8 @@ class PackItemIn(BaseModel):
     sort_order: int = 0
     # None = use the catalog price (products.unit_price).
     pack_price_override: Optional[float] = Field(default=None, ge=0)
+    # A3. None = not sent (older screens). false = counted in totals, never printed to customers.
+    print_on_pdf: Optional[bool] = None
 
 
 class PackCategoryIn(BaseModel):
@@ -68,6 +70,7 @@ class PackItemOut(BaseModel):
     default_qty: float
     optional: bool
     sort_order: int
+    print_on_pdf: bool = True
 
 
 class PackChargeOut(BaseModel):

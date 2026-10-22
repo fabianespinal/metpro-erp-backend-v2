@@ -128,8 +128,8 @@ def test_create_insert_leaves_public_token_out(monkeypatch):
     assert "public_token" not in insert_sql
     assert "subtotal" in insert_sql and "grand_total" in insert_sql
     assert "item_type" in captured["sql"] and "description" in captured["sql"]
-    assert captured["rows"][0][6:] == ("product", None, None, None)
-    assert captured["rows"][1][6:] == ("service", "On-site walk", None, None)
+    assert captured["rows"][0][6:] == ("product", None, None, None, True)
+    assert captured["rows"][1][6:] == ("service", "On-site walk", None, None, True)
 
 
 # ---------- finalize ----------

@@ -298,7 +298,13 @@ def get_public_invoice(token: Annotated[str, Path(pattern=PUBLIC_TOKEN_PATTERN)]
     """Public invoice view. Access is by unguessable token only."""
     invoice_id = _invoice_id_for_public_token(token)
     invoice = service.get_invoice_with_contact(invoice_id)
-    return public_payload(invoice)  # B-22: no internal ids, UUIDs, token or creator name
+    def _totals():
+        charges = invoice.get("included_charges") or {}
+        if isinstance(charges, str):
+            charges = json.loads(charges)
+        return service.invoice_lines_and_totals(invoice, charges)[1]
+
+    return public_payload(invoice, _totals)  # B-22: no internal ids, UUIDs, token or creator name. A3: hidden lines removed
 
 
 def _render_public_invoice_pdf(invoice_id: int) -> Response:

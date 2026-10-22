@@ -60,6 +60,8 @@ class QuoteItemBase(BaseModel):
     product_id: Optional[int] = None
     # Template-pack category name. Printed as a section heading on the PDFs.
     category: Optional[str] = Field(default=None, max_length=120)
+    # A3. None = the client did not send it (older screens). false = counted in totals, never printed to customers.
+    print_on_pdf: Optional[bool] = None
 
 
 # -----------------------------

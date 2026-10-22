@@ -63,12 +63,25 @@ PUBLIC_TOKEN_PATTERN = (
 )
 
 
+@router.get("/print-options")
+def print_options(current_user: dict = Depends(require_auth)):
+    """A3: may a line be marked "no imprimir"? Lets the screen show the control only when it is switched on."""
+    from core.visibility import print_controls_enabled
+    return {"print_controls_enabled": print_controls_enabled()}
+
+
 @router.get("/public/{token}", dependencies=[Depends(public_rate_limit)])
 def get_quote_public(token: Annotated[str, Path(pattern=PUBLIC_TOKEN_PATTERN)]):
     """Public quote view. Access is by unguessable token only."""
     quote_id = service.quote_id_for_public_token(token)
     quote = service.get_quote_with_contact(quote_id)
-    return public_payload(quote)  # B-22: no internal ids, UUIDs or creator name
+    def _totals():
+        charges = quote.get("included_charges") or {}
+        if isinstance(charges, str):
+            charges = json.loads(charges)
+        return service.quote_document_totals(quote, quote.get("items", []), charges)
+
+    return public_payload(quote, _totals)  # B-22: no internal ids, UUIDs or creator name. A3: hidden lines removed
 
 
 @router.get("/public/{token}/pdf", dependencies=[Depends(public_rate_limit)])

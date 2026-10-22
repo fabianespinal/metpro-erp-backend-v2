@@ -19,6 +19,8 @@ LOGO_PATH = os.path.join(BASE_DIR, "assets", "logo.png")
 
 def create_conduce_pdf(doc_id, doc_date, client, project_name, notes, items, signer_name=None, seal=None):
     """Generate PDF bytes for a conduce (delivery note)."""
+    from core.visibility import customer_items
+    items = customer_items(items)  # A3: a hidden line is not shown to the customer on any document
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)

@@ -55,7 +55,7 @@ def test_b19_convert_writes_line_no():
     import inspect
     from quotes import service
     src = inspect.getsource(service.convert_quote_to_invoice)
-    assert "line_no) VALUES %s" in src and "enumerate(items, start=1)" in src
+    assert "line_no, print_on_pdf) VALUES %s" in src and "enumerate(items, start=1)" in src
 
 
 @needs_db

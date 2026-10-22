@@ -92,6 +92,9 @@ def _category_heading(pdf, item, current, width):
     return cat
 
 
+from core.visibility import customer_items  # noqa: E402  (A3)
+
+
 def build_quote_invoice_pdf(
     doc_type, doc_id, doc_date, client, project_name, notes, items,
     charges, items_total, total_discounts, items_after_discount,
@@ -110,6 +113,7 @@ def build_quote_invoice_pdf(
     payments = payments or []
     amount_paid = amount_paid or 0
     amount_due = amount_due or 0
+    items = customer_items(items)  # A3: hidden lines stay in the totals the caller computed, never print
 
     pdf = FPDF()
 

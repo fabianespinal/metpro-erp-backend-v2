@@ -1,5 +1,5 @@
 -- CI test schema: structure of the production database (public schema) with all migrations
--- through 2026-10-22_payment_corrections.sql (pack pricing 2026-10-17 is not included; its tests use mocks).
+-- through 2026-10-22_print_on_pdf.sql (pack pricing 2026-10-17 is not included; its tests use mocks).
 -- Structure only, except the tax_types seed rows at the end (quotes need a tax type).
 -- Regenerate: load this file into an empty UTF8 db, apply the new migration, then
 --   pg_dump --schema-only --no-owner --no-privileges --no-comments -n public <db>  (drop the \restrict lines)
@@ -217,7 +217,8 @@ CREATE TABLE public.invoice_items (
     invoice_id bigint NOT NULL,
     product_id bigint,
     line_no integer,
-    category text
+    category text,
+    print_on_pdf boolean DEFAULT true NOT NULL
 );
 
 
@@ -410,6 +411,7 @@ CREATE TABLE public.quote_items (
     item_type text DEFAULT 'product'::text NOT NULL,
     description text,
     category text,
+    print_on_pdf boolean DEFAULT true NOT NULL,
     CONSTRAINT quote_items_item_type_check CHECK ((item_type = ANY (ARRAY['product'::text, 'service'::text, 'custom'::text])))
 );
 
@@ -625,7 +627,8 @@ CREATE TABLE public.template_pack_items (
     product_id bigint NOT NULL,
     default_qty numeric(12,2) DEFAULT 1 NOT NULL,
     optional boolean DEFAULT false NOT NULL,
-    sort_order integer DEFAULT 0 NOT NULL
+    sort_order integer DEFAULT 0 NOT NULL,
+    print_on_pdf boolean DEFAULT true NOT NULL
 );
 
 
@@ -1254,7 +1257,6 @@ ALTER TABLE public.tax_types ENABLE ROW LEVEL SECURITY;
 --
 -- PostgreSQL database dump complete
 --
-
 
 
 -- Seed rows (same as the migration).

@@ -1,5 +1,5 @@
 -- CI test schema: structure of the production database (public schema) with all migrations
--- through 2026-10-22_print_on_pdf.sql (pack pricing 2026-10-17 is not included; its tests use mocks).
+-- through 2026-10-22_product_dimensions.sql (pack pricing 2026-10-17 is not included; its tests use mocks).
 -- Structure only, except the tax_types seed rows at the end (quotes need a tax type).
 -- Regenerate: load this file into an empty UTF8 db, apply the new migration, then
 --   pg_dump --schema-only --no-owner --no-privileges --no-comments -n public <db>  (drop the \restrict lines)
@@ -330,7 +330,16 @@ CREATE TABLE public.products (
     description text,
     unit_price numeric(12,2),
     cost numeric(12,2),
-    archived_at timestamp with time zone
+    archived_at timestamp with time zone,
+    length numeric(14,4),
+    width numeric(14,4),
+    height numeric(14,4),
+    thickness numeric(14,4),
+    area numeric(18,4),
+    volume numeric(18,4),
+    unit_of_measure text,
+    CONSTRAINT products_dimensions_nonneg CHECK ((((length IS NULL) OR (length >= (0)::numeric)) AND ((width IS NULL) OR (width >= (0)::numeric)) AND ((height IS NULL) OR (height >= (0)::numeric)) AND ((thickness IS NULL) OR (thickness >= (0)::numeric)) AND ((area IS NULL) OR (area >= (0)::numeric)) AND ((volume IS NULL) OR (volume >= (0)::numeric)))),
+    CONSTRAINT products_unit_of_measure_len CHECK (((unit_of_measure IS NULL) OR ((char_length(unit_of_measure) >= 1) AND (char_length(unit_of_measure) <= 20))))
 );
 
 

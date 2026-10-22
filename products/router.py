@@ -1,7 +1,7 @@
 from core.errors import api_error
 from fastapi import APIRouter, Depends, File, UploadFile
 from typing import List
-from .models import Product, ProductBase
+from .models import Product, ProductBase, DIMENSION_FIELDS
 from . import service
 from auth.service import require_auth, require_role
 
@@ -15,8 +15,14 @@ def create_product(product: ProductBase, current_user: dict = Depends(require_au
         product.description,
         product.unit_price,
         product.cost,
+        dims={k: getattr(product, k) for k in DIMENSION_FIELDS if k in product.model_fields_set} or None,
     )
     return Product(**result)
+
+@router.get('/options')
+def product_options(current_user: dict = Depends(require_auth)):
+    """B3 switch, so the form shows the dimensions section only when it is on."""
+    return {"dimensions_enabled": service.dimensions_enabled()}
 
 @router.get('/', response_model=List[Product])
 def get_products(current_user: dict = Depends(require_auth)):
@@ -41,6 +47,7 @@ def update_product(product_id: int, product: ProductBase, current_user: dict = D
         product.unit_price,
         product.cost,
         cost_set="cost" in product.model_fields_set,
+        dims={k: getattr(product, k) for k in DIMENSION_FIELDS if k in product.model_fields_set} or None,
     )
     return Product(**result)
 

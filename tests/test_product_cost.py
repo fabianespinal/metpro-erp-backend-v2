@@ -45,7 +45,7 @@ def test_put_without_cost_keeps_stored_cost(monkeypatch):
     monkeypatch.setattr(auth_service, "_assert_user_active", lambda u: None)
     seen = {}
 
-    def fake(pid, name, desc, price, cost=None, cost_set=False):
+    def fake(pid, name, desc, price, cost=None, cost_set=False, dims=None):
         seen.update(cost=cost, cost_set=cost_set)
         return {"id": pid, "name": name, "description": desc, "unit_price": price, "cost": 70.0}
 

@@ -45,6 +45,7 @@ EXPECTED = {
     (404, "Proyecto no encontrado", "PROJECT_NOT_FOUND"),
     (400, "El nombre no puede estar vacío", "NAME_REQUIRED"),
     (400, "El cliente tiene cotizaciones, facturas o proyectos y no se puede eliminar", "CLIENT_IN_USE"),
+    (400, "Las dimensiones de producto no están habilitadas", "PRODUCT_DIMENSIONS_DISABLED"),  # B3
     (400, "El producto se usa en un paquete de plantilla y no se puede eliminar", "PRODUCT_IN_USE"),
     (400, "El proyecto tiene gastos asociados y no se puede eliminar", "PROJECT_HAS_EXPENSES"),
     (400, "El cliente de un proyecto creado desde una cotización no se puede cambiar", "PROJECT_CLIENT_LOCKED"),  # X-03

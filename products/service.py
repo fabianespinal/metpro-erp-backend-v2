@@ -14,11 +14,35 @@ def _cell(row: dict, key: str) -> str:
     """CSV cell as stripped text. Rows shorter than the header give None (debug B-09)."""
     return (row.get(key) or "").strip()
 
+def dimensions_enabled() -> bool:
+    """B3 switch. Off: the API refuses dimension values and the form hides the section. Stored values stay readable."""
+    import os
+    return os.environ.get("PRODUCT_DIMENSIONS_ENABLED", "false").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _write_dimensions(cursor, product_id: int, dims: Optional[dict]) -> None:
+    """Writes only the dimension fields the caller actually sent (a missing field never wipes a stored value).
+    An explicit null clears one. Column names come from a fixed list, never from input."""
+    from .models import DIMENSION_FIELDS
+    if not dims:
+        return
+    if not dimensions_enabled():
+        raise api_error(400, "Las dimensiones de producto no están habilitadas", "PRODUCT_DIMENSIONS_DISABLED")
+    cols = [c for c in DIMENSION_FIELDS if c in dims]
+    if not cols:
+        return
+    cursor.execute(
+        "UPDATE products SET " + ", ".join(f"{c} = %s" for c in cols) + " WHERE id = %s",
+        [dims[c] for c in cols] + [product_id],
+    )
+
+
 # ============================================================
 # CREATE PRODUCT
 # ============================================================
 
-def create_product(name: str, description: str, unit_price: float, cost: Optional[float] = None) -> dict:
+def create_product(name: str, description: str, unit_price: float, cost: Optional[float] = None,
+                   dims: Optional[dict] = None) -> dict:
     conn = None
     try:
         conn = get_db_connection()
@@ -29,12 +53,18 @@ def create_product(name: str, description: str, unit_price: float, cost: Optiona
             VALUES (%s, %s, %s, %s)
             RETURNING id
         """, (name, description, unit_price, cost))
-
         new_id = cursor.fetchone()["id"]
+        _write_dimensions(cursor, new_id, dims)
+
         conn.commit()
 
         cursor.execute("SELECT * FROM products WHERE id = %s", (new_id,))
         return cursor.fetchone()
+
+    except HTTPException:
+        if conn:
+            conn.rollback()
+        raise
 
     except Exception as e:
         if conn:
@@ -92,7 +122,7 @@ def get_product_by_id(product_id: int) -> dict:
 # ============================================================
 
 def update_product(product_id: int, name: str, description: str, unit_price: float,
-                   cost: Optional[float] = None, cost_set: bool = False) -> dict:
+                   cost: Optional[float] = None, cost_set: bool = False, dims: Optional[dict] = None) -> dict:
     conn = None
     try:
         conn = get_db_connection()
@@ -115,6 +145,7 @@ def update_product(product_id: int, name: str, description: str, unit_price: flo
                 WHERE id = %s
             """, (name, description, unit_price, product_id))
 
+        _write_dimensions(cursor, product_id, dims)
         conn.commit()
 
         cursor.execute("SELECT * FROM products WHERE id = %s", (product_id,))

@@ -54,6 +54,19 @@ def get_project_profitability(
     return service.get_project_profitability(start_date, end_date, client_id, project_id)
 
 
+@router.get('/client-profitability')
+def get_client_profitability(
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    client_id: Optional[int] = None,
+    current_user: dict = Depends(require_auth)
+):
+    """Rentabilidad por cliente (Fase 1): ingreso sin impuesto, COGS, utilidad bruta, % y saldo pendiente."""
+    _check_range(start_date, end_date)
+    from .client_profitability import get_client_profitability as build
+    return build(start_date, end_date, client_id)
+
+
 @router.get('/expenses-by-category')
 def get_expenses_by_category(
     start_date: Optional[date] = None,

@@ -1,7 +1,7 @@
 -- B3 Product dimensions. All estimation fields defined at once so no later migration is needed.
 -- Foundation for the future estimation work; nothing reads them yet except the product form.
 -- Additive and nullable: existing products keep every value, dimensions start empty.
--- Values are stored as entered. Nothing is derived or converted here (no assumptions about area or volume).
+-- Values are stored as entered. The migration derives and converts nothing; the backend calculates area and volume on save.
 BEGIN;
 
 ALTER TABLE public.products
@@ -11,7 +11,11 @@ ALTER TABLE public.products
     ADD COLUMN IF NOT EXISTS thickness       numeric(14,4),
     ADD COLUMN IF NOT EXISTS area            numeric(18,4),
     ADD COLUMN IF NOT EXISTS volume          numeric(18,4),
-    ADD COLUMN IF NOT EXISTS unit_of_measure text;
+    ADD COLUMN IF NOT EXISTS unit_of_measure text,
+    -- Area and volume are calculated by the backend when enough dimensions exist. A true flag means the value
+    -- was typed by a person and is never recalculated (manual override).
+    ADD COLUMN IF NOT EXISTS area_manual     boolean NOT NULL DEFAULT false,
+    ADD COLUMN IF NOT EXISTS volume_manual   boolean NOT NULL DEFAULT false;
 
 DO $$
 BEGIN

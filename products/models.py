@@ -19,7 +19,12 @@ class ProductBase(BaseModel):
     area: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
     volume: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
 
+    # True = typed by a person, never recalculated. False = calculated by the backend when enough dimensions exist.
+    area_manual: Optional[bool] = None
+    volume_manual: Optional[bool] = None
+
 DIMENSION_FIELDS = ("length", "width", "height", "thickness", "area", "volume")
+FLAG_FIELDS = ("area_manual", "volume_manual")
 
 class Product(ProductBase):
     id: int

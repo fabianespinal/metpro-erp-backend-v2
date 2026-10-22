@@ -28,7 +28,11 @@ def _write_dimensions(cursor, product_id: int, dims: Optional[dict]) -> None:
     if not dims:
         return
     if not dimensions_enabled():
-        raise api_error(400, "Las dimensiones de producto no están habilitadas", "PRODUCT_DIMENSIONS_DISABLED")
+        # Screens send the whole product back, so every dimension arrives as null. Nulls are ignored while the
+        # switch is off (a stored value is never cleared); only a real value is refused.
+        if any(v is not None for v in dims.values()):
+            raise api_error(400, "Las dimensiones de producto no están habilitadas", "PRODUCT_DIMENSIONS_DISABLED")
+        return
     cols = [c for c in DIMENSION_FIELDS if c in dims]
     if not cols:
         return

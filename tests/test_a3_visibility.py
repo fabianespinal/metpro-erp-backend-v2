@@ -248,8 +248,8 @@ def test_existing_style_payload_without_the_flag_prints(db):
 def test_hiding_needs_the_switch_but_existing_hidden_quotes_stay_editable(db, monkeypatch):
     qid = _quote(db, [SHOWN, HIDDEN]).json()["data"]["quote_id"]
     monkeypatch.setenv("PRINT_CONTROLS_ENABLED", "false")
-    r = _quote(db, [SHOWN, HIDDEN])
-    assert r.status_code == 400 and r.json()["code"] == "PRINT_CONTROLS_DISABLED"
+    # Create carries lines hidden by a pack or a duplicate, so it is not gated.
+    assert _quote(db, [SHOWN, HIDDEN]).status_code == 200
     # Editing the quote that already hides one line is fine while the switch is off ...
     ok = client.put(f"/quotes/{qid}", json={"items": [dict(SHOWN, quantity=3), HIDDEN]}, headers=_hdr())
     assert ok.status_code == 200, ok.text

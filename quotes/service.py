@@ -170,7 +170,7 @@ def _compute_quote_totals(items: List[dict], charges: dict, tax_rate: float) -> 
 
 
 def _check_print_flags(cursor, quote_id, items: List[dict]) -> None:
-    """A3. Hiding a line needs PRINT_CONTROLS_ENABLED. A quote that already has hidden lines may be
+    """A3 (update only). Hiding a line needs PRINT_CONTROLS_ENABLED. A quote that already has hidden lines may be
     edited while the switch is off, as long as it does not hide MORE lines than it already hides.
     A client that sends no flag cannot silently un-hide lines: refused (409) when the quote has hidden lines."""
     from core.visibility import print_controls_enabled
@@ -333,7 +333,8 @@ def create_quote(
             tax["tax_label"],
         ))
 
-        _check_print_flags(cursor, None, [_item_as_dict(i) for i in items])
+        # No switch check on create: hidden lines here come from a template pack or a duplicate. The switch
+        # (PRINT_CONTROLS_ENABLED) governs the screen control and hiding MORE lines on update.
         rows = [
             (
                 quote_id,

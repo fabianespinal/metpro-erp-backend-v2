@@ -165,10 +165,10 @@ def test_zero_amount_rejected_by_model():
 
 
 def test_get_payments_filters_by_invoice_id():
-    cur = Scripted([R("FROM invoice_payments WHERE invoice_id", many=[{"id": 1}])])
+    cur = Scripted([R("FROM invoice_payments p", many=[{"id": 1}])])
     assert psvc.get_payments_for_invoice(FakeConn(cur), 5) == [{"id": 1}]
     sql, params = cur.calls[0]
-    assert "WHERE invoice_id = %s" in sql and params == (5,)
+    assert "WHERE p.invoice_id = %s" in sql and params == (5,)  # the invoice FK, never the payment id
 
 
 def test_payments_list_route_exists():

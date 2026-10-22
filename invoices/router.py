@@ -13,7 +13,9 @@ from core.email_attachments import read_extra_attachments
 from core.public_payload import public_payload
 
 from invoices.payments.models import PaymentCreate
-from invoices.payments.service import create_payment, get_payments_for_invoice, void_payment, payment_void_enabled
+from invoices.payments.service import (
+    correct_payment, create_payment, get_payments_for_invoice, payment_correction_enabled, payment_void_enabled, void_payment,
+)
 from pydantic import BaseModel
 from core.errors import internal_error
 
@@ -33,6 +35,12 @@ router = APIRouter(prefix="/invoices", tags=["invoices"])
 def create_invoice(invoice: InvoiceCreate, current_user: dict = Depends(require_auth)):
     result = service.create_invoice_from_quote(invoice.quote_id, invoice.notes, current_user.get("user_id"))
     return Invoice(**result)
+
+
+@router.get("/payment-options")
+def payment_options(current_user: dict = Depends(require_auth)):
+    """Which payment actions are switched on, so the screen shows only those."""
+    return {"void_enabled": payment_void_enabled(), "correction_enabled": payment_correction_enabled()}
 
 
 @router.get("/", response_model=List[Invoice])
@@ -180,7 +188,7 @@ def delete_invoice(invoice_id: int, _admin: dict = Depends(require_role("admin")
 def add_payment(invoice_id: int, data: PaymentCreate, current_user: dict = Depends(require_auth)):
     conn = get_db_connection()
     try:
-        payment_id = create_payment(conn, invoice_id, data)
+        payment_id = create_payment(conn, invoice_id, data, current_user.get("user_id"))
         return {"payment_id": payment_id}
     except HTTPException:
         conn.rollback()
@@ -217,6 +225,35 @@ def void_invoice_payment(
     except Exception as e:
         conn.rollback()
         raise internal_error("No se pudo anular el pago", e)
+    finally:
+        conn.close()
+
+
+class PaymentCorrectionIn(PaymentCreate):
+    reason: str
+
+
+@router.post("/{invoice_id}/payments/{payment_id}/correct")
+def correct_invoice_payment(
+    invoice_id: int,
+    payment_id: int,
+    body: PaymentCorrectionIn,
+    current_user: dict = Depends(require_auth),
+):
+    """Corregir un pago (admin): anula el pago con motivo y registra el pago corregido enlazado, en un solo paso."""
+    if not payment_correction_enabled():
+        raise api_error(404, "No disponible", "NOT_FOUND")
+    if current_user.get("role") not in _allowed_roles("admin"):  # same rule as the void
+        raise api_error(403, "Permisos insuficientes", "INSUFFICIENT_PERMISSIONS")
+    conn = get_db_connection()
+    try:
+        return correct_payment(conn, invoice_id, payment_id, body.reason, body, current_user.get("user_id"))
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise internal_error("No se pudo corregir el pago", e)
     finally:
         conn.close()
 

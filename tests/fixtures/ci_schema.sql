@@ -1,5 +1,5 @@
 -- CI test schema: structure of the production database (public schema) with all migrations
--- through 2026-10-22_tax_types.sql (pack pricing 2026-10-17 is not included; its tests use mocks).
+-- through 2026-10-22_payment_corrections.sql (pack pricing 2026-10-17 is not included; its tests use mocks).
 -- Structure only, except the tax_types seed rows at the end (quotes need a tax type).
 -- Regenerate: load this file into an empty UTF8 db, apply the new migration, then
 --   pg_dump --schema-only --no-owner --no-privileges --no-comments -n public <db>  (drop the \restrict lines)
@@ -246,7 +246,14 @@ CREATE TABLE public.invoice_payments (
     notes text,
     voided_at timestamp with time zone,
     void_reason text,
-    voided_by_user_id uuid
+    voided_by_user_id uuid,
+    created_at timestamp with time zone DEFAULT now(),
+    created_by_user_id uuid,
+    corrects_payment_id integer,
+    correction_chain_id integer,
+    backfilled boolean DEFAULT false NOT NULL,
+    CONSTRAINT invoice_payments_correction_pair_chk CHECK (((corrects_payment_id IS NULL) = (correction_chain_id IS NULL))),
+    CONSTRAINT invoice_payments_no_self_correction_chk CHECK (((corrects_payment_id IS NULL) OR (corrects_payment_id <> id)))
 );
 
 
@@ -955,6 +962,20 @@ CREATE INDEX idx_quote_items_quote_id ON public.quote_items USING btree (quote_i
 
 
 --
+-- Name: invoice_payments_chain_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX invoice_payments_chain_idx ON public.invoice_payments USING btree (correction_chain_id) WHERE (correction_chain_id IS NOT NULL);
+
+
+--
+-- Name: invoice_payments_one_correction_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX invoice_payments_one_correction_idx ON public.invoice_payments USING btree (corrects_payment_id) WHERE (corrects_payment_id IS NOT NULL);
+
+
+--
 -- Name: invoices_public_token_key; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1048,6 +1069,30 @@ ALTER TABLE ONLY public.invoice_items
 
 ALTER TABLE ONLY public.invoice_items
     ADD CONSTRAINT invoice_items_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id) ON DELETE SET NULL;
+
+
+--
+-- Name: invoice_payments invoice_payments_correction_chain_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.invoice_payments
+    ADD CONSTRAINT invoice_payments_correction_chain_id_fkey FOREIGN KEY (correction_chain_id) REFERENCES public.invoice_payments(id);
+
+
+--
+-- Name: invoice_payments invoice_payments_corrects_payment_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.invoice_payments
+    ADD CONSTRAINT invoice_payments_corrects_payment_id_fkey FOREIGN KEY (corrects_payment_id) REFERENCES public.invoice_payments(id);
+
+
+--
+-- Name: invoice_payments invoice_payments_created_by_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.invoice_payments
+    ADD CONSTRAINT invoice_payments_created_by_user_id_fkey FOREIGN KEY (created_by_user_id) REFERENCES public.users(id) ON DELETE SET NULL;
 
 
 --

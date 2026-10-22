@@ -1271,4 +1271,4 @@ ALTER TABLE public.tax_types ENABLE ROW LEVEL SECURITY;
 -- Seed rows (same as the migration).
 INSERT INTO public.tax_types (code, label, rate, active, is_default, sort_order) VALUES
     ('itbis_18', 'ITBIS (18%)', 0.1800, true, true, 1),
-    ('construction_17_2017', 'Ley 17-2017 (1.8%)', 0.0180, false, false, 2);
+    ('construction_17_2017', 'Construcción (Ley 17-2017)', 0.0180, true, false, 2);

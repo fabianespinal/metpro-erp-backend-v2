@@ -217,10 +217,10 @@ def _validate_product_ids(cursor, items: List[dict]) -> None:
         raise api_error(400, "Producto no encontrado", "PRODUCT_NOT_FOUND")
 
 
-def preview_totals(items: List[dict], charges: dict, tax_type_code: Optional[str] = None) -> dict:
-    """Stateless totals for the take-off screen. Reads tax_types only; no writes."""
+def preview_totals(items: List[dict], charges: dict) -> dict:
+    """Stateless totals for the take-off screen. Reads tax_types only; no writes. The tax type follows the charges."""
     from tax.service import get_tax_snapshot
-    tax = get_tax_snapshot(tax_type_code)
+    tax = get_tax_snapshot(charges)
     t = _compute_quote_totals(items, charges, tax["tax_rate"])
     return {
         "items_total": t["items_total"],
@@ -275,7 +275,6 @@ def create_quote(
     payment_terms: Optional[str] = None,
     valid_until: Optional[date] = None,
     created_by_user_id: Optional[str] = None,
-    tax_type_code: Optional[str] = None,
 ) -> dict:
     conn = None
     try:
@@ -300,7 +299,7 @@ def create_quote(
         _validate_item_discounts(items)
         quote_id = generate_quote_id()
         from tax.service import resolve_tax_type
-        tax = resolve_tax_type(cursor, tax_type_code)  # None = the default type
+        tax = resolve_tax_type(cursor, included_charges)  # decided by the indirect charges
         totals = _compute_quote_totals(items, included_charges, tax["tax_rate"])
 
         # public_token is not set here. It stays NULL until finalize.
@@ -572,8 +571,6 @@ def update_quote(quote_id: str, quote_update) -> dict:
         # Pull these out — they're handled separately below.
         items = update_dict.pop('items', None)
         included_charges = update_dict.pop('included_charges', None)
-        # A1: choosing a tax type re-reads it from tax_types and stores the snapshot. Only Draft quotes get here.
-        tax_type_code = update_dict.pop('tax_type_code', None)
 
         if 'valid_until' in update_dict and update_dict['valid_until'] is not None:
             update_dict['valid_until'] = _serialize_date(update_dict['valid_until'])
@@ -588,15 +585,7 @@ def update_quote(quote_id: str, quote_update) -> dict:
             """
             cursor.execute(query, list(update_dict.values()) + [quote_id])
 
-        if tax_type_code is not None:
-            from tax.service import resolve_tax_type
-            tax = resolve_tax_type(cursor, tax_type_code)
-            cursor.execute(
-                "UPDATE quotes SET tax_type_code = %s, tax_rate = %s, tax_label = %s, updated_at = CURRENT_TIMESTAMP WHERE quote_id = %s",
-                (tax["tax_type_code"], tax["tax_rate"], tax["tax_label"], quote_id),
-            )
-        else:
-            tax = None  # read from the stored snapshot only if totals are recalculated below
+        tax = None  # re-resolved below only when the indirect charges change; otherwise the stored snapshot stays
 
         # Re-insert items if provided
         if items is not None:
@@ -633,7 +622,7 @@ def update_quote(quote_id: str, quote_update) -> dict:
                 execute_values(cursor, INS_ITEMS_SQL, rows)
 
         # Recalculate totals if items, charges or the tax type changed
-        if included_charges is not None or items is not None or tax_type_code is not None:
+        if included_charges is not None or items is not None:
             cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id", (quote_id,))
             current_items = [dict(row) for row in cursor.fetchall()]
 
@@ -655,7 +644,14 @@ def update_quote(quote_id: str, quote_update) -> dict:
                 else:
                     charges = raw or {}
 
-            if tax is None:
+            if included_charges is not None:
+                from tax.service import resolve_tax_type
+                tax = resolve_tax_type(cursor, charges)  # A1 rule: charges decide the type
+                cursor.execute(
+                    "UPDATE quotes SET tax_type_code = %s, tax_rate = %s, tax_label = %s WHERE quote_id = %s",
+                    (tax["tax_type_code"], tax["tax_rate"], tax["tax_label"], quote_id),
+                )
+            else:
                 from tax.service import snapshot_from_document
                 tax = snapshot_from_document(quote)
             totals = _compute_quote_totals(current_items, charges, tax["tax_rate"])

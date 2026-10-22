@@ -44,7 +44,6 @@ def create_quote(quote: QuoteCreate, current_user: dict = Depends(require_auth))
         payment_terms=quote.payment_terms,
         valid_until=quote.valid_until,
         created_by_user_id=current_user.get("user_id"),
-        tax_type_code=quote.tax_type_code,
     )
     return result
 
@@ -315,7 +314,7 @@ def preview_quote_totals(body: TotalsPreviewIn, current_user: dict = Depends(req
     """Totals for a draft selection. Stateless. Same math as save and finalize."""
     items = [item.dict() for item in body.items]
     charges = body.included_charges.dict()
-    return service.preview_totals(items, charges, body.tax_type_code)
+    return service.preview_totals(items, charges)
 
 
 @router.post("/cost-estimate/preview")

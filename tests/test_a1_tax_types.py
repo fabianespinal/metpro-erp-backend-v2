@@ -29,6 +29,7 @@ client = TestClient(app)
 
 ITEMS = [{"product_name": "Viga", "quantity": 2, "unit_price": 500.0, "discount_type": "none", "discount_value": 0}]
 NO_CHARGES = {"supervision": False, "admin": False, "insurance": False, "transport": False, "contingency": False}
+CONSTR = dict(NO_CHARGES, supervision=True, supervision_percentage=0)  # selected at 0%: same amounts, construction type
 BODY = {"client_id": None, "contact_id": None, "project_name": "A1", "items": ITEMS, "included_charges": NO_CHARGES}
 
 
@@ -68,8 +69,8 @@ def test_migration_is_additive_seeds_two_types_and_keeps_rls_on():
     assert len(alters) == 6 and all(a[1] == "DROP DEFAULT" for a in alters)
     assert {a[0] for a in alters} == {"TAX_TYPE_CODE", "TAX_RATE", "TAX_LABEL"}
     assert "'ITBIS_18'" in sql and "'CONSTRUCTION_17_2017'" in sql
-    # The 1.8% type is seeded inactive: activating it is the explicit switch.
-    assert "'LEY 17-2017 (1.8%)', 0.0180, FALSE, FALSE, 2" in sql
+    # Both types are active: the backend picks one from the quote's indirect charges.
+    assert "'CONSTRUCCIÓN (LEY 17-2017)', 0.0180, TRUE, FALSE, 2" in sql
 
 
 def test_rollback_refuses_when_non_default_documents_exist():
@@ -143,8 +144,8 @@ def test_pdf_prints_the_stored_label(monkeypatch):
         transport=0, transport_pct=3, contingency=0, contingency_pct=3,
         subtotal_general=t["subtotal_general"], itbis=t["itbis"], grand_total=t["grand_total"],
     )
-    create_invoice_pdf(tax_label="Ley 17-2017 (1.8%)", **kwargs)
-    assert "Ley 17-2017 (1.8%):" in texts
+    create_invoice_pdf(tax_label="Construcción (Ley 17-2017)", **kwargs)
+    assert "Construcción (Ley 17-2017):" in texts
     assert "ITBIS (18%):" not in texts
     texts.clear()
     create_invoice_pdf(**kwargs)  # no label: generic text, never a wrong percentage
@@ -178,7 +179,7 @@ def db(monkeypatch):
                 "('00000000-0000-0000-0000-000000000001', 't_user', 'x', 't_user@test.local', 'user', true) "
                 "ON CONFLICT DO NOTHING")
     cur.execute("UPDATE tax_types SET rate = 0.1800, label = 'ITBIS (18%)', active = true WHERE code = 'itbis_18'")
-    cur.execute("UPDATE tax_types SET rate = 0.0180, label = 'Ley 17-2017 (1.8%)', active = true "
+    cur.execute("UPDATE tax_types SET rate = 0.0180, label = 'Construcción (Ley 17-2017)', active = true "
                 "WHERE code = 'construction_17_2017'")
     cur.execute("INSERT INTO clients (company_name, tax_id) VALUES ('Cliente A1', '1-31-00001-1') RETURNING id")
     cid = cur.fetchone()["id"]
@@ -190,7 +191,7 @@ def db(monkeypatch):
     conn = connect()
     cur = conn.cursor()
     cur.execute("UPDATE tax_types SET rate = 0.1800, label = 'ITBIS (18%)', active = true WHERE code = 'itbis_18'")
-    cur.execute("UPDATE tax_types SET rate = 0.0180, label = 'Ley 17-2017 (1.8%)', active = true "
+    cur.execute("UPDATE tax_types SET rate = 0.0180, label = 'Construcción (Ley 17-2017)', active = true "
                 "WHERE code = 'construction_17_2017'")
     conn.commit()
     conn.close()
@@ -236,51 +237,71 @@ def test_new_quote_defaults_to_the_default_type(db):
 
 @needs_db
 def test_quote_with_construction_type_taxes_at_its_rate(db):
-    q = client.post("/quotes/", json=_body(db, tax_type_code="construction_17_2017"), headers=_hdr()).json()["data"]
-    assert q["tax_type_code"] == "construction_17_2017" and q["tax_label"] == "Ley 17-2017 (1.8%)"
+    q = client.post("/quotes/", json=_body(db, included_charges=CONSTR), headers=_hdr()).json()["data"]
+    assert q["tax_type_code"] == "construction_17_2017" and q["tax_label"] == "Construcción (Ley 17-2017)"
     assert float(q["tax_amount"]) == pytest.approx(18.0) and float(q["grand_total"]) == pytest.approx(1018.0)
 
 
 @needs_db
-def test_unknown_or_inactive_type_is_rejected(db):
-    r = client.post("/quotes/", json=_body(db, tax_type_code="nope"), headers=_hdr())
-    assert r.status_code == 400 and r.json()["code"] == "TAX_TYPE_INVALID"
+def test_an_inactive_type_fails_loudly_never_falls_back(db):
     conn = db["connect"]()
     conn.cursor().execute("UPDATE tax_types SET active = false WHERE code = 'construction_17_2017'")
     conn.commit()
     conn.close()
-    r = client.post("/quotes/", json=_body(db, tax_type_code="construction_17_2017"), headers=_hdr())
+    r = client.post("/quotes/", json=_body(db, included_charges=CONSTR), headers=_hdr())
     assert r.status_code == 400 and r.json()["code"] == "TAX_TYPE_INVALID"
-    r = client.post("/quotes/totals/preview", json={"items": ITEMS, "included_charges": NO_CHARGES,
-                                                    "tax_type_code": "construction_17_2017"}, headers=_hdr())
+    r = client.post("/quotes/totals/preview", json={"items": ITEMS, "included_charges": CONSTR}, headers=_hdr())
     assert r.status_code == 400
+    assert client.post("/quotes/", json=_body(db), headers=_hdr()).status_code == 200  # no charges: ITBIS still works
 
 
 @needs_db
-def test_preview_uses_the_chosen_type(db):
-    r = client.post("/quotes/totals/preview", json={"items": ITEMS, "included_charges": NO_CHARGES,
-                                                    "tax_type_code": "construction_17_2017"}, headers=_hdr())
+def test_a_client_cannot_choose_the_type(db):
+    q = client.post("/quotes/", json=_body(db, tax_type_code="construction_17_2017"), headers=_hdr()).json()["data"]
+    assert q["tax_type_code"] == "itbis_18"  # field ignored: no charges selected
+
+
+@pytest.mark.parametrize("key", ["supervision", "admin", "insurance", "transport", "contingency"])
+def test_any_one_indirect_charge_selects_construction(key):
+    from tax.service import tax_code_for_charges
+    assert tax_code_for_charges(dict(NO_CHARGES, **{key: True})) == "construction_17_2017"
+
+
+def test_no_indirect_charge_means_itbis():
+    from tax.service import tax_code_for_charges
+    assert tax_code_for_charges(NO_CHARGES) == "itbis_18"
+    assert tax_code_for_charges({}) == "itbis_18" and tax_code_for_charges(None) == "itbis_18"
+    assert tax_code_for_charges({"dynamic_charges": [{"name": "x", "enabled": True, "percentage": 5}]}) == "itbis_18"
+
+
+@needs_db
+def test_preview_follows_the_charges(db):
+    r = client.post("/quotes/totals/preview", json={"items": ITEMS, "included_charges": CONSTR}, headers=_hdr())
     d = r.json()["data"]
     assert d["tax_rate"] == pytest.approx(0.018) and d["tax_amount"] == pytest.approx(18.0)
-    assert d["tax_type_code"] == "construction_17_2017" and d["tax_label"] == "Ley 17-2017 (1.8%)"
+    assert d["tax_type_code"] == "construction_17_2017" and d["tax_label"] == "Construcción (Ley 17-2017)"
     d = client.post("/quotes/totals/preview", json={"items": ITEMS, "included_charges": NO_CHARGES},
                     headers=_hdr()).json()["data"]
     assert d["tax_rate"] == pytest.approx(0.18) and d["tax_type_code"] == "itbis_18"
 
 
 @needs_db
-def test_draft_can_change_type_and_totals_follow(db):
+def test_draft_type_follows_charge_changes_and_items_keep_it(db):
     q = client.post("/quotes/", json=_body(db), headers=_hdr()).json()["data"]
     qid = q["quote_id"]
-    r = client.put(f"/quotes/{qid}", json={"tax_type_code": "construction_17_2017"}, headers=_hdr())
+    assert q["tax_type_code"] == "itbis_18"
+    r = client.put(f"/quotes/{qid}", json={"included_charges": CONSTR}, headers=_hdr())
     assert r.status_code == 200, r.text
     row = _row(db, "SELECT tax_type_code, tax_rate, tax_amount, grand_total FROM quotes WHERE quote_id = %s", (qid,))
     assert row["tax_type_code"] == "construction_17_2017"
     assert float(row["tax_amount"]) == pytest.approx(18.0) and float(row["grand_total"]) == pytest.approx(1018.0)
-    # an edit that does not name a type keeps the snapshot
+    # an item edit that does not touch the charges keeps the snapshot
     client.put(f"/quotes/{qid}", json={"items": [dict(ITEMS[0], quantity=4)]}, headers=_hdr())
     row = _row(db, "SELECT tax_type_code, tax_amount FROM quotes WHERE quote_id = %s", (qid,))
     assert row["tax_type_code"] == "construction_17_2017" and float(row["tax_amount"]) == pytest.approx(36.0)
+    # deselecting every indirect charge returns to ITBIS
+    client.put(f"/quotes/{qid}", json={"included_charges": NO_CHARGES}, headers=_hdr())
+    assert _row(db, "SELECT tax_type_code FROM quotes WHERE quote_id = %s", (qid,))["tax_type_code"] == "itbis_18"
 
 
 @needs_db
@@ -288,14 +309,14 @@ def test_type_is_locked_after_finalize(db):
     q = client.post("/quotes/", json=_body(db), headers=_hdr()).json()["data"]
     qid = q["quote_id"]
     assert client.post(f"/quotes/{qid}/finalize", headers=_hdr()).status_code == 200
-    r = client.put(f"/quotes/{qid}", json={"tax_type_code": "construction_17_2017"}, headers=_hdr())
+    r = client.put(f"/quotes/{qid}", json={"included_charges": CONSTR}, headers=_hdr())
     assert r.status_code == 400 and r.json()["code"] == "QUOTE_FINALIZED"
     assert _row(db, "SELECT tax_type_code FROM quotes WHERE quote_id = %s", (qid,))["tax_type_code"] == "itbis_18"
 
 
 @needs_db
 def test_snapshot_survives_a_rate_change_and_reaches_the_invoice(db):
-    q = client.post("/quotes/", json=_body(db, tax_type_code="construction_17_2017"), headers=_hdr()).json()["data"]
+    q = client.post("/quotes/", json=_body(db, included_charges=CONSTR), headers=_hdr()).json()["data"]
     qid = q["quote_id"]
     assert client.post(f"/quotes/{qid}/finalize", headers=_hdr()).status_code == 200
     conn = db["connect"]()
@@ -307,16 +328,16 @@ def test_snapshot_survives_a_rate_change_and_reaches_the_invoice(db):
     row = _row(db, "SELECT tax_type_code, tax_rate, tax_label, itbis_total, grand_total, total_amount FROM invoices WHERE id = %s",
                (inv["invoice_id"],))
     assert row["tax_type_code"] == "construction_17_2017" and float(row["tax_rate"]) == pytest.approx(0.018)
-    assert row["tax_label"] == "Ley 17-2017 (1.8%)"
+    assert row["tax_label"] == "Construcción (Ley 17-2017)"
     assert float(row["itbis_total"]) == pytest.approx(18.0) and float(row["grand_total"]) == pytest.approx(1018.0)
     quote = _row(db, "SELECT tax_rate, tax_label, tax_amount FROM quotes WHERE quote_id = %s", (qid,))
-    assert float(quote["tax_rate"]) == pytest.approx(0.018) and quote["tax_label"] == "Ley 17-2017 (1.8%)"
+    assert float(quote["tax_rate"]) == pytest.approx(0.018) and quote["tax_label"] == "Construcción (Ley 17-2017)"
 
 
 @needs_db
 def test_invoice_pdf_totals_use_the_invoice_rate_not_18(db):
     from invoices.service import get_invoice_with_contact, invoice_lines_and_totals
-    q = client.post("/quotes/", json=_body(db, tax_type_code="construction_17_2017"), headers=_hdr()).json()["data"]
+    q = client.post("/quotes/", json=_body(db, included_charges=CONSTR), headers=_hdr()).json()["data"]
     qid = q["quote_id"]
     client.post(f"/quotes/{qid}/finalize", headers=_hdr())
     client.patch(f"/quotes/{qid}/status", json={"status": "Approved"}, headers=_hdr())
@@ -325,7 +346,7 @@ def test_invoice_pdf_totals_use_the_invoice_rate_not_18(db):
     raw = invoice["included_charges"]
     _items, totals = invoice_lines_and_totals(invoice, raw)
     assert totals["itbis"] == pytest.approx(18.0) and totals["grand_total"] == pytest.approx(1018.0)
-    assert totals["tax_label"] == "Ley 17-2017 (1.8%)" and totals["tax_rate"] == pytest.approx(0.018)
+    assert totals["tax_label"] == "Construcción (Ley 17-2017)" and totals["tax_rate"] == pytest.approx(0.018)
     for url in (f"/pdf/invoices/{inv['invoice_id']}", f"/invoices/{inv['invoice_id']}/pdf"):
         r = client.get(url, headers=_hdr())
         assert r.status_code in (200, 404), url
@@ -333,7 +354,7 @@ def test_invoice_pdf_totals_use_the_invoice_rate_not_18(db):
 
 @needs_db
 def test_duplicate_keeps_the_original_snapshot(db):
-    q = client.post("/quotes/", json=_body(db, tax_type_code="construction_17_2017"), headers=_hdr()).json()["data"]
+    q = client.post("/quotes/", json=_body(db, included_charges=CONSTR), headers=_hdr()).json()["data"]
     d = client.post(f"/quotes/{q['quote_id']}/duplicate", headers=_hdr()).json()["data"]
     assert d["tax_type_code"] == "construction_17_2017" and float(d["tax_rate"]) == pytest.approx(0.018)
     row = _row(db, "SELECT tax_amount, grand_total FROM quotes WHERE quote_id = %s", (d["quote_id"],))
@@ -342,11 +363,11 @@ def test_duplicate_keeps_the_original_snapshot(db):
 
 @needs_db
 def test_public_payload_carries_label_and_rate(db):
-    q = client.post("/quotes/", json=_body(db, tax_type_code="construction_17_2017"), headers=_hdr()).json()["data"]
+    q = client.post("/quotes/", json=_body(db, included_charges=CONSTR), headers=_hdr()).json()["data"]
     fin = client.post(f"/quotes/{q['quote_id']}/finalize", headers=_hdr()).json()["data"]
     token = _row(db, "SELECT public_token FROM quotes WHERE quote_id = %s", (q["quote_id"],))["public_token"]
     pub = client.get(f"/quotes/public/{token}").json()["data"]
-    assert pub["tax_label"] == "Ley 17-2017 (1.8%)" and float(pub["tax_rate"]) == pytest.approx(0.018)
+    assert pub["tax_label"] == "Construcción (Ley 17-2017)" and float(pub["tax_rate"]) == pytest.approx(0.018)
     assert "quote_id" not in pub and fin["tax_type_code"] == "construction_17_2017"
 
 

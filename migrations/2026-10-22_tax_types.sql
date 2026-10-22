@@ -5,8 +5,9 @@
 --    Seeded with two rows. Rates and labels live here, never in code.
 --    The accounting treatment of construction_17_2017 is NOT decided here: the rate is applied the
 --    same way as itbis_18 (tax_amount = rate * subtotal). Treatment is validated separately by the owner.
---    construction_17_2017 is seeded INACTIVE: it is the feature toggle. Nothing can select it until the owner
---    activates it (UPDATE tax_types SET active = true ...) after the frontend and public site are deployed.
+--    The type is decided automatically by the backend from the quote's indirect charges (approved 2026-10-22):
+--    any of supervision, admin, insurance, transport, contingency selected -> construction_17_2017, else itbis_18.
+--    Both types are seeded active. Deactivating construction_17_2017 makes quotes with those charges fail loudly.
 -- 2. quotes and invoices get tax_type_code, tax_rate, tax_label (snapshot of the type at the time).
 --    Every existing document was issued at 18% (verified 2026-10-22: 10 quotes, 4 invoices), so the
 --    constant column default describes history. The default is dropped right after, so every new
@@ -31,7 +32,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS tax_types_one_default_idx
 
 INSERT INTO public.tax_types (code, label, rate, active, is_default, sort_order) VALUES
     ('itbis_18',              'ITBIS (18%)',        0.1800, true, true,  1),
-    ('construction_17_2017',  'Ley 17-2017 (1.8%)', 0.0180, false, false, 2)
+    ('construction_17_2017',  'Construcción (Ley 17-2017)', 0.0180, true, false, 2)
 ON CONFLICT (code) DO NOTHING;
 
 -- Same posture as every other public table: RLS on, no policies. The backend connects as owner.

@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends
 from typing import Optional
 from core.errors import api_error
 from . import service
-from auth.service import require_auth
+from auth.service import require_auth, require_role
 
 router = APIRouter(prefix='/reports', tags=['reports'])
 
@@ -59,7 +59,7 @@ def get_client_profitability(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     client_id: Optional[int] = None,
-    current_user: dict = Depends(require_auth)
+    current_user: dict = Depends(require_role("admin"))  # margin data: admin and superadmin only
 ):
     """Rentabilidad por cliente (Fase 1): ingreso sin impuesto, COGS, utilidad bruta, % y saldo pendiente."""
     _check_range(start_date, end_date)

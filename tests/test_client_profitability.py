@@ -75,8 +75,8 @@ def db(monkeypatch):
     conn.close()
 
 
-def _get(path="/reports/client-profitability"):
-    token = create_access_token({"sub": "t", "role": "user", "user_id": "00000000-0000-0000-0000-000000000001"})
+def _get(path="/reports/client-profitability", role="admin"):
+    token = create_access_token({"sub": "t", "role": role, "user_id": "00000000-0000-0000-0000-000000000001"})
     r = client.get(path, headers={"Authorization": f"Bearer {token}"})
     assert r.status_code == 200, r.text
     return r.json()["data"]
@@ -179,7 +179,16 @@ def test_requires_auth():
 
 def test_rejects_inverted_range(monkeypatch):
     monkeypatch.setattr(auth_service, "_assert_user_active", lambda u: None)
-    token = create_access_token({"sub": "t", "role": "user", "user_id": "00000000-0000-0000-0000-000000000001"})
+    token = create_access_token({"sub": "t", "role": "admin", "user_id": "00000000-0000-0000-0000-000000000001"})
     r = client.get("/reports/client-profitability?start_date=2026-10-31&end_date=2026-10-01",
                    headers={"Authorization": f"Bearer {token}"})
     assert r.status_code == 400
+
+
+@needs_db
+def test_regular_users_are_refused_admin_and_superadmin_pass(db):
+    db[0].commit()  # release the fixture TRUNCATE lock before the request opens its own connection
+    token = create_access_token({"sub": "t", "role": "user", "user_id": "00000000-0000-0000-0000-000000000001"})
+    r = client.get("/reports/client-profitability", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 403
+    assert _get(role="superadmin")["summary"]["client_count"] == 0

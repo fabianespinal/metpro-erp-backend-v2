@@ -272,6 +272,7 @@ def test_convert_writes_header_totals(monkeypatch):
         "quote_id": "q1", "client_id": 7, "contact_id": 3, "project_name": "W", "notes": None,
         "status": "Approved", "included_charges": {}, "total_amount": 118.0,
         "grand_total": 118.0, "payment_terms": None, "valid_until": None,
+        "tax_type_code": "itbis_18", "tax_rate": 0.18, "tax_label": "ITBIS (18%)",
     }
     items = [{"product_id": None, "product_name": "X", "quantity": 1, "unit_price": 100.0,
               "discount_type": "none", "discount_value": 0}]

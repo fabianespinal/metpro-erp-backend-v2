@@ -54,7 +54,17 @@ INS_DUP_SQL = (
 # =============================================================================
 # SECTION 2: HELPER FUNCTIONS
 # =============================================================================
-def calculate_quote_totals(items: List[dict], charges: dict) -> dict:
+# Pre-A1 rate. Used only when a caller passes no rate (parity tests, subtotal-only callers).
+# Documents carry their own snapshot (quotes.tax_rate / invoices.tax_rate).
+LEGACY_TAX_RATE = 0.18
+
+
+def calculate_quote_totals(items: List[dict], charges: dict, tax_rate: Optional[float] = None) -> dict:
+    """Totals. Production paths pass the document's stored tax_rate (A1).
+
+    tax_rate=None keeps the pre-A1 behavior (LEGACY_TAX_RATE) for the parity tests and for callers
+    that only need subtotals. A document total must never be built without its own rate.
+    """
     items_total = sum(float(item['quantity'] or 0) * float(item['unit_price'] or 0) for item in items)
     total_discounts = 0
     for item in items:
@@ -85,7 +95,8 @@ def calculate_quote_totals(items: List[dict], charges: dict) -> dict:
         items_after_discount + supervision + admin + insurance + transport + contingency
         + dynamic_total
     )
-    itbis = subtotal_general * 0.18
+    rate = LEGACY_TAX_RATE if tax_rate is None else float(tax_rate)
+    itbis = subtotal_general * rate
     grand_total = subtotal_general + itbis
 
     return {
@@ -103,6 +114,19 @@ def calculate_quote_totals(items: List[dict], charges: dict) -> dict:
     }
 
 
+def _doc_rate(doc: dict) -> Optional[float]:
+    """The document's stored tax rate as a float, or None for a row without a snapshot."""
+    r = doc.get("tax_rate")
+    return None if r is None else float(r)
+
+
+def _with_tax_meta(totals: dict, doc: dict) -> dict:
+    """Carry the document's tax label and rate with its totals, so every PDF prints the stored label."""
+    totals["tax_label"] = doc.get("tax_label")
+    totals["tax_rate"] = _doc_rate(doc)
+    return totals
+
+
 def quote_document_totals(quote: dict, items: List[dict], charges: dict) -> dict:
     """Totals printed on every quote PDF: internal download, email and public link (debug B-13).
 
@@ -110,7 +134,7 @@ def quote_document_totals(quote: dict, items: List[dict], charges: dict) -> dict
     (set at create/update/finalize), they are the source of truth for discounts, subtotal,
     ITBIS and grand total, so all four PDF paths print the same numbers.
     """
-    breakdown = calculate_quote_totals(items, charges or {})
+    breakdown = calculate_quote_totals(items, charges or {}, _doc_rate(quote))
     if all(quote.get(k) is not None for k in ("subtotal", "discount_total", "tax_amount", "grand_total")):
         totals = dict(breakdown)
         totals["total_discounts"] = float(quote["discount_total"])
@@ -118,8 +142,8 @@ def quote_document_totals(quote: dict, items: List[dict], charges: dict) -> dict
         totals["subtotal_general"] = float(quote["subtotal"])
         totals["itbis"] = float(quote["tax_amount"])
         totals["grand_total"] = float(quote["grand_total"])
-        return totals
-    return breakdown
+        return _with_tax_meta(totals, quote)
+    return _with_tax_meta(breakdown, quote)
 
 
 def generate_quote_id() -> str:
@@ -136,13 +160,13 @@ def _serialize_date(d) -> Optional[str]:
     return d  # already a string — let Postgres handle it
 
 
-def _compute_quote_totals(items: List[dict], charges: dict) -> dict:
+def _compute_quote_totals(items: List[dict], charges: dict, tax_rate: float) -> dict:
     """Totals via quotes.totals.compute_totals (quoting v1).
 
     Lazy import: quotes.totals imports calculate_quote_totals from this module.
     """
     from quotes.totals import compute_totals
-    return compute_totals(items, charges)
+    return compute_totals(items, charges, tax_rate)
 
 
 def _item_as_dict(item) -> dict:
@@ -176,9 +200,11 @@ def _validate_product_ids(cursor, items: List[dict]) -> None:
         raise api_error(400, "Producto no encontrado", "PRODUCT_NOT_FOUND")
 
 
-def preview_totals(items: List[dict], charges: dict) -> dict:
-    """Stateless totals for the take-off screen. No DB access, no writes."""
-    t = _compute_quote_totals(items, charges)
+def preview_totals(items: List[dict], charges: dict, tax_type_code: Optional[str] = None) -> dict:
+    """Stateless totals for the take-off screen. Reads tax_types only; no writes."""
+    from tax.service import get_tax_snapshot
+    tax = get_tax_snapshot(tax_type_code)
+    t = _compute_quote_totals(items, charges, tax["tax_rate"])
     return {
         "items_total": t["items_total"],
         "total_discounts": t["total_discounts"],
@@ -190,6 +216,8 @@ def preview_totals(items: List[dict], charges: dict) -> dict:
         "contingency": t["contingency"],
         "subtotal": t["subtotal_general"],
         "tax_rate": t["tax_rate"],
+        "tax_type_code": tax["tax_type_code"],
+        "tax_label": tax["tax_label"],
         "tax_amount": t["tax_amount"],
         "grand_total": t["grand_total"],
     }
@@ -230,6 +258,7 @@ def create_quote(
     payment_terms: Optional[str] = None,
     valid_until: Optional[date] = None,
     created_by_user_id: Optional[str] = None,
+    tax_type_code: Optional[str] = None,
 ) -> dict:
     conn = None
     try:
@@ -253,16 +282,19 @@ def create_quote(
         _validate_product_ids(cursor, items)
         _validate_item_discounts(items)
         quote_id = generate_quote_id()
-        totals = _compute_quote_totals(items, included_charges)
+        from tax.service import resolve_tax_type
+        tax = resolve_tax_type(cursor, tax_type_code)  # None = the default type
+        totals = _compute_quote_totals(items, included_charges, tax["tax_rate"])
 
         # public_token is not set here. It stays NULL until finalize.
         cursor.execute("""
             INSERT INTO quotes
                 (quote_id, client_id, contact_id, project_name, notes, status,
                  included_charges, total_amount, payment_terms, valid_until,
-                 subtotal, discount_total, tax_amount, grand_total, created_by_user_id)
+                 subtotal, discount_total, tax_amount, grand_total, created_by_user_id,
+                 tax_type_code, tax_rate, tax_label)
             VALUES
-                (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s, %s, %s, %s)
+                (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             quote_id,
             client_id,
@@ -279,6 +311,9 @@ def create_quote(
             totals["tax_amount"],
             totals["grand_total"],
             created_by_user_id,
+            tax["tax_type_code"],
+            tax["tax_rate"],
+            tax["tax_label"],
         ))
 
         rows = [
@@ -305,6 +340,7 @@ def create_quote(
             SELECT quote_id, client_id, contact_id, project_name, notes, status,
                    included_charges, total_amount, payment_terms, valid_until,
                    subtotal, discount_total, tax_amount, grand_total,
+                   tax_type_code, tax_rate, tax_label,
                    created_at, updated_at
             FROM quotes
             WHERE quote_id = %s
@@ -341,6 +377,7 @@ def get_quote_by_id(quote_id: str) -> dict:
             SELECT quote_id, quote_number, client_id, contact_id, project_name, notes, status,
                    included_charges, total_amount, subtotal, discount_total,
                    tax_amount, grand_total, terms, payment_terms, valid_until,
+                   tax_type_code, tax_rate, tax_label,
                    finalized_at, public_token, created_at, updated_at,
                    (SELECT COALESCE(u.full_name, u.username) FROM users u WHERE u.id = quotes.created_by_user_id) AS created_by_name
             FROM quotes
@@ -406,6 +443,9 @@ def get_quote_with_contact(quote_id: str) -> dict:
                 q.discount_total,
                 q.tax_amount,
                 q.grand_total,
+                q.tax_type_code,
+                q.tax_rate,
+                q.tax_label,
                 q.payment_terms,
                 q.valid_until,
                 q.created_at,
@@ -512,6 +552,8 @@ def update_quote(quote_id: str, quote_update) -> dict:
         # Pull these out — they're handled separately below.
         items = update_dict.pop('items', None)
         included_charges = update_dict.pop('included_charges', None)
+        # A1: choosing a tax type re-reads it from tax_types and stores the snapshot. Only Draft quotes get here.
+        tax_type_code = update_dict.pop('tax_type_code', None)
 
         if 'valid_until' in update_dict and update_dict['valid_until'] is not None:
             update_dict['valid_until'] = _serialize_date(update_dict['valid_until'])
@@ -525,6 +567,16 @@ def update_quote(quote_id: str, quote_update) -> dict:
                 WHERE quote_id = %s
             """
             cursor.execute(query, list(update_dict.values()) + [quote_id])
+
+        if tax_type_code is not None:
+            from tax.service import resolve_tax_type
+            tax = resolve_tax_type(cursor, tax_type_code)
+            cursor.execute(
+                "UPDATE quotes SET tax_type_code = %s, tax_rate = %s, tax_label = %s, updated_at = CURRENT_TIMESTAMP WHERE quote_id = %s",
+                (tax["tax_type_code"], tax["tax_rate"], tax["tax_label"], quote_id),
+            )
+        else:
+            tax = None  # read from the stored snapshot only if totals are recalculated below
 
         # Re-insert items if provided
         if items is not None:
@@ -559,8 +611,8 @@ def update_quote(quote_id: str, quote_update) -> dict:
             if rows:
                 execute_values(cursor, INS_ITEMS_SQL, rows)
 
-        # Recalculate totals if items or charges changed
-        if included_charges is not None or items is not None:
+        # Recalculate totals if items, charges or the tax type changed
+        if included_charges is not None or items is not None or tax_type_code is not None:
             cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id", (quote_id,))
             current_items = [dict(row) for row in cursor.fetchall()]
 
@@ -582,7 +634,10 @@ def update_quote(quote_id: str, quote_update) -> dict:
                 else:
                     charges = raw or {}
 
-            totals = _compute_quote_totals(current_items, charges)
+            if tax is None:
+                from tax.service import snapshot_from_document
+                tax = snapshot_from_document(quote)
+            totals = _compute_quote_totals(current_items, charges, tax["tax_rate"])
 
             cursor.execute("""
                 UPDATE quotes
@@ -597,6 +652,7 @@ def update_quote(quote_id: str, quote_update) -> dict:
         cursor.execute("""
             SELECT quote_id, client_id, project_name, notes, status,
                    included_charges, total_amount, payment_terms, valid_until,
+                   tax_type_code, tax_rate, tax_label,
                    created_at, updated_at
             FROM quotes
             WHERE quote_id = %s
@@ -685,7 +741,8 @@ def duplicate_quote(quote_id: str, created_by_user_id: Optional[str] = None) -> 
         cursor.execute("""
             SELECT quote_id, client_id, contact_id, project_name, notes, status,
                    included_charges, total_amount, payment_terms, valid_until, terms,
-                   subtotal, discount_total, tax_amount, grand_total
+                   subtotal, discount_total, tax_amount, grand_total,
+                   tax_type_code, tax_rate, tax_label
             FROM quotes
             WHERE quote_id = %s
         """, (quote_id,))
@@ -722,8 +779,9 @@ def duplicate_quote(quote_id: str, created_by_user_id: Optional[str] = None) -> 
             INSERT INTO quotes
                 (quote_id, client_id, contact_id, project_name, notes, status,
                  included_charges, total_amount, payment_terms, terms,
-                 valid_until, subtotal, discount_total, tax_amount, grand_total, created_by_user_id, public_token)
-            VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s, %s, %s, %s, %s, NULL)
+                 valid_until, subtotal, discount_total, tax_amount, grand_total, created_by_user_id,
+                 tax_type_code, tax_rate, tax_label, public_token)
+            VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NULL)
         """, (
             new_quote_id,
             original["client_id"],
@@ -741,6 +799,9 @@ def duplicate_quote(quote_id: str, created_by_user_id: Optional[str] = None) -> 
             original.get("tax_amount"),
             original.get("grand_total"),
             created_by_user_id,
+            original["tax_type_code"],  # the copy keeps the original's snapshot, so its stored totals stay consistent
+            original["tax_rate"],
+            original["tax_label"],
         ))
 
         # 7. Duplicate quote items (product_id, item_type, description kept)
@@ -768,6 +829,7 @@ def duplicate_quote(quote_id: str, created_by_user_id: Optional[str] = None) -> 
         cursor.execute("""
             SELECT quote_id, client_id, project_name, notes, status,
                    included_charges, total_amount, payment_terms, valid_until,
+                   tax_type_code, tax_rate, tax_label,
                    created_at, updated_at
             FROM quotes
             WHERE quote_id = %s
@@ -807,7 +869,7 @@ def finalize_quote(quote_id: str) -> dict:
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
         cursor.execute(
-            "SELECT quote_id, status, included_charges FROM quotes WHERE quote_id = %s FOR UPDATE",
+            "SELECT quote_id, status, included_charges, tax_rate FROM quotes WHERE quote_id = %s FOR UPDATE",
             (quote_id,),
         )
         quote = cursor.fetchone()
@@ -824,7 +886,7 @@ def finalize_quote(quote_id: str) -> dict:
         raw = quote.get("included_charges") or {}
         if isinstance(raw, str):
             raw = json.loads(raw) if raw else {}
-        totals = _compute_quote_totals(current_items, raw)
+        totals = _compute_quote_totals(current_items, raw, float(quote["tax_rate"]))
 
         cursor.execute(
             """
@@ -844,6 +906,7 @@ def finalize_quote(quote_id: str) -> dict:
             SELECT quote_id, client_id, contact_id, project_name, notes, status,
                    included_charges, total_amount, payment_terms, valid_until,
                    subtotal, discount_total, tax_amount, grand_total,
+                   tax_type_code, tax_rate, tax_label,
                    finalized_at, created_at, updated_at
             FROM quotes
             WHERE quote_id = %s
@@ -1008,7 +1071,8 @@ def convert_quote_to_invoice(quote_id: str, created_by_user_id: Optional[str] = 
         # 1. Load quote
         cursor.execute("""
             SELECT quote_id, quote_number, client_id, contact_id, project_name, notes, status,
-                   included_charges, total_amount, grand_total, payment_terms, valid_until
+                   included_charges, total_amount, grand_total, payment_terms, valid_until,
+                   tax_type_code, tax_rate, tax_label
             FROM quotes
             WHERE quote_id = %s
             FOR UPDATE
@@ -1039,7 +1103,7 @@ def convert_quote_to_invoice(quote_id: str, created_by_user_id: Optional[str] = 
 
         # Invoice total is the stored grand_total set at finalize/save.
         # Recompute only for legacy rows that have no stored total.
-        breakdown = calculate_quote_totals(items, charges)
+        breakdown = calculate_quote_totals(items, charges, float(quote["tax_rate"]))
         if quote.get("grand_total") is not None:
             invoice_total = float(quote["grand_total"])
         else:
@@ -1069,8 +1133,9 @@ def convert_quote_to_invoice(quote_id: str, created_by_user_id: Optional[str] = 
                 (quote_id, invoice_number, invoice_date, client_id, contact_id,
                  total_amount, status, notes, payment_terms, valid_until, created_by_user_id,
                  subtotal, discount_total, charges_total, itbis_total, grand_total,
-                 amount_paid, amount_due, quote_number)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 amount_paid, amount_due, quote_number,
+                 tax_type_code, tax_rate, tax_label)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
             quote_id,
@@ -1092,6 +1157,9 @@ def convert_quote_to_invoice(quote_id: str, created_by_user_id: Optional[str] = 
             0,
             invoice_total,
             quote_number,
+            quote["tax_type_code"],  # snapshot: the invoice keeps the quote's type, rate and label for good
+            quote["tax_rate"],
+            quote["tax_label"],
         ))
 
         invoice_id = cursor.fetchone()["id"]   # FIXED

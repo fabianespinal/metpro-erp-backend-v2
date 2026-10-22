@@ -104,7 +104,8 @@ def build_quote_invoice_pdf(
     amount_paid=0,
     amount_due=0,
     signer_name=None,
-    seal=None
+    seal=None,
+    tax_label=None
 ):
     payments = payments or []
     amount_paid = amount_paid or 0
@@ -395,7 +396,7 @@ def build_quote_invoice_pdf(
     pdf.set_x(summary_x)
     pdf.set_font('Arial', '', 7)
     pdf.set_text_color(60, 60, 60)
-    pdf.cell(45, 4, 'ITBIS (18%):', 0, 0, 'L')
+    pdf.cell(45, 4, f'{sanitize_text(tax_label or "ITBIS")}:', 0, 0, 'L')  # A1: the document's stored label
     pdf.set_text_color(30, 30, 30)
     pdf.cell(25, 4, f'${itbis:,.2f}', 0, 1, 'R')
 

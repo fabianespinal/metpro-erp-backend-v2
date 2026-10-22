@@ -97,6 +97,7 @@ from emails import router as emails_router
 from cover_page.router import router as cover_page_router
 from terms_page.router import router as terms_router
 from company_settings.router import router as company_settings_router
+from tax.router import router as tax_router
 
 
 app.include_router(auth_router)
@@ -115,6 +116,7 @@ app.include_router(emails_router)
 app.include_router(cover_page_router)
 app.include_router(terms_router)
 app.include_router(company_settings_router)
+app.include_router(tax_router)
 
 
 # ============================================================

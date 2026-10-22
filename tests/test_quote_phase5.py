@@ -114,7 +114,7 @@ def test_totals_update_sql_has_five_params_plus_id():
 def test_create_insert_leaves_public_token_out(monkeypatch):
     # create_quote needs client and contact checks, then insert, commit, reselect.
     cursor = FakeCursor(
-        fetchone_rows=[{"id": 1}, {"id": 2}, {"quote_id": FIXED_ID, "status": "Draft"}],
+        fetchone_rows=[{"id": 1}, {"id": 2}, TAX_ROW, {"quote_id": FIXED_ID, "status": "Draft"}],
         fetchall_rows=[[]],
     )
     _patch_db(monkeypatch, cursor)
@@ -134,8 +134,12 @@ def test_create_insert_leaves_public_token_out(monkeypatch):
 
 # ---------- finalize ----------
 
+TAX_ROW = {"code": "itbis_18", "label": "ITBIS (18%)", "rate": 0.18}
+
+
 def _draft_row(**over):
-    row = {"quote_id": FIXED_ID, "status": "Draft", "included_charges": CHARGES, "public_token": None}
+    row = {"quote_id": FIXED_ID, "status": "Draft", "included_charges": CHARGES, "public_token": None,
+           "tax_type_code": "itbis_18", "tax_rate": 0.18, "tax_label": "ITBIS (18%)"}
     row.update(over)
     return row
 
@@ -278,6 +282,7 @@ def test_draft_endpoint_delegates_to_create(monkeypatch):
         included_charges = _Charges()
         payment_terms = None
         valid_until = None
+        tax_type_code = None
 
     result = router_mod.create_draft_quote(_Body(), current_user={})
     assert result["status"] == "Draft"
@@ -327,7 +332,7 @@ def test_finalize_rejects_empty_quote(monkeypatch):
 def test_create_persists_product_id_and_validates_existence(monkeypatch):
     items = [dict(ITEMS[0], product_id=42), dict(ITEMS[1])]
     cursor = FakeCursor(
-        fetchone_rows=[{"id": 1}, {"id": 2}, {"quote_id": FIXED_ID, "status": "Draft"}],
+        fetchone_rows=[{"id": 1}, {"id": 2}, TAX_ROW, {"quote_id": FIXED_ID, "status": "Draft"}],
         fetchall_rows=[[{"id": 42}], []],
     )
     _patch_db(monkeypatch, cursor)

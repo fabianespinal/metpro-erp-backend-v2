@@ -51,11 +51,11 @@ def db(monkeypatch):
     cur.execute("INSERT INTO products (name, unit_price, cost) VALUES ('Viga', 100, 60), ('Suelto', 10, 5) RETURNING id")
     viga, suelto = [r["id"] for r in cur.fetchall()]
     cur.execute("INSERT INTO quotes (quote_id, client_id, status, subtotal, tax_amount, grand_total, total_amount, "
-                "included_charges, quote_number) VALUES ('q-5c', %s, 'Invoiced', 100, 18, 118, 118, '{}', 10008)", (a,))
+                "included_charges, quote_number, tax_type_code, tax_rate, tax_label) VALUES ('q-5c', %s, 'Invoiced', 100, 18, 118, 118, '{}', 10008, 'itbis_18', 0.18, 'ITBIS (18%%)')", (a,))
     cur.execute("INSERT INTO quote_items (quote_id, product_id, product_name, quantity, unit_price) "
                 "VALUES ('q-5c', %s, 'Viga', 1, 100)", (viga,))
-    cur.execute("INSERT INTO invoices (invoice_number, quote_id, client_id, status, total_amount, itbis_total, invoice_date) "
-                "VALUES ('F-10008', 'q-5c', %s, 'Pending', 118, 18, '2026-10-17')", (a,))
+    cur.execute("INSERT INTO invoices (invoice_number, quote_id, client_id, status, total_amount, itbis_total, invoice_date, tax_type_code, tax_rate, tax_label) "
+                "VALUES ('F-10008', 'q-5c', %s, 'Pending', 118, 18, '2026-10-17', 'itbis_18', 0.18, 'ITBIS (18%%)')", (a,))
     cur.execute("INSERT INTO projects (client_id, name, start_date, quote_id, quote_number) "
                 "VALUES (%s, 'Desde cotización', '2026-10-01', 'q-5c', 10008) RETURNING id", (a,))
     linked = cur.fetchone()["id"]

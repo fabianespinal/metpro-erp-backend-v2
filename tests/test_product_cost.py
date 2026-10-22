@@ -132,8 +132,8 @@ def db(monkeypatch):
     p1, p2, p3 = [r["id"] for r in cur.fetchall()]
     # Quote: lines 1000 + 200 + 300 (service, no product) + 20 = 1520; charges off -> subtotal 1520
     cur.execute("INSERT INTO quotes (quote_id, client_id, status, subtotal, tax_amount, grand_total, total_amount, "
-                "included_charges) VALUES ('q-cost', %s, 'Invoiced', 1520, 273.6, 1793.6, 1793.6, "
-                "'{\"supervision\": false, \"admin\": false, \"insurance\": false, \"transport\": false, \"contingency\": false}') ",
+                "included_charges, tax_type_code, tax_rate, tax_label) VALUES ('q-cost', %s, 'Invoiced', 1520, 273.6, 1793.6, 1793.6, "
+                "'{\"supervision\": false, \"admin\": false, \"insurance\": false, \"transport\": false, \"contingency\": false}', 'itbis_18', 0.18, 'ITBIS (18%%)') ",
                 (cid,))
     cur.execute("INSERT INTO quote_items (quote_id, product_id, product_name, quantity, unit_price) VALUES "
                 "('q-cost', %s, 'Viga', 10, 100), ('q-cost', %s, 'Plancha', 4, 50), ('q-cost', NULL, 'Montaje', 1, 300), "
@@ -141,8 +141,8 @@ def db(monkeypatch):
     cur.execute("INSERT INTO projects (client_id, name, start_date, quote_id) VALUES (%s, 'Nave Costos', '2026-10-01', 'q-cost') "
                 "RETURNING id", (cid,))
     pid = cur.fetchone()["id"]
-    cur.execute("INSERT INTO invoices (invoice_number, quote_id, client_id, status, total_amount, itbis_total, invoice_date) "
-                "VALUES ('F-C', 'q-cost', %s, 'Pending', 1793.6, 273.6, '2026-10-05')", (cid,))
+    cur.execute("INSERT INTO invoices (invoice_number, quote_id, client_id, status, total_amount, itbis_total, invoice_date, tax_type_code, tax_rate, tax_label) "
+                "VALUES ('F-C', 'q-cost', %s, 'Pending', 1793.6, 273.6, '2026-10-05', 'itbis_18', 0.18, 'ITBIS (18%%)')", (cid,))
     cur.execute("INSERT INTO expenses (date, category, amount, project_id) VALUES ('2026-10-06', 'Materiales', 900, %s)", (pid,))
     conn.commit()
     conn.close()

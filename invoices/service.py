@@ -16,10 +16,13 @@ def generate_invoice_number() -> str:
     return f"INV-{timestamp}"
 
 
-def calculate_invoice_totals(items: List[dict], charges: dict) -> dict:
-    """Same arithmetic as quotes: one implementation, so the two cannot drift."""
+def calculate_invoice_totals(items: List[dict], charges: dict, tax_rate: Optional[float] = None) -> dict:
+    """Same arithmetic as quotes: one implementation, so the two cannot drift.
+
+    Pass the invoice's stored tax_rate (A1). None keeps the pre-A1 behavior for the parity tests.
+    """
     from quotes.service import calculate_quote_totals  # local: avoids import cycle
-    return calculate_quote_totals(items, charges)
+    return calculate_quote_totals(items, charges, tax_rate)
 
 
 def _legacy_calculate_invoice_totals(items: List[dict], charges: dict) -> dict:
@@ -119,7 +122,10 @@ def invoice_lines_and_totals(invoice: dict, charges: dict):
     finally:
         conn.close()
 
-    totals = calculate_invoice_totals(items, charges or {})
+    rate = invoice.get("tax_rate")
+    totals = calculate_invoice_totals(items, charges or {}, None if rate is None else float(rate))
+    totals["tax_label"] = invoice.get("tax_label")  # A1: printed as stored
+    totals["tax_rate"] = None if rate is None else float(rate)
     billed = invoice.get("total_amount")
     if billed is not None:
         billed = float(billed)
@@ -273,7 +279,8 @@ def get_invoice_by_id(invoice_id: int) -> dict:
             except Exception:
                 charges = {}
 
-            totals = calculate_invoice_totals(items, charges)
+            rate = invoice.get("tax_rate")
+            totals = calculate_invoice_totals(items, charges, None if rate is None else float(rate))
             invoice["totals"] = totals
 
         return invoice
@@ -453,6 +460,9 @@ def get_invoice_with_contact(invoice_id: int) -> dict:
                 i.updated_at,
                 (SELECT COALESCE(u.full_name, u.username) FROM users u WHERE u.id = i.created_by_user_id) AS created_by_name,
                 i.public_token,
+                i.tax_type_code,
+                i.tax_rate,
+                i.tax_label,
                 -- Same source as the internal invoice PDF (pdf/service.py): the quote, then the invoice.
                 q.project_name,
                 COALESCE(q.payment_terms, i.payment_terms) AS payment_terms,

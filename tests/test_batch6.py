@@ -73,8 +73,8 @@ def test_b19_lines_follow_line_no_then_ctid(monkeypatch):
     cur.execute("TRUNCATE invoice_items, invoices, quote_items, quotes, clients RESTART IDENTITY CASCADE")
     cur.execute("INSERT INTO clients (company_name) VALUES ('C') RETURNING id")
     cid = cur.fetchone()["id"]
-    cur.execute("INSERT INTO invoices (invoice_number, client_id, status, total_amount, invoice_date) "
-                "VALUES ('F-1', %s, 'Pending', 3, '2026-10-17') RETURNING id", (cid,))
+    cur.execute("INSERT INTO invoices (invoice_number, client_id, status, total_amount, invoice_date, tax_type_code, tax_rate, tax_label) "
+                "VALUES ('F-1', %s, 'Pending', 3, '2026-10-17', 'itbis_18', 0.18, 'ITBIS (18%%)') RETURNING id", (cid,))
     inv = cur.fetchone()["id"]
     for desc, no in (("tres", 3), ("uno", 1), ("dos", 2), ("legacy", None)):
         cur.execute("INSERT INTO invoice_items (invoice_id, description, quantity, unit_price, discount, total, line_no) "

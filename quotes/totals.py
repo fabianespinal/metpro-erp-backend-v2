@@ -1,10 +1,9 @@
 """Quote totals with an explicit tax rate (quoting v1, phase 3).
 
-Not wired into create or update yet. Same arithmetic as
-quotes.service.calculate_quote_totals, but the tax rate is a parameter.
+Same arithmetic as quotes.service.calculate_quote_totals, but the tax rate is a parameter.
 
-Default TAX_RATE matches current production (ITBIS 18%). Changing the
-default changes every customer-facing total and needs explicit approval.
+Documents pass their own stored rate (A1: quotes.tax_rate from tax_types). TAX_RATE is the
+pre-A1 default, used only by callers that pass no rate.
 
 Items are type-agnostic: product, service, and custom lines all count the
 same. item_type only affects presentation, not math.
@@ -21,13 +20,13 @@ def compute_totals(items: List[dict], charges: dict, tax_rate: Optional[float] =
 
     tax_amount = subtotal_general * tax_rate.
     grand_total = subtotal_general + tax_amount.
-    With tax_rate=0.18 the result is identical to the legacy function.
+    With the pre-A1 rate the result is identical to the legacy function.
     """
     rate = TAX_RATE if tax_rate is None else float(tax_rate)
     if rate < 0:
         raise ValueError("La tasa de impuesto debe ser mayor o igual a 0")
 
-    base = _legacy_totals(items, charges)
+    base = _legacy_totals(items, charges, rate)
     subtotal_general = base["subtotal_general"]
     tax_amount = subtotal_general * rate
     grand_total = subtotal_general + tax_amount

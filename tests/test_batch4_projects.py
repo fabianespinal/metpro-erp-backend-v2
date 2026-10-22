@@ -55,11 +55,11 @@ def db(monkeypatch):
     for qid, num, status, name in (("q-leg", 10002, "Approved", ""), ("q-inv", 10006, "Invoiced", "Nave"),
                                    ("q-fin", 10007, "Final", "Final")):
         cur.execute("INSERT INTO quotes (quote_id, client_id, contact_id, status, subtotal, tax_amount, grand_total, "
-                    "total_amount, included_charges, quote_number, project_name) "
-                    "VALUES (%s, %s, %s, %s, 100, 18, 118, 118, '{}', %s, %s)", (qid, cid, ctid, status, num, name))
+                    "total_amount, included_charges, quote_number, project_name, tax_type_code, tax_rate, tax_label) "
+                    "VALUES (%s, %s, %s, %s, 100, 18, 118, 118, '{}', %s, %s, 'itbis_18', 0.18, 'ITBIS (18%%)')", (qid, cid, ctid, status, num, name))
         cur.execute("INSERT INTO quote_items (quote_id, product_name, quantity, unit_price) VALUES (%s, 'Viga', 1, 100)", (qid,))
-    cur.execute("INSERT INTO invoices (invoice_number, quote_id, client_id, contact_id, status, total_amount, invoice_date) "
-                "VALUES ('F-10006', 'q-inv', %s, %s, 'Pending', 118, '2026-10-17')", (cid, ctid))
+    cur.execute("INSERT INTO invoices (invoice_number, quote_id, client_id, contact_id, status, total_amount, invoice_date, tax_type_code, tax_rate, tax_label) "
+                "VALUES ('F-10006', 'q-inv', %s, %s, 'Pending', 118, '2026-10-17', 'itbis_18', 0.18, 'ITBIS (18%%)')", (cid, ctid))
     conn.commit()
     conn.close()
     return connect

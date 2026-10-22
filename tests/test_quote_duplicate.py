@@ -68,6 +68,7 @@ ORIGINAL = {
     "payment_terms": "30 days",
     "valid_until": None,
     "terms": "Prices valid 30 days",
+    "tax_type_code": "itbis_18", "tax_rate": 0.18, "tax_label": "ITBIS (18%)",
 }
 
 ORIGINAL_ITEMS = [

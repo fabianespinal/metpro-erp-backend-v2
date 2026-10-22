@@ -76,6 +76,8 @@ class QuoteBase(BaseModel):
 
     items: List[QuoteItemBase]
     included_charges: IncludedCharges = IncludedCharges()
+    # A1: code from tax_types. None = the default type. Unknown or inactive codes are rejected (400).
+    tax_type_code: Optional[str] = Field(default=None, max_length=40)
 
 
 # -----------------------------
@@ -99,6 +101,8 @@ class QuoteUpdate(BaseModel):
 
     items: Optional[List[QuoteItemBase]] = None
     included_charges: Optional[IncludedCharges] = None
+    # A1: changes the snapshot. Draft only (the whole update is Draft-only).
+    tax_type_code: Optional[str] = Field(default=None, max_length=40)
 
 
 # -----------------------------
@@ -157,3 +161,4 @@ class CostPreviewIn(BaseModel):
 class TotalsPreviewIn(BaseModel):
     items: List[TotalsItemIn] = []
     included_charges: IncludedCharges = IncludedCharges()
+    tax_type_code: Optional[str] = Field(default=None, max_length=40)

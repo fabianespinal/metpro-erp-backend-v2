@@ -152,6 +152,7 @@ def test_convert_uses_stored_grand_total_and_marks_invoiced_in_same_transaction(
         "notes": None, "status": "Approved", "included_charges": {},
         "total_amount": 3015.51, "grand_total": 3015.51,
         "payment_terms": None, "valid_until": None,
+        "tax_type_code": "itbis_18", "tax_rate": 0.18, "tax_label": "ITBIS (18%)",
     }
     invoice_row = {
         "id": 7, "invoice_number": "INV-TEST", "quote_id": "q-1", "client_id": 1,
@@ -184,6 +185,7 @@ def test_convert_legacy_quote_without_stored_total_falls_back_to_computation(mon
         "quote_id": "q-2", "client_id": 1, "contact_id": 2, "project_name": None,
         "notes": None, "status": "Approved", "included_charges": {},
         "total_amount": None, "grand_total": None, "payment_terms": None, "valid_until": None,
+        "tax_type_code": "itbis_18", "tax_rate": 0.18, "tax_label": "ITBIS (18%)",
     }
     invoice_row = {"id": 8, "invoice_number": "INV-L", "quote_id": "q-2", "client_id": 1,
                    "status": "Pending", "total_amount": 0, "invoice_date": "2026-10-16",

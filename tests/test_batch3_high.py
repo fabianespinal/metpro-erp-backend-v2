@@ -237,7 +237,7 @@ def db(monkeypatch):
     cur.execute("INSERT INTO contacts (company_id, name, email) VALUES (%s, 'Ana', 'a@x.com') RETURNING id", (cid,))
     ctid = cur.fetchone()["id"]
     cur.execute("INSERT INTO quotes (quote_id, client_id, contact_id, status, subtotal, tax_amount, grand_total, total_amount, "
-                "included_charges, quote_number) VALUES ('q-b3', %s, %s, 'Approved', 100, 18, 118, 118, '{}', 10002)",
+                "included_charges, quote_number, tax_type_code, tax_rate, tax_label) VALUES ('q-b3', %s, %s, 'Approved', 100, 18, 118, 118, '{}', 10002, 'itbis_18', 0.18, 'ITBIS (18%%)')",
                 (cid, ctid))
     cur.execute("INSERT INTO quote_items (quote_id, product_name, quantity, unit_price) VALUES ('q-b3', 'Viga', 1, 100)")
     cur.execute("INSERT INTO projects (client_id, name, start_date, quote_id, quote_number) "

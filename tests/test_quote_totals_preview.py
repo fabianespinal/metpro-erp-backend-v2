@@ -41,9 +41,12 @@ def test_preview_requires_auth():
 
 
 def test_preview_matches_compute_totals(client, monkeypatch):
-    # No DB: the endpoint must not touch the database at all.
+    # Read-only: the only database access is the tax type lookup (A1). Nothing is written.
     import quotes.service as svc
+    import tax.service as tax_svc
     monkeypatch.setattr(svc, "get_db_connection", lambda: (_ for _ in ()).throw(AssertionError("DB touched")))
+    monkeypatch.setattr(tax_svc, "get_tax_snapshot",
+                        lambda code: {"tax_type_code": "itbis_18", "tax_rate": 0.18, "tax_label": "ITBIS (18%)"})
     resp = client.post("/quotes/totals/preview", json=BODY)
     assert resp.status_code == 200
     data = resp.json()

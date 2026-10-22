@@ -240,6 +240,7 @@ DUP_ORIGINAL = {
     "total_amount": 1500.0, "payment_terms": "30 days", "valid_until": None,
     "terms": "t", "subtotal": 100.0, "discount_total": 5.0, "tax_amount": 18.0,
     "grand_total": 118.0,
+    "tax_type_code": "itbis_18", "tax_rate": 0.18, "tax_label": "ITBIS (18%)",
 }
 DUP_ITEMS = [
     {"id": 1, "quote_id": "orig-1", "product_id": 42, "product_name": "IPE 200",
@@ -290,6 +291,7 @@ def test_convert_quote_to_invoice_writes_created_by(monkeypatch):
             "notes": None, "status": "Approved", "included_charges": {},
             "total_amount": 118.0, "grand_total": 118.0, "payment_terms": "30 days",
             "valid_until": None,
+            "tax_type_code": "itbis_18", "tax_rate": 0.18, "tax_label": "ITBIS (18%)",
         }),
         R("SELECT id FROM invoices WHERE quote_id", one=None),
         R("SELECT COUNT(*) AS n FROM invoices WHERE quote_id", one={"n": 0}),  # B-06: earlier (cancelled) invoices
@@ -304,7 +306,7 @@ def test_convert_quote_to_invoice_writes_created_by(monkeypatch):
     qsvc.convert_quote_to_invoice("q1", CREATOR)
     sql, params = cur.sql_with("INSERT INTO invoices")[0]
     assert params[10] == CREATOR
-    assert len(params) == 19
+    assert len(params) == 22
 
 
 def test_update_user_sql_has_no_updated_at(monkeypatch):

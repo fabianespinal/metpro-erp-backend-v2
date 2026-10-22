@@ -214,11 +214,11 @@ def db(monkeypatch):
     cur.execute("INSERT INTO contacts (company_id, name, email) VALUES (%s, 'Ana', 'a@x.com') RETURNING id", (cid,))
     ctid = cur.fetchone()["id"]
     cur.execute("INSERT INTO quotes (quote_id, client_id, contact_id, status, subtotal, tax_amount, grand_total, total_amount, "
-                "included_charges, quote_number, valid_until) VALUES ('q-5a', %s, %s, 'Invoiced', 100, 18, 118, 118, '{}', "
-                "10005, %s)", (cid, ctid, date.today() - timedelta(days=30)))
+                "included_charges, quote_number, valid_until, tax_type_code, tax_rate, tax_label) VALUES ('q-5a', %s, %s, 'Invoiced', 100, 18, 118, 118, '{}', "
+                "10005, %s, 'itbis_18', 0.18, 'ITBIS (18%%)')", (cid, ctid, date.today() - timedelta(days=30)))
     cur.execute("INSERT INTO quote_items (quote_id, product_name, quantity, unit_price) VALUES ('q-5a', 'Viga', 1, 100)")
-    cur.execute("INSERT INTO invoices (invoice_number, quote_id, client_id, contact_id, status, total_amount, invoice_date) "
-                "VALUES ('F-10005', 'q-5a', %s, %s, 'Pending', 118, '2026-10-17') RETURNING id", (cid, ctid))
+    cur.execute("INSERT INTO invoices (invoice_number, quote_id, client_id, contact_id, status, total_amount, invoice_date, tax_type_code, tax_rate, tax_label) "
+                "VALUES ('F-10005', 'q-5a', %s, %s, 'Pending', 118, '2026-10-17', 'itbis_18', 0.18, 'ITBIS (18%%)') RETURNING id", (cid, ctid))
     iid = cur.fetchone()["id"]
     cur.execute("INSERT INTO projects (client_id, name, start_date, end_date, estimated_budget) "
                 "VALUES (%s, 'P5A', '2026-10-01', '2026-12-01', 5000) RETURNING id", (cid,))

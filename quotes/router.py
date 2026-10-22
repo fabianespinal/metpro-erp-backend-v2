@@ -43,6 +43,7 @@ def create_quote(quote: QuoteCreate, current_user: dict = Depends(require_auth))
         payment_terms=quote.payment_terms,
         valid_until=quote.valid_until,
         created_by_user_id=current_user.get("user_id"),
+        tax_type_code=quote.tax_type_code,
     )
     return result
 
@@ -117,6 +118,7 @@ def get_quote_public_pdf(token: Annotated[str, Path(pattern=PUBLIC_TOKEN_PATTERN
         contingency_pct=raw_charges.get("contingency_percentage", 3.0),
         subtotal_general=totals["subtotal_general"],
         itbis=totals["itbis"],
+        tax_label=totals.get("tax_label"),
         grand_total=totals["grand_total"],
         payment_terms=quote.get("payment_terms"),
         valid_until=str(quote["valid_until"]) if quote.get("valid_until") else None,
@@ -191,6 +193,7 @@ def send_quote(
         contingency_pct=raw_charges.get("contingency_percentage", 3.0),
         subtotal_general=totals["subtotal_general"],
         itbis=totals["itbis"],
+        tax_label=totals.get("tax_label"),
         grand_total=totals["grand_total"],
         payment_terms=quote.get("payment_terms"),
         valid_until=str(quote["valid_until"]) if quote.get("valid_until") else None,
@@ -270,6 +273,7 @@ def get_quote_pdf(quote_id: str, print_seal: bool = False, current_user: dict = 
         contingency_pct=raw_charges.get("contingency_percentage", 3.0),
         subtotal_general=totals["subtotal_general"],
         itbis=totals["itbis"],
+        tax_label=totals.get("tax_label"),
         grand_total=totals["grand_total"],
         payment_terms=quote.get("payment_terms"),
         valid_until=str(quote["valid_until"]) if quote.get("valid_until") else None,
@@ -287,7 +291,7 @@ def preview_quote_totals(body: TotalsPreviewIn, current_user: dict = Depends(req
     """Totals for a draft selection. Stateless. Same math as save and finalize."""
     items = [item.dict() for item in body.items]
     charges = body.included_charges.dict()
-    return service.preview_totals(items, charges)
+    return service.preview_totals(items, charges, body.tax_type_code)
 
 
 @router.post("/cost-estimate/preview")

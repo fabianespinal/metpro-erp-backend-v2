@@ -130,18 +130,18 @@ def db(monkeypatch):
                 "contacts, clients RESTART IDENTITY CASCADE")
     cur.execute("INSERT INTO clients (company_name) VALUES ('Cliente Ledger') RETURNING id")
     cid = cur.fetchone()["id"]
-    cur.execute("INSERT INTO quotes (quote_id, client_id, status, total_amount, grand_total) "
-                "VALUES ('q-ledger', %s, 'Invoiced', 1180, 1180)", (cid,))
+    cur.execute("INSERT INTO quotes (quote_id, client_id, status, total_amount, grand_total, tax_type_code, tax_rate, tax_label) "
+                "VALUES ('q-ledger', %s, 'Invoiced', 1180, 1180, 'itbis_18', 0.18, 'ITBIS (18%%)')", (cid,))
     cur.execute("INSERT INTO projects (client_id, name, start_date, quote_id) VALUES (%s, 'Nave A', '2026-10-01', 'q-ledger') "
                 "RETURNING id", (cid,))
     pid = cur.fetchone()["id"]
     cur.execute("INSERT INTO projects (client_id, name, start_date) VALUES (%s, 'Sin factura', '2026-10-01') RETURNING id", (cid,))
     pid2 = cur.fetchone()["id"]
-    cur.execute("INSERT INTO invoices (invoice_number, quote_id, client_id, status, total_amount, itbis_total, invoice_date) "
-                "VALUES ('F-1', 'q-ledger', %s, 'Pending', 1180, 180, '2026-10-05') RETURNING id", (cid,))
+    cur.execute("INSERT INTO invoices (invoice_number, quote_id, client_id, status, total_amount, itbis_total, invoice_date, tax_type_code, tax_rate, tax_label) "
+                "VALUES ('F-1', 'q-ledger', %s, 'Pending', 1180, 180, '2026-10-05', 'itbis_18', 0.18, 'ITBIS (18%%)') RETURNING id", (cid,))
     iid = cur.fetchone()["id"]
-    cur.execute("INSERT INTO invoices (invoice_number, quote_id, client_id, status, total_amount, invoice_date) "
-                "VALUES ('F-X', 'q-ledger', %s, 'Cancelled', 999, '2026-10-05')", (cid,))
+    cur.execute("INSERT INTO invoices (invoice_number, quote_id, client_id, status, total_amount, invoice_date, tax_type_code, tax_rate, tax_label) "
+                "VALUES ('F-X', 'q-ledger', %s, 'Cancelled', 999, '2026-10-05', 'itbis_18', 0.18, 'ITBIS (18%%)')", (cid,))
     cur.execute("INSERT INTO invoice_payments (invoice_id, amount, payment_date, method) VALUES (%s, 500, '2026-10-06', 'Cheque')", (iid,))
     conn.commit()
     conn.close()
@@ -244,12 +244,12 @@ def test_invoice_without_itbis_is_flagged_and_counted_as_net(db):
     import psycopg2
     conn = psycopg2.connect(DSN)
     cur = conn.cursor()
-    cur.execute("INSERT INTO quotes (quote_id, client_id, status) VALUES ('q-legacy', %s, 'Invoiced')", (db["cid"],))
+    cur.execute("INSERT INTO quotes (quote_id, client_id, status, tax_type_code, tax_rate, tax_label) VALUES ('q-legacy', %s, 'Invoiced', 'itbis_18', 0.18, 'ITBIS (18%%)')", (db["cid"],))
     cur.execute("INSERT INTO projects (client_id, name, start_date, quote_id) VALUES (%s, 'Legacy', '2026-10-01', 'q-legacy') "
                 "RETURNING id", (db["cid"],))
     pid = cur.fetchone()[0]
-    cur.execute("INSERT INTO invoices (invoice_number, quote_id, client_id, status, total_amount, itbis_total, invoice_date) "
-                "VALUES ('F-L', 'q-legacy', %s, 'Pending', 500, 0, '2026-10-05')", (db["cid"],))
+    cur.execute("INSERT INTO invoices (invoice_number, quote_id, client_id, status, total_amount, itbis_total, invoice_date, tax_type_code, tax_rate, tax_label) "
+                "VALUES ('F-L', 'q-legacy', %s, 'Pending', 500, 0, '2026-10-05', 'itbis_18', 0.18, 'ITBIS (18%%)')", (db["cid"],))
     conn.commit()
     conn.close()
     p = client.get(f"/reports/project-profitability?project_id={pid}", headers=_hdr()).json()["data"]["projects"][0]

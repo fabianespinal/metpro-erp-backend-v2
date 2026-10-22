@@ -219,7 +219,9 @@ def _validate_product_ids(cursor, items: List[dict]) -> None:
 
 def preview_totals(items: List[dict], charges: dict, tax_type_code: Optional[str] = None) -> dict:
     """Stateless totals for the take-off screen. Reads tax_types only; no writes."""
-    from tax.service import get_tax_snapshot
+    from tax.service import get_tax_snapshot, tax_from_charges_enabled, tax_code_for_charges
+    if tax_from_charges_enabled():
+        tax_type_code = tax_code_for_charges(charges)  # 2026-10-22: tax follows charges
     tax = get_tax_snapshot(tax_type_code)
     t = _compute_quote_totals(items, charges, tax["tax_rate"])
     return {
@@ -299,7 +301,9 @@ def create_quote(
         _validate_product_ids(cursor, items)
         _validate_item_discounts(items)
         quote_id = generate_quote_id()
-        from tax.service import resolve_tax_type
+        from tax.service import resolve_tax_type, tax_from_charges_enabled, tax_code_for_charges
+        if tax_from_charges_enabled():
+            tax_type_code = tax_code_for_charges(included_charges)  # client value ignored
         tax = resolve_tax_type(cursor, tax_type_code)  # None = the default type
         totals = _compute_quote_totals(items, included_charges, tax["tax_rate"])
 
@@ -588,8 +592,11 @@ def update_quote(quote_id: str, quote_update) -> dict:
             """
             cursor.execute(query, list(update_dict.values()) + [quote_id])
 
-        if tax_type_code is not None:
-            from tax.service import resolve_tax_type
+        from tax.service import resolve_tax_type, tax_from_charges_enabled, tax_code_for_charges
+        derive_tax = tax_from_charges_enabled()
+        if derive_tax:
+            tax_type_code = None  # client value ignored; derived from charges below
+        if tax_type_code is not None and not derive_tax:
             tax = resolve_tax_type(cursor, tax_type_code)
             cursor.execute(
                 "UPDATE quotes SET tax_type_code = %s, tax_rate = %s, tax_label = %s, updated_at = CURRENT_TIMESTAMP WHERE quote_id = %s",
@@ -633,7 +640,7 @@ def update_quote(quote_id: str, quote_update) -> dict:
                 execute_values(cursor, INS_ITEMS_SQL, rows)
 
         # Recalculate totals if items, charges or the tax type changed
-        if included_charges is not None or items is not None or tax_type_code is not None:
+        if included_charges is not None or items is not None or tax_type_code is not None or derive_tax:
             cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id", (quote_id,))
             current_items = [dict(row) for row in cursor.fetchall()]
 
@@ -655,6 +662,12 @@ def update_quote(quote_id: str, quote_update) -> dict:
                 else:
                     charges = raw or {}
 
+            if derive_tax:
+                tax = resolve_tax_type(cursor, tax_code_for_charges(charges))
+                cursor.execute(
+                    "UPDATE quotes SET tax_type_code = %s, tax_rate = %s, tax_label = %s, updated_at = CURRENT_TIMESTAMP WHERE quote_id = %s",
+                    (tax["tax_type_code"], tax["tax_rate"], tax["tax_label"], quote_id),
+                )
             if tax is None:
                 from tax.service import snapshot_from_document
                 tax = snapshot_from_document(quote)
@@ -899,6 +912,21 @@ def finalize_quote(quote_id: str) -> dict:
             raise api_error(404, "Cotización no encontrada", "QUOTE_NOT_FOUND")
         if quote["status"] != "Draft":
             raise api_error(400, "Solo las cotizaciones en Borrador se pueden finalizar", "QUOTE_NOT_DRAFT")
+
+        # M3 (2026-10-22, toggle BLOCK_ZERO_LINE_FINALIZE, default OFF): no finalize with a $0 line.
+        import os
+        if os.getenv("BLOCK_ZERO_LINE_FINALIZE", "0").strip().lower() in ("1", "true", "yes"):
+            cursor.execute(
+                "SELECT product_name FROM quote_items WHERE quote_id = %s AND unit_price <= 0 ORDER BY id",
+                (quote_id,),
+            )
+            zero = [r["product_name"] for r in cursor.fetchall()]
+            if zero:
+                raise api_error(
+                    400,
+                    "No se puede finalizar: hay lineas con precio 0: " + ", ".join(zero[:5]),
+                    "ZERO_PRICE_LINE",
+                )
 
         cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id", (quote_id,))
         current_items = [dict(row) for row in cursor.fetchall()]

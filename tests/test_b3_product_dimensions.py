@@ -129,6 +129,10 @@ def test_switch_off_refuses_dimension_writes_but_reads_stay(db, monkeypatch):
     r = client.put(f"/products/{pid}", json={"name": "P", "unit_price": 1, "width": 9}, headers=_hdr())
     assert r.status_code == 400 and r.json()["code"] == "PRODUCT_DIMENSIONS_DISABLED"
     assert float(_row(db, pid)["width"]) == 4
+    # A screen that sends the whole product back (all dimensions null) must not fail or clear anything.
+    whole = {"name": "P3", "unit_price": 1, **{f: None for f in FIELDS}}
+    assert client.put(f"/products/{pid}", json=whole, headers=_hdr()).status_code == 200
+    assert float(_row(db, pid)["width"]) == 4 and _row(db, pid)["name"] == "P3"
     assert client.put(f"/products/{pid}", json={"name": "P2", "unit_price": 1}, headers=_hdr()).status_code == 200
     got = _body(client.get(f"/products/{pid}", headers=_hdr()))
     assert float(got["width"]) == 4

@@ -38,6 +38,8 @@ EXPECTED = {
     ("quotes/service.py", 400, "Ocultar productos en el PDF no está habilitado", "PDF_PRINT_ITEMS_DISABLED"),  # PDF update
     ("quotes/service.py", 403, "Los precios, cantidades, descuentos, cargos e impuestos de un estimado de ingeniería solo los puede cambiar un administrador", "ESTIMATE_LOCKED"),  # I3
     ("quotes/service.py", 400, "Indique el motivo del cambio", "ESTIMATE_EDIT_REASON_REQUIRED"),  # I3
+    ("quotes/service.py", 404, "No disponible", "NOT_FOUND"),  # B1 switch off
+    ("quotes/service.py", 400, "El contacto {target_contact} no pertenece al cliente {target_client}", "CONTACT_CLIENT_MISMATCH"),  # B1
     ("quotes/service.py", 404, "Cliente no encontrado", "CLIENT_NOT_FOUND"),
     ("quotes/service.py", 400, "El contacto {contact_id} no pertenece al cliente {client_id}", "CONTACT_CLIENT_MISMATCH"),
     ("quotes/service.py", 400, "Seleccione un contacto del cliente", "CONTACT_REQUIRED"),

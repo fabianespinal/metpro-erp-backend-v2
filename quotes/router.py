@@ -2,6 +2,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Path, UploadFile
 from fastapi.responses import StreamingResponse
 from typing import List, Optional
+from pydantic import BaseModel
 import json
 
 from .models import QuoteCreate, StatusUpdate, QuoteUpdate, TotalsPreviewIn, CostPreviewIn
@@ -79,6 +80,16 @@ def pdf_option_flags(current_user: dict = Depends(require_auth)):
         "medidas_enabled": pdf_options.medidas_enabled(),
         "print_items_enabled": pdf_options.print_items_enabled(),
         "project_desc_enabled": pdf_options.project_desc_enabled(),
+    }
+
+
+@router.get("/options")
+def quote_options(current_user: dict = Depends(require_auth)):
+    """Phase B switches, so screens show only what is switched on."""
+    from core.quote_features import blank_quotes_enabled, duplicate_change_client_enabled
+    return {
+        "blank_quotes_enabled": blank_quotes_enabled(),
+        "duplicate_change_client_enabled": duplicate_change_client_enabled(),
     }
 
 
@@ -382,10 +393,21 @@ def update_quote_status(
     return service.update_quote_status(quote_id, status_update.status, current_user.get("user_id"))
 
 
+class DuplicateQuoteIn(BaseModel):
+    """B1: optional target. No body = the same client and contact, as before."""
+    client_id: Optional[int] = None
+    contact_id: Optional[int] = None
+
+
 @router.post("/{quote_id}/duplicate")
-def duplicate_quote(quote_id: str, current_user: dict = Depends(require_auth)):
-    """Duplicate an existing quote"""
-    return service.duplicate_quote(quote_id, current_user.get("user_id"))
+def duplicate_quote(quote_id: str, body: Optional[DuplicateQuoteIn] = None, current_user: dict = Depends(require_auth)):
+    """Duplicate an existing quote, optionally for another client or contact (B1, switch DUPLICATE_CHANGE_CLIENT_ENABLED)."""
+    return service.duplicate_quote(
+        quote_id,
+        current_user.get("user_id"),
+        client_id=body.client_id if body else None,
+        contact_id=body.contact_id if body else None,
+    )
 
 
 @router.post("/{quote_id}/convert-to-invoice")

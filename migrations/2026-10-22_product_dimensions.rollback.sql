@@ -15,6 +15,6 @@ ALTER TABLE public.products DROP CONSTRAINT IF EXISTS products_unit_of_measure_l
 ALTER TABLE public.products
     DROP COLUMN IF EXISTS length, DROP COLUMN IF EXISTS width, DROP COLUMN IF EXISTS height,
     DROP COLUMN IF EXISTS thickness, DROP COLUMN IF EXISTS area, DROP COLUMN IF EXISTS volume,
-    DROP COLUMN IF EXISTS unit_of_measure;
+    DROP COLUMN IF EXISTS unit_of_measure, DROP COLUMN IF EXISTS area_manual, DROP COLUMN IF EXISTS volume_manual;
 
 COMMIT;

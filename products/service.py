@@ -21,24 +21,47 @@ def dimensions_enabled() -> bool:
 
 
 def _write_dimensions(cursor, product_id: int, dims: Optional[dict]) -> None:
-    """Writes only the dimension fields the caller actually sent (a missing field never wipes a stored value).
-    An explicit null clears one. Column names come from a fixed list, never from input."""
-    from .models import DIMENSION_FIELDS
+    """Writes only the dimension fields the caller actually sent (a missing field never wipes a stored value),
+    then recalculates area and volume for every value that is not manual (B3 rule: products/dimensions.py).
+    An explicit null clears a field. Column names come from fixed lists, never from input.
+
+    Manual rule: a typed area (or volume) with no explicit flag is manual. area_manual=false hands it back to the
+    calculation. While the switch is off, nulls and false flags are ignored and any real value is refused."""
+    from .models import DIMENSION_FIELDS, FLAG_FIELDS
+    from .dimensions import derive_area, derive_volume
     if not dims:
         return
     if not dimensions_enabled():
-        # Screens send the whole product back, so every dimension arrives as null. Nulls are ignored while the
-        # switch is off (a stored value is never cleared); only a real value is refused.
-        if any(v is not None for v in dims.values()):
+        # Screens send the whole product back, so dimensions arrive as null and flags as false.
+        if any(v not in (None, False) for v in dims.values()):
             raise api_error(400, "Las dimensiones de producto no están habilitadas", "PRODUCT_DIMENSIONS_DISABLED")
         return
-    cols = [c for c in DIMENSION_FIELDS if c in dims]
-    if not cols:
-        return
+    dims = dict(dims)
+    for value_key, flag_key in (("area", "area_manual"), ("volume", "volume_manual")):
+        if flag_key not in dims and dims.get(value_key) is not None:
+            dims[flag_key] = True  # typed without a flag = manual override
+        if dims.get(flag_key) is True and dims.get(value_key, "unset") is None:
+            dims[flag_key] = False  # manual flag with the value cleared: back to calculated
+    cols = [c for c in DIMENSION_FIELDS + FLAG_FIELDS if c in dims]
+    if cols:
+        cursor.execute(
+            "UPDATE products SET " + ", ".join(f"{c} = %s" for c in cols) + " WHERE id = %s",
+            [dims[c] for c in cols] + [product_id],
+        )
     cursor.execute(
-        "UPDATE products SET " + ", ".join(f"{c} = %s" for c in cols) + " WHERE id = %s",
-        [dims[c] for c in cols] + [product_id],
+        "SELECT length, width, height, thickness, area_manual, volume_manual FROM products WHERE id = %s",
+        (product_id,),
     )
+    row = cursor.fetchone()
+    sets, params = [], []
+    if not row["area_manual"]:
+        sets.append("area = %s")
+        params.append(derive_area(row["length"], row["width"]))
+    if not row["volume_manual"]:
+        sets.append("volume = %s")
+        params.append(derive_volume(row["length"], row["width"], row["height"], row["thickness"]))
+    if sets:
+        cursor.execute("UPDATE products SET " + ", ".join(sets) + " WHERE id = %s", params + [product_id])
 
 
 # ============================================================

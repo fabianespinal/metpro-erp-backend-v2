@@ -69,7 +69,13 @@ def test_correction_route_is_admin_only_and_toggled():
     src = inspect.getsource(router.correct_invoice_payment)
     assert "payment_correction_enabled()" in src and "_allowed_roles(\"admin\")" in src
     svc = importlib.import_module("invoices.payments.service")
-    assert svc.payment_correction_enabled() is False  # off by default
+    assert svc.payment_correction_enabled() is True  # approved: on at launch
+
+
+def test_correction_is_on_when_the_variable_is_unset(monkeypatch):
+    svc = importlib.import_module("invoices.payments.service")
+    monkeypatch.delenv("PAYMENT_CORRECTION_ENABLED", raising=False)
+    assert svc.payment_correction_enabled() is True
 
 
 @pytest.mark.parametrize("value,expected", [("true", True), ("1", True), ("false", False), ("", False), ("no", False)])
@@ -324,3 +330,42 @@ def test_trigger_blocks_edits_and_deletes_but_not_the_correction_flow(guarded):
         conn.close()
     assert client.post(f"/invoices/{db['iid']}/payments/{d.json()['data']['payment_id']}/void",
                        json={"reason": "anular"}, headers=_hdr("admin")).status_code == 200  # the plain void still works
+
+
+@needs_db
+def test_trigger_allows_no_update_except_a_complete_void(guarded):
+    import psycopg2
+    db = guarded
+    a = _pay(db, 100)
+    blocked = [
+        "UPDATE invoice_payments SET created_by_user_id = NULL WHERE id = %s",
+        "UPDATE invoice_payments SET backfilled = true WHERE id = %s",
+        "UPDATE invoice_payments SET created_at = now() WHERE id = %s",
+        "UPDATE invoice_payments SET correction_chain_id = id WHERE id = %s",
+        "UPDATE invoice_payments SET voided_at = now() WHERE id = %s",  # void without reason and user
+        "UPDATE invoice_payments SET voided_at = now(), void_reason = '  ', voided_by_user_id = '%s' WHERE id = %%s" % ADMIN_ID,
+    ]
+    for sql in blocked:
+        conn = db["connect"]()
+        try:
+            with pytest.raises(psycopg2.errors.IntegrityConstraintViolation):
+                conn.cursor().execute(sql, (a,))
+        finally:
+            conn.rollback()
+            conn.close()
+    conn = db["connect"]()
+    conn.cursor().execute("UPDATE invoice_payments SET voided_at = now(), void_reason = 'error', voided_by_user_id = %s WHERE id = %s", (ADMIN_ID, a))
+    conn.commit()
+    conn.close()
+
+
+@needs_db
+def test_a_user_with_payments_cannot_be_deleted(db, monkeypatch):
+    import users.service as users_service
+    from users.service import delete_user
+    monkeypatch.setattr(users_service, "get_db_connection", db["connect"])
+    from fastapi import HTTPException
+    _pay(db, 50)
+    with pytest.raises(HTTPException) as exc:
+        delete_user(USER_ID, "superadmin")
+    assert exc.value.code == "USER_HAS_PAYMENTS"

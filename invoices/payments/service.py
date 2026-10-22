@@ -179,9 +179,9 @@ def void_payment(conn, invoice_id: int, payment_id: int, reason: str, user_id=No
 
 
 def payment_correction_enabled() -> bool:
-    """Toggle for A2. Off unless PAYMENT_CORRECTION_ENABLED is set to a true value: the action returns 404."""
+    """Switch for A2. ON by default (approved to enable on launch). Set PAYMENT_CORRECTION_ENABLED=false to turn it off: the action returns 404."""
     import os
-    return os.environ.get("PAYMENT_CORRECTION_ENABLED", "false").strip().lower() in ("1", "true", "yes", "on")
+    return os.environ.get("PAYMENT_CORRECTION_ENABLED", "true").strip().lower() in ("1", "true", "yes", "on")
 
 
 # Statuses where a correction may run: the open ones plus Paid (the usual case: a wrong payment closed the invoice).

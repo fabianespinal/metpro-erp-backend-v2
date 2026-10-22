@@ -94,10 +94,14 @@ def get_revenue_report(start_date: Optional[str], end_date: Optional[str],
     """
     Revenue from invoices and payments (R1). Quotes are not revenue.
 
-    - invoiced:    SUM(total_amount) of non-cancelled invoices (by invoice_date)
-    - collected:   SUM(amount) of payments (by payment_date)  <- headline figure
-    - outstanding: SUM(total_amount - amount_paid) of Pending/Overdue invoices (by invoice_date)
-    - pipeline:    SUM(grand_total) of Approved quotes not yet invoiced (information only)
+    Approved 2026-10-22: revenue is the subtotal BEFORE tax. Neither ITBIS nor Construcción (Ley 17-2017)
+    contributes, whatever the document's tax type. Every figure below is net of the document's own tax (itbis_total
+    holds whichever tax the document carries).
+
+    - invoiced:    SUM(total_amount - itbis_total) of non-cancelled invoices (by invoice_date)
+    - collected:   each payment without its tax share: amount * (total_amount - itbis_total) / total_amount  <- headline
+    - outstanding: (total_amount - amount_paid) without its tax share, Pending/Overdue invoices (by invoice_date)
+    - pipeline:    SUM(grand_total - tax_amount) of Approved quotes not yet invoiced (information only)
     Date filters apply when both start_date and end_date are given.
     """
     conn = None
@@ -121,28 +125,30 @@ def get_revenue_report(start_date: Optional[str], end_date: Optional[str],
 
         p1 = []
         cursor.execute(scoped(
-            "SELECT COALESCE(SUM(i.total_amount), 0) AS amount, COUNT(*) AS n "
+            "SELECT COALESCE(SUM(i.total_amount - COALESCE(i.itbis_total, 0)), 0) AS amount, COUNT(*) AS n "
             "FROM invoices i WHERE i.status <> 'Cancelled'",
             "i.invoice_date", "i.client_id", p1), p1)
         invoiced = cursor.fetchone()
 
         p2 = []
         cursor.execute(scoped(
-            "SELECT COALESCE(SUM(p.amount), 0) AS amount, COUNT(*) AS n "
+            "SELECT COALESCE(SUM(p.amount * CASE WHEN i.total_amount > 0 "
+            "THEN (i.total_amount - COALESCE(i.itbis_total, 0)) / i.total_amount ELSE 1 END), 0) AS amount, COUNT(*) AS n "
             "FROM invoice_payments p JOIN invoices i ON i.id = p.invoice_id WHERE p.voided_at IS NULL",
             "p.payment_date", "i.client_id", p2), p2)
         collected = cursor.fetchone()
 
         p3 = []
         cursor.execute(scoped(
-            "SELECT COALESCE(SUM(i.total_amount - COALESCE(i.amount_paid, 0)), 0) AS amount, COUNT(*) AS n "
+            "SELECT COALESCE(SUM((i.total_amount - COALESCE(i.amount_paid, 0)) * CASE WHEN i.total_amount > 0 "
+            "THEN (i.total_amount - COALESCE(i.itbis_total, 0)) / i.total_amount ELSE 1 END), 0) AS amount, COUNT(*) AS n "
             "FROM invoices i WHERE i.status IN ('Pending', 'Overdue')",
             "i.invoice_date", "i.client_id", p3), p3)
         outstanding = cursor.fetchone()
 
         p4 = []
         cursor.execute(scoped(
-            "SELECT COALESCE(SUM(COALESCE(q.grand_total, q.total_amount)), 0) AS amount, COUNT(*) AS n "
+            "SELECT COALESCE(SUM(COALESCE(q.grand_total, q.total_amount) - COALESCE(q.tax_amount, 0)), 0) AS amount, COUNT(*) AS n "
             "FROM quotes q WHERE q.status = 'Approved' "
             "AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.quote_id = q.quote_id AND i.status <> 'Cancelled')",
             "q.created_at", "q.client_id", p4, naive_utc=True), p4)
@@ -159,6 +165,7 @@ def get_revenue_report(start_date: Optional[str], end_date: Optional[str],
                 "invoiced_total": round(float(invoiced["amount"]), 2),
                 "outstanding": round(float(outstanding["amount"]), 2),
                 "pipeline_approved": round(float(pipeline["amount"]), 2),
+                "basis": "sin_impuesto",
                 "filters": {"start_date": start_date, "end_date": end_date, "client_id": client_id},
             },
             "revenue_breakdown": [

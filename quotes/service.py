@@ -741,7 +741,12 @@ def delete_quote(quote_id: str) -> dict:
 # =============================================================================
 # SECTION 4: QUOTE BUSINESS LOGIC
 # =============================================================================
-def duplicate_quote(quote_id: str, created_by_user_id: Optional[str] = None) -> dict:
+def duplicate_quote(
+    quote_id: str,
+    created_by_user_id: Optional[str] = None,
+    client_id: Optional[int] = None,
+    contact_id: Optional[int] = None,
+) -> dict:
     """Duplicate an existing quote into a new Draft.
 
     Copies: client, contact, project, notes (exact), included_charges,
@@ -750,11 +755,20 @@ def duplicate_quote(quote_id: str, created_by_user_id: Optional[str] = None) -> 
     description). Resets: status = Draft, public_token = NULL, finalized_at
     not copied.
 
+    B1: client_id and/or contact_id move the copy to another client or contact (needs
+    DUPLICATE_CHANGE_CLIENT_ENABLED). The contact must belong to the target client, so changing the
+    client always needs a contact of the new client. Everything else is copied unchanged, including
+    prices and the tax snapshot. The original quote is never modified.
+
     Requires quoting_v1 migration (terms, item_type, description,
     public_token nullable). Do not deploy this code before that migration.
     """
     conn = None
     try:
+        if client_id is not None or contact_id is not None:
+            from core.quote_features import duplicate_change_client_enabled
+            if not duplicate_change_client_enabled():
+                raise api_error(404, "No disponible", "NOT_FOUND")
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
@@ -772,6 +786,22 @@ def duplicate_quote(quote_id: str, created_by_user_id: Optional[str] = None) -> 
             raise api_error(404, "Cotización no encontrada", "QUOTE_NOT_FOUND")
 
         original = dict(original)
+
+        target_client = original["client_id"]
+        target_contact = original["contact_id"]
+        if client_id is not None or contact_id is not None:
+            target_client = client_id if client_id is not None else original["client_id"]
+            cursor.execute("SELECT id FROM clients WHERE id = %s", (target_client,))
+            if not cursor.fetchone():
+                raise api_error(404, "Cliente no encontrado", "CLIENT_NOT_FOUND")
+            if contact_id is None:
+                if target_client != original["client_id"]:
+                    raise api_error(400, "Seleccione un contacto del cliente", "CONTACT_REQUIRED")
+            else:
+                target_contact = contact_id
+            cursor.execute("SELECT id FROM contacts WHERE id = %s AND company_id = %s", (target_contact, target_client))
+            if not cursor.fetchone():
+                raise api_error(400, f"El contacto {target_contact} no pertenece al cliente {target_client}", "CONTACT_CLIENT_MISMATCH")
 
         # 2. Fetch original items
         cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id", (quote_id,))
@@ -805,8 +835,8 @@ def duplicate_quote(quote_id: str, created_by_user_id: Optional[str] = None) -> 
             VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NULL)
         """, (
             new_quote_id,
-            original["client_id"],
-            original["contact_id"],
+            target_client,
+            target_contact,
             original.get("project_name"),
             original.get("notes"),
             "Draft",

@@ -30,6 +30,7 @@ jobs:
     env:
       APP_ENV: test
       RATE_LIMIT_ENABLED: "false"
+      ESTIMATOR_DB_URL: "postgresql://postgres:postgres@localhost:5432/metpro_test"
       METPRO_LEDGER_TEST_DB: "host=localhost port=5432 user=postgres password=postgres dbname=metpro_test"
     steps:
       - uses: actions/checkout@v4
@@ -42,6 +43,8 @@ jobs:
       - name: Load production schema (structure only)
         run: |
           psql "postgresql://postgres:postgres@localhost:5432/metpro_test" -v ON_ERROR_STOP=1 -q -f tests/fixtures/ci_schema.sql
+          psql "postgresql://postgres:postgres@localhost:5432/metpro_test" -v ON_ERROR_STOP=1 -q -f migrations/2026-10-22_estimator_schema.sql
+          psql "postgresql://postgres:postgres@localhost:5432/metpro_test" -v ON_ERROR_STOP=1 -q -f migrations/2026-10-22_estimator_seed_v1.sql
           psql "postgresql://postgres:postgres@localhost:5432/metpro_test" -c "ALTER DATABASE metpro_test SET lock_timeout = '10s'"
       - name: Tests
         run: python -m pytest -q -p no:cacheprovider -rs

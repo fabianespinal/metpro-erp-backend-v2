@@ -165,8 +165,12 @@ def test_invoiced_or_rejected_quotes_can_be_duplicated_for_a_new_client(db):
 
 @needs_db
 def test_options_endpoint(db, monkeypatch):
+    monkeypatch.delenv("TAX_FROM_CHARGES", raising=False)
     assert client.get("/quotes/options", headers=_hdr()).json()["data"] == {
-        "blank_quotes_enabled": True, "duplicate_change_client_enabled": True}
+        "blank_quotes_enabled": True, "duplicate_change_client_enabled": True, "tax_from_charges_enabled": False}
+    monkeypatch.setenv("TAX_FROM_CHARGES", "true")
+    assert client.get("/quotes/options", headers=_hdr()).json()["data"]["tax_from_charges_enabled"] is True
+    monkeypatch.delenv("TAX_FROM_CHARGES", raising=False)
     monkeypatch.setenv("BLANK_QUOTES_ENABLED", "false")
     assert client.get("/quotes/options", headers=_hdr()).json()["data"]["blank_quotes_enabled"] is False
     assert client.get("/quotes/options").status_code in (401, 403)

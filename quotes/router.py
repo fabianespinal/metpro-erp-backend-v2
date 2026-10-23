@@ -88,9 +88,11 @@ def pdf_option_flags(current_user: dict = Depends(require_auth)):
 def quote_options(current_user: dict = Depends(require_auth)):
     """Phase B switches, so screens show only what is switched on."""
     from core.quote_features import blank_quotes_enabled, duplicate_change_client_enabled
+    from tax.service import tax_from_charges_enabled
     return {
         "blank_quotes_enabled": blank_quotes_enabled(),
         "duplicate_change_client_enabled": duplicate_change_client_enabled(),
+        "tax_from_charges_enabled": tax_from_charges_enabled(),  # screens show the tax read-only when on
     }
 
 

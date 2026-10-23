@@ -80,6 +80,16 @@ def test_core_quantity_override_only_for_fixed_lines():
 
 
 # ---------------- switch (no database needed) ----------------
+def test_enabled_status_follows_switch_and_needs_login(monkeypatch):
+    import auth.service as auth_service
+    monkeypatch.setattr(auth_service, "ENFORCE_ACTIVE_CHECK", False)
+    assert client.get("/estimator/enabled").status_code == 401
+    monkeypatch.delenv("ENGINEERING_ESTIMATE_ENABLED", raising=False)
+    assert client.get("/estimator/enabled", headers=_hdr("user")).json()["data"] == {"enabled": False}
+    monkeypatch.setenv("ENGINEERING_ESTIMATE_ENABLED", "true")
+    assert client.get("/estimator/enabled", headers=_hdr("user")).json()["data"] == {"enabled": True}
+
+
 def test_missing_token_is_401_even_when_switch_off(monkeypatch):
     monkeypatch.delenv("ENGINEERING_ESTIMATE_ENABLED", raising=False)
     assert client.post("/estimator/calculate", json={}).status_code == 401
@@ -314,6 +324,16 @@ if DB:
         dup = client.post(f"/quotes/{qid}/duplicate", headers=world["user"][0]).json()["data"]["quote_id"]
         assert _one("SELECT quote_type FROM quotes WHERE quote_id = %s", (dup,))["quote_type"] is None
         assert _one("SELECT count(*) AS n FROM quote_edit_audit a JOIN quotes q ON q.id=a.quote_id WHERE q.quote_id IN (%s,%s)", (qid, dup))["n"] == 0
+
+    @needs_db
+    def test_get_quote_returns_quote_type(world):
+        est = _gen(world).json()["data"]["quote_id"]
+        assert client.get(f"/quotes/{est}", headers=world["user"][0]).json()["data"]["quote_type"] == "engineering_estimate"
+        std = client.post("/quotes/", json={"client_id": world["client_id"], "contact_id": world["contact_id"], "project_name": "s",
+                          "items": [{"product_name": "V", "quantity": 1, "unit_price": 1.0}],
+                          "included_charges": {"supervision": False, "admin": False, "insurance": False, "transport": False, "contingency": False}},
+                          headers=world["user"][0]).json()["data"]["quote_id"]
+        assert client.get(f"/quotes/{std}", headers=world["user"][0]).json()["data"]["quote_type"] is None
 
     @needs_db
     def test_public_page_does_not_leak_quote_type(world):

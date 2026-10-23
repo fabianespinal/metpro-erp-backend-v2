@@ -434,6 +434,7 @@ def get_quote_by_id(quote_id: str) -> dict:
                    tax_amount, grand_total, terms, payment_terms, valid_until,
                    tax_type_code, tax_rate, tax_label,
                    finalized_at, public_token, created_at, updated_at,
+                   to_jsonb(quotes)->>'quote_type' AS quote_type,
                    (SELECT COALESCE(u.full_name, u.username) FROM users u WHERE u.id = quotes.created_by_user_id) AS created_by_name
             FROM quotes
             WHERE quote_id = %s

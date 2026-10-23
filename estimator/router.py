@@ -1,7 +1,7 @@
 """Engineering Estimate API (I3). Admin and superadmin only. Switch off = 404 on every route."""
 from fastapi import APIRouter, Depends
 
-from auth.service import require_role
+from auth.service import require_auth, require_role
 from estimator import service
 from estimator.api_models import EstimateRequest, GenerateRequest, ParityRequest
 from estimator.switch import require_enabled
@@ -37,3 +37,13 @@ def get_run(run_id: int, user: dict = Depends(admin_user)):
 def run_parity(run_id: int, body: ParityRequest, user: dict = Depends(admin_user)):
     """Compare typed workbook values with the run. Not stored."""
     return service.parity(run_id, body.values)
+
+
+# Available to any logged-in user and NOT behind the switch: the screens ask it whether to show the estimator.
+status_router = APIRouter(prefix="/estimator", tags=["estimator"], dependencies=[Depends(require_auth)])
+
+
+@status_router.get("/enabled")
+def estimator_enabled_status():
+    from estimator.switch import estimator_enabled
+    return {"enabled": estimator_enabled()}

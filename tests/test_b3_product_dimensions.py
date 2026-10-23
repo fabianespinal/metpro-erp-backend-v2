@@ -19,7 +19,7 @@ from auth.service import create_access_token  # noqa: E402
 from main import app  # noqa: E402
 
 client = TestClient(app)
-FIELDS = ("length", "width", "height", "thickness", "area", "volume", "unit_of_measure")
+FIELDS = ("length", "width", "height", "thickness", "area", "volume")  # unit_of_measure is the Medidas label, not a dimension
 DSN = os.environ.get("METPRO_LEDGER_TEST_DB")
 needs_db = pytest.mark.skipif(not DSN, reason="METPRO_LEDGER_TEST_DB not set")
 
@@ -57,7 +57,7 @@ def test_model_validates_and_marks_which_fields_were_sent():
     from products.models import ProductBase
     p = ProductBase(name="x", unit_price=1, width=2.5)
     assert p.model_fields_set >= {"width"} and "length" not in p.model_fields_set
-    for bad in ({"length": -1}, {"area": float("nan")}, {"unit_of_measure": ""}, {"unit_of_measure": "x" * 21}):
+    for bad in ({"length": -1}, {"area": float("nan")}, {"unit_of_measure": "x" * 21}):
         with pytest.raises(ValidationError):
             ProductBase(name="x", unit_price=1, **bad)
 
@@ -107,11 +107,11 @@ def _body(r):
 @needs_db
 def test_create_and_update_store_dimensions_as_entered(db):
     r = client.post("/products/", json={"name": "Plancha", "unit_price": 10, "length": 2.44, "width": 1.22,
-                                         "thickness": 0.0125, "area": 2.9768, "unit_of_measure": "m"}, headers=_hdr())
+                                         "thickness": 0.0125, "area": 2.9768}, headers=_hdr())
     assert r.status_code == 200, r.text
     pid = _body(r)["id"]
     row = _row(db, pid)
-    assert float(row["length"]) == 2.44 and float(row["thickness"]) == 0.0125 and row["unit_of_measure"] == "m"
+    assert float(row["length"]) == 2.44 and float(row["thickness"]) == 0.0125
     assert row["height"] is None and float(row["area"]) == 2.9768 and row["area_manual"] is True  # typed area kept
     assert float(row["volume"]) == pytest.approx(0.0372)  # calculated: length x width x thickness (no height)
     # Update that omits dimensions keeps them; one that sends a field changes only it; null clears it.

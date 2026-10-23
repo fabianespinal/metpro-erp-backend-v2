@@ -337,11 +337,9 @@ CREATE TABLE public.products (
     thickness numeric(14,4),
     area numeric(18,4),
     volume numeric(18,4),
-    unit_of_measure text,
     area_manual boolean DEFAULT false NOT NULL,
     volume_manual boolean DEFAULT false NOT NULL,
-    CONSTRAINT products_dimensions_nonneg CHECK ((((length IS NULL) OR (length >= (0)::numeric)) AND ((width IS NULL) OR (width >= (0)::numeric)) AND ((height IS NULL) OR (height >= (0)::numeric)) AND ((thickness IS NULL) OR (thickness >= (0)::numeric)) AND ((area IS NULL) OR (area >= (0)::numeric)) AND ((volume IS NULL) OR (volume >= (0)::numeric)))),
-    CONSTRAINT products_unit_of_measure_len CHECK (((unit_of_measure IS NULL) OR ((char_length(unit_of_measure) >= 1) AND (char_length(unit_of_measure) <= 20))))
+    CONSTRAINT products_dimensions_nonneg CHECK ((((length IS NULL) OR (length >= (0)::numeric)) AND ((width IS NULL) OR (width >= (0)::numeric)) AND ((height IS NULL) OR (height >= (0)::numeric)) AND ((thickness IS NULL) OR (thickness >= (0)::numeric)) AND ((area IS NULL) OR (area >= (0)::numeric)) AND ((volume IS NULL) OR (volume >= (0)::numeric))))
 );
 
 

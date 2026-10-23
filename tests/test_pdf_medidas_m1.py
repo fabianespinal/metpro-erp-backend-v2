@@ -153,7 +153,7 @@ def test_flags_endpoint(db, monkeypatch):
     monkeypatch.setenv("PDF_PROJECT_DESC_ENABLED", "false")
     r = client.get("/quotes/pdf-options", headers=_hdr())
     assert r.status_code == 200
-    assert r.json()["data"] == {"medidas_enabled": True, "print_items_enabled": True, "project_desc_enabled": False}
+    assert r.json()["data"] == {"medidas_enabled": True, "print_items_enabled": True, "project_desc_enabled": False, "full_copy_enabled": False}
 
 
 @needs_db

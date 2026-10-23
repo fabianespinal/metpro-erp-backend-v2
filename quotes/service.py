@@ -524,6 +524,7 @@ def get_quote_with_contact(quote_id: str) -> dict:
                 q.valid_until,
                 q.created_at,
                 q.updated_at,
+                COALESCE((to_jsonb(q)->>'print_items')::boolean, true) AS print_items,
 
                 c.company_name,
                 c.address        AS company_address,

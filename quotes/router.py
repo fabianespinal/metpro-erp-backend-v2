@@ -119,6 +119,7 @@ def get_quote_public_pdf(token: Annotated[str, Path(pattern=PUBLIC_TOKEN_PATTERN
     totals = service.quote_document_totals(quote, items, raw_charges)  # B-13: same totals on every PDF
 
     pdf_stream = create_quote_pdf(
+        print_items=quote.get("print_items", True) is not False,  # PDF update: false = no item table
         doc_type="COTIZACION",
         signer_name=resolve_signer_name(None, quote.get("created_by_name")),
         doc_id=quote_label_for(quote),
@@ -193,6 +194,7 @@ def send_quote(
     totals = service.quote_document_totals(quote, items, raw_charges)  # B-13: same totals on every PDF
 
     pdf_stream = create_quote_pdf(
+        print_items=quote.get("print_items", True) is not False,  # PDF update: false = no item table
         doc_type="COTIZACION",
         signer_name=resolve_signer_name(current_user, quote.get("created_by_name")),
         seal=seal,
@@ -273,6 +275,7 @@ def get_quote_pdf(quote_id: str, print_seal: bool = False, current_user: dict = 
     totals = service.quote_document_totals(quote, items, raw_charges)  # B-13: same totals on every PDF
 
     pdf_stream = create_quote_pdf(
+        print_items=quote.get("print_items", True) is not False,  # PDF update: false = no item table
         doc_type="COTIZACION",
         signer_name=resolve_signer_name(current_user, quote.get("created_by_name")),
         seal=seal,

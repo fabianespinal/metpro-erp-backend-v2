@@ -132,7 +132,8 @@ def generate_quote_pdf(quote_id: str, current_user: dict = None, print_seal: boo
             grand_total=grand_total,
             signer_name=resolve_signer_name(current_user, quote.get('created_by_name')),
             seal=seal,
-            tax_label=t.get('tax_label')
+            tax_label=t.get('tax_label'),
+            print_items=quote.get('print_items', True) is not False,
         )
 
         return StreamingResponse(
@@ -302,7 +303,8 @@ def generate_invoice_pdf(invoice_id: int, current_user: dict = None, print_seal:
             amount_due=amount_due,
             signer_name=resolve_signer_name(current_user, invoice.get('created_by_name')),
             seal=seal,
-            tax_label=t.get('tax_label')
+            tax_label=t.get('tax_label'),
+            print_items=invoice.get('print_items', True) is not False,
         )
 
         return StreamingResponse(

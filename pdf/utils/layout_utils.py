@@ -93,6 +93,7 @@ def _category_heading(pdf, item, current, width):
 
 
 from core.visibility import customer_items  # noqa: E402  (A3)
+from core import pdf_options  # noqa: E402
 
 
 def build_quote_invoice_pdf(
@@ -108,12 +109,18 @@ def build_quote_invoice_pdf(
     amount_due=0,
     signer_name=None,
     seal=None,
-    tax_label=None
+    tax_label=None,
+    print_items=True
 ):
     payments = payments or []
     amount_paid = amount_paid or 0
     amount_due = amount_due or 0
     items = customer_items(items)  # A3: hidden lines stay in the totals the caller computed, never print
+    # PDF update. print_items = false (the quote checkbox, copied to the invoice) removes the whole item table;
+    # charges and totals are the caller's and never change. The other two features follow their switches.
+    show_items = print_items is not False
+    project_heading = pdf_options.project_desc_enabled() and bool(project_name)
+    show_units = show_items and pdf_options.medidas_enabled() and any(pdf_options.clean_unit(i.get('unit_of_measure')) for i in items)
 
     pdf = FPDF()
 
@@ -200,7 +207,7 @@ def build_quote_invoice_pdf(
         pdf.set_text_color(30, 30, 30)
         pdf.cell(0, 4, sanitize_text(fmt_day(valid_until)), 0, 1)
 
-    if project_name:
+    if project_name and not project_heading:  # with the heading switch on, the name prints above the items instead
         pdf.set_x(left_x)
         pdf.set_font('Arial', 'B', 7)
         pdf.set_text_color(80, 80, 80)
@@ -266,43 +273,61 @@ def build_quote_invoice_pdf(
     final_y = max(pdf.get_y(), start_y + 20)
     pdf.set_y(final_y + 4)
 
-    pdf.set_font('Arial', 'B', 9)
-    pdf.set_text_color(30, 30, 30)
-    pdf.cell(0, 5, 'Detalle de Items', 0, 1, 'L')
-    pdf.ln(2)
+    def _project_heading():
+        pdf.set_x(10)
+        pdf.set_font('Arial', 'B', 9)
+        pdf.set_text_color(30, 30, 30)
+        pdf.multi_cell(190, 5, sanitize_text('Proyecto desc.: ' + str(project_name)), 0, 'L')
+        pdf.ln(2)
 
-    pdf.set_fill_color(245, 245, 245)
-    pdf.set_draw_color(220, 220, 220)
-    pdf.set_font('Arial', 'B', 7)
-    pdf.set_text_color(60, 60, 60)
-    pdf.cell(85, 6, 'DESCRIPCIÓN', 1, 0, 'L', True)
-    pdf.cell(25, 6, 'CANTIDAD', 1, 0, 'C', True)
-    pdf.cell(35, 6, 'PRECIO UNIT.', 1, 0, 'R', True)
-    pdf.cell(45, 6, 'TOTAL', 1, 1, 'R', True)
+    if not show_items and project_heading:
+        _project_heading()  # no table: the heading still prints, then the totals follow
 
-    pdf.set_font('Arial', '', 7)
-    pdf.set_text_color(30, 30, 30)
-    row_color = True
+    if show_items:
+        pdf.set_font('Arial', 'B', 9)
+        pdf.set_text_color(30, 30, 30)
+        pdf.cell(0, 5, 'Detalle de Items', 0, 1, 'L')
+        pdf.ln(2)
+        if project_heading:
+            _project_heading()
 
-    current_category = None
-    for item in items:
-        current_category = _category_heading(pdf, item, current_category, 190)
-        qty = float(item.get('quantity') or 0)
-        price = float(item.get('unit_price') or 0)
-        subtotal = qty * price
-        product_name = sanitize_text(item.get('product_name', 'Item'))[:50]
+        pdf.set_fill_color(245, 245, 245)
+        pdf.set_draw_color(220, 220, 220)
+        pdf.set_font('Arial', 'B', 7)
+        pdf.set_text_color(60, 60, 60)
+        desc_w, name_max = (60, 38) if show_units else (85, 50)  # MEDIDAS takes 25 from the description
+        pdf.cell(desc_w, 6, 'DESCRIPCIÓN', 1, 0, 'L', True)
+        if show_units:
+            pdf.cell(25, 6, 'MEDIDAS', 1, 0, 'C', True)
+        pdf.cell(25, 6, 'CANTIDAD', 1, 0, 'C', True)
+        pdf.cell(35, 6, 'PRECIO UNIT.', 1, 0, 'R', True)
+        pdf.cell(45, 6, 'TOTAL', 1, 1, 'R', True)
 
-        if row_color:
-            pdf.set_fill_color(252, 252, 252)
-        else:
-            pdf.set_fill_color(255, 255, 255)
+        pdf.set_font('Arial', '', 7)
+        pdf.set_text_color(30, 30, 30)
+        row_color = True
 
-        pdf.cell(85, 5, product_name, 1, 0, 'L', True)
-        pdf.cell(25, 5, f'{qty:.2f}', 1, 0, 'C', True)
-        pdf.cell(35, 5, f'${price:,.2f}', 1, 0, 'R', True)
-        pdf.cell(45, 5, f'${subtotal:,.2f}', 1, 1, 'R', True)
+        current_category = None
+        for item in items:
+            current_category = _category_heading(pdf, item, current_category, 190)
+            qty = float(item.get('quantity') or 0)
+            price = float(item.get('unit_price') or 0)
+            subtotal = qty * price
+            product_name = sanitize_text(item.get('product_name', 'Item'))[:name_max]
 
-        row_color = not row_color
+            if row_color:
+                pdf.set_fill_color(252, 252, 252)
+            else:
+                pdf.set_fill_color(255, 255, 255)
+
+            pdf.cell(desc_w, 5, product_name, 1, 0, 'L', True)
+            if show_units:
+                pdf.cell(25, 5, sanitize_text(pdf_options.clean_unit(item.get('unit_of_measure')) or ''), 1, 0, 'C', True)
+            pdf.cell(25, 5, f'{qty:.2f}', 1, 0, 'C', True)
+            pdf.cell(35, 5, f'${price:,.2f}', 1, 0, 'R', True)
+            pdf.cell(45, 5, f'${subtotal:,.2f}', 1, 1, 'R', True)
+
+            row_color = not row_color
 
     pdf.ln(6)
 

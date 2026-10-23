@@ -466,6 +466,7 @@ def get_invoice_with_contact(invoice_id: int) -> dict:
                 i.tax_type_code,
                 i.tax_rate,
                 i.tax_label,
+                COALESCE((to_jsonb(i)->>'print_items')::boolean, true) AS print_items,
                 -- Same source as the internal invoice PDF (pdf/service.py): the quote, then the invoice.
                 q.project_name,
                 COALESCE(q.payment_terms, i.payment_terms) AS payment_terms,

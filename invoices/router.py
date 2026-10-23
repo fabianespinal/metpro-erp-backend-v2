@@ -106,6 +106,7 @@ def send_invoice(
     # -------------------------------------------------------------------------------
 
     pdf_stream = create_invoice_pdf(
+        print_items=invoice.get("print_items", True) is not False,  # PDF update: false = no item table
         doc_type="FACTURA",
         signer_name=resolve_signer_name(current_user, invoice.get("created_by_name")),
         doc_id=invoice["invoice_number"],
@@ -330,6 +331,7 @@ def _render_public_invoice_pdf(invoice_id: int) -> Response:
         conn.close()
 
     pdf_stream = create_invoice_pdf(
+        print_items=invoice.get("print_items", True) is not False,  # PDF update: false = no item table
         doc_type="FACTURA",
         signer_name=resolve_signer_name(None, invoice.get("created_by_name")),
         doc_id=invoice["invoice_number"],

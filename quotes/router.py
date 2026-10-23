@@ -79,6 +79,7 @@ def pdf_option_flags(current_user: dict = Depends(require_auth)):
     return {
         "medidas_enabled": pdf_options.medidas_enabled(),
         "print_items_enabled": pdf_options.print_items_enabled(),
+        "full_copy_enabled": pdf_options.full_copy_enabled(),
         "project_desc_enabled": pdf_options.project_desc_enabled(),
     }
 

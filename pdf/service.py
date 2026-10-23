@@ -23,10 +23,22 @@ import logging
 logger = logging.getLogger("metpro.pdf")
 
 
+def _check_full_copy(full_copy: bool, current_user: dict) -> None:
+    """The internal full copy needs its switch on and an admin or superadmin. Everything else is refused."""
+    if not full_copy:
+        return
+    from core import pdf_options
+    if not pdf_options.full_copy_enabled():
+        raise api_error(404, "La copia completa no está habilitada", "FULL_COPY_DISABLED")
+    if (current_user or {}).get("role") not in ("admin", "superadmin"):
+        raise api_error(403, "Permisos insuficientes", "INSUFFICIENT_PERMISSIONS")
+
+
 # ============================================================
 # QUOTE PDF GENERATION
 # ============================================================
-def generate_quote_pdf(quote_id: str, current_user: dict = None, print_seal: bool = False) -> StreamingResponse:
+def generate_quote_pdf(quote_id: str, current_user: dict = None, print_seal: bool = False, full_copy: bool = False) -> StreamingResponse:
+    _check_full_copy(full_copy, current_user)
     seal = seal_for_pdf(print_seal)  # None unless the request asks for it
     conn = None
     try:
@@ -134,12 +146,13 @@ def generate_quote_pdf(quote_id: str, current_user: dict = None, print_seal: boo
             seal=seal,
             tax_label=t.get('tax_label'),
             print_items=quote.get('print_items', True) is not False,
+            full_copy=full_copy,
         )
 
         return StreamingResponse(
             pdf_stream,
             media_type='application/pdf',
-            headers={'Content-Disposition': f'attachment; filename={quote_label_for(quote)}_cotizacion.pdf'}
+            headers={'Content-Disposition': f'attachment; filename={quote_label_for(quote)}_cotizacion{"_completa" if full_copy else ""}.pdf'}
         )
 
     except HTTPException:
@@ -155,7 +168,8 @@ def generate_quote_pdf(quote_id: str, current_user: dict = None, print_seal: boo
 # ============================================================
 # INVOICE PDF GENERATION
 # ============================================================
-def generate_invoice_pdf(invoice_id: int, current_user: dict = None, print_seal: bool = False) -> StreamingResponse:
+def generate_invoice_pdf(invoice_id: int, current_user: dict = None, print_seal: bool = False, full_copy: bool = False) -> StreamingResponse:
+    _check_full_copy(full_copy, current_user)
     seal = seal_for_pdf(print_seal)  # None unless the request asks for it
     conn = None
     try:
@@ -305,12 +319,13 @@ def generate_invoice_pdf(invoice_id: int, current_user: dict = None, print_seal:
             seal=seal,
             tax_label=t.get('tax_label'),
             print_items=invoice.get('print_items', True) is not False,
+            full_copy=full_copy,
         )
 
         return StreamingResponse(
             pdf_stream,
             media_type='application/pdf',
-            headers={'Content-Disposition': f'attachment; filename={invoice["invoice_number"]}_factura.pdf'}
+            headers={'Content-Disposition': f'attachment; filename={invoice["invoice_number"]}_factura{"_completa" if full_copy else ""}.pdf'}
         )
 
     except HTTPException:

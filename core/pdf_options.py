@@ -22,6 +22,11 @@ def print_items_enabled() -> bool:
     return _on("PDF_PRINT_ITEMS_ENABLED")
 
 
+def full_copy_enabled() -> bool:
+    """Internal "full copy" PDF (every line, ignores the hide controls). Admin and superadmin only."""
+    return _on("PDF_FULL_COPY_ENABLED")
+
+
 def project_desc_enabled() -> bool:
     return _on("PDF_PROJECT_DESC_ENABLED")
 

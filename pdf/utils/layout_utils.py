@@ -110,12 +110,17 @@ def build_quote_invoice_pdf(
     signer_name=None,
     seal=None,
     tax_label=None,
-    print_items=True
+    print_items=True,
+    full_copy=False
 ):
     payments = payments or []
     amount_paid = amount_paid or 0
     amount_due = amount_due or 0
-    items = customer_items(items)  # A3: hidden lines stay in the totals the caller computed, never print
+    # Internal full copy (admin only, own switch): every line prints and the checkbox is ignored. Totals are the same.
+    if full_copy:
+        print_items = True
+    else:
+        items = customer_items(items)  # A3: hidden lines stay in the totals the caller computed, never print
     # PDF update. print_items = false (the quote checkbox, copied to the invoice) removes the whole item table;
     # charges and totals are the caller's and never change. The other two features follow their switches.
     show_items = print_items is not False

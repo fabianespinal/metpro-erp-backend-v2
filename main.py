@@ -98,6 +98,7 @@ from cover_page.router import router as cover_page_router
 from terms_page.router import router as terms_router
 from company_settings.router import router as company_settings_router
 from tax.router import router as tax_router
+from estimator.router import router as estimator_router
 
 
 app.include_router(auth_router)
@@ -117,6 +118,7 @@ app.include_router(cover_page_router)
 app.include_router(terms_router)
 app.include_router(company_settings_router)
 app.include_router(tax_router)
+app.include_router(estimator_router)  # ENGINEERING_ESTIMATE_ENABLED off by default: every route answers 404
 
 
 # ============================================================

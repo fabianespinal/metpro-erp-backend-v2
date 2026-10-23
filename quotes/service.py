@@ -12,6 +12,7 @@ from database import get_db_connection
 from core.errors import internal_error
 from quotes.dynamic_charges import dynamic_charges_total
 from core.numbering import invoice_label
+from estimator.quote_lock import ADMIN_ROLES, is_estimate, money_changes
 from psycopg2.extras import RealDictCursor, execute_values
 
 INS_SQL = "INSERT INTO quote_items (quote_id, product_name, quantity, unit_price, discount_type, discount_value) VALUES %s"
@@ -267,6 +268,105 @@ TOTALS_UPDATE_SQL = """
 # =============================================================================
 # SECTION 3: QUOTE CRUD OPERATIONS
 # =============================================================================
+def create_quote_in_tx(
+    cursor,
+    client_id: int,
+    contact_id: int,
+    project_name: Optional[str],
+    notes: Optional[str],
+    items: List[dict],
+    included_charges: dict,
+    payment_terms: Optional[str] = None,
+    valid_until: Optional[date] = None,
+    created_by_user_id: Optional[str] = None,
+    tax_type_code: Optional[str] = None,
+    quote_type: Optional[str] = None,
+) -> str:
+    """Validate and insert a Draft quote and its lines on the caller's cursor. No commit. Returns quote_id.
+
+    Shared by create_quote (own connection) and the estimator Generate (one transaction with the run).
+    quote_type is written only when given (estimate quotes)."""
+    cursor.execute("SELECT id FROM clients WHERE id = %s", (client_id,))
+    if not cursor.fetchone():
+        raise api_error(404, "Cliente no encontrado", "CLIENT_NOT_FOUND")
+
+    # Validate that the contact belongs to the selected client
+    if contact_id is None:
+        raise api_error(400, "Seleccione un contacto del cliente", "CONTACT_REQUIRED")
+    cursor.execute(
+        "SELECT id FROM contacts WHERE id = %s AND company_id = %s",
+        (contact_id, client_id),
+    )
+    if not cursor.fetchone():
+        raise api_error(400, f"El contacto {contact_id} no pertenece al cliente {client_id}", "CONTACT_CLIENT_MISMATCH")
+
+    _validate_product_ids(cursor, items)
+    _validate_item_discounts(items)
+    quote_id = generate_quote_id()
+    from tax.service import resolve_tax_type, tax_from_charges_enabled, tax_code_for_charges
+    if tax_from_charges_enabled():
+        tax_type_code = tax_code_for_charges(included_charges)  # client value ignored
+    tax = resolve_tax_type(cursor, tax_type_code)  # None = the default type
+    totals = _compute_quote_totals(items, included_charges, tax["tax_rate"])
+
+    # public_token is not set here. It stays NULL until finalize.
+    columns = (
+        "quote_id, client_id, contact_id, project_name, notes, status, "
+        "included_charges, total_amount, payment_terms, valid_until, "
+        "subtotal, discount_total, tax_amount, grand_total, created_by_user_id, "
+        "tax_type_code, tax_rate, tax_label"
+    )
+    values = [
+        quote_id,
+        client_id,
+        contact_id,
+        project_name,
+        notes,
+        "Draft",
+        json.dumps(included_charges),
+        totals["grand_total"],
+        payment_terms,
+        _serialize_date(valid_until),
+        totals["subtotal_general"],
+        totals["total_discounts"],
+        totals["tax_amount"],
+        totals["grand_total"],
+        created_by_user_id,
+        tax["tax_type_code"],
+        tax["tax_rate"],
+        tax["tax_label"],
+    ]
+    placeholders = "%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s"
+    if quote_type is not None:
+        # Only estimate quotes name the column, so the standard path works before the I1 migration is applied.
+        columns += ", quote_type"
+        placeholders += ", %s"
+        values.append(quote_type)
+    cursor.execute(f"INSERT INTO quotes ({columns}) VALUES ({placeholders})", values)
+
+    # No switch check on create: hidden lines here come from a template pack or a duplicate. The switch
+    # (PRINT_CONTROLS_ENABLED) governs the screen control and hiding MORE lines on update.
+    rows = [
+        (
+            quote_id,
+            item["product_name"],
+            item["quantity"],
+            item["unit_price"],
+            item.get("discount_type", "none"),
+            item.get("discount_value", 0.0),
+            item.get("item_type") or "product",
+            item.get("description"),
+            item.get("product_id"),
+            item.get("category"),
+            _print_flag(item),
+        )
+        for item in items
+    ]
+    if rows:
+        execute_values(cursor, INS_ITEMS_SQL, rows)
+    return quote_id
+
+
 def create_quote(
     client_id: int,
     contact_id: int,
@@ -284,79 +384,10 @@ def create_quote(
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        cursor.execute("SELECT id FROM clients WHERE id = %s", (client_id,))
-        if not cursor.fetchone():
-            raise api_error(404, "Cliente no encontrado", "CLIENT_NOT_FOUND")
-
-        # Validate that the contact belongs to the selected client
-        if contact_id is None:
-            raise api_error(400, "Seleccione un contacto del cliente", "CONTACT_REQUIRED")
-        cursor.execute(
-            "SELECT id FROM contacts WHERE id = %s AND company_id = %s",
-            (contact_id, client_id),
+        quote_id = create_quote_in_tx(
+            cursor, client_id, contact_id, project_name, notes, items, included_charges,
+            payment_terms, valid_until, created_by_user_id, tax_type_code,
         )
-        if not cursor.fetchone():
-            raise api_error(400, f"El contacto {contact_id} no pertenece al cliente {client_id}", "CONTACT_CLIENT_MISMATCH")
-
-        _validate_product_ids(cursor, items)
-        _validate_item_discounts(items)
-        quote_id = generate_quote_id()
-        from tax.service import resolve_tax_type, tax_from_charges_enabled, tax_code_for_charges
-        if tax_from_charges_enabled():
-            tax_type_code = tax_code_for_charges(included_charges)  # client value ignored
-        tax = resolve_tax_type(cursor, tax_type_code)  # None = the default type
-        totals = _compute_quote_totals(items, included_charges, tax["tax_rate"])
-
-        # public_token is not set here. It stays NULL until finalize.
-        cursor.execute("""
-            INSERT INTO quotes
-                (quote_id, client_id, contact_id, project_name, notes, status,
-                 included_charges, total_amount, payment_terms, valid_until,
-                 subtotal, discount_total, tax_amount, grand_total, created_by_user_id,
-                 tax_type_code, tax_rate, tax_label)
-            VALUES
-                (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """, (
-            quote_id,
-            client_id,
-            contact_id,
-            project_name,
-            notes,
-            "Draft",
-            json.dumps(included_charges),
-            totals["grand_total"],
-            payment_terms,
-            _serialize_date(valid_until),
-            totals["subtotal_general"],
-            totals["total_discounts"],
-            totals["tax_amount"],
-            totals["grand_total"],
-            created_by_user_id,
-            tax["tax_type_code"],
-            tax["tax_rate"],
-            tax["tax_label"],
-        ))
-
-        # No switch check on create: hidden lines here come from a template pack or a duplicate. The switch
-        # (PRINT_CONTROLS_ENABLED) governs the screen control and hiding MORE lines on update.
-        rows = [
-            (
-                quote_id,
-                item["product_name"],
-                item["quantity"],
-                item["unit_price"],
-                item.get("discount_type", "none"),
-                item.get("discount_value", 0.0),
-                item.get("item_type") or "product",
-                item.get("description"),
-                item.get("product_id"),
-                item.get("category"),
-                _print_flag(item),
-            )
-            for item in items
-        ]
-        if rows:
-            execute_values(cursor, INS_ITEMS_SQL, rows)
 
         conn.commit()
 
@@ -551,8 +582,8 @@ def get_all_quotes(
 ALLOW_EDIT_NON_DRAFT_QUOTES = False  # Business rule: only Draft quotes are editable.
 
 
-def update_quote(quote_id: str, quote_update) -> dict:
-    """Update an existing quote."""
+def update_quote(quote_id: str, quote_update, actor: Optional[dict] = None) -> dict:
+    """Update an existing quote. actor = the token payload (role, user_id); used only by the estimate-quote lock."""
     conn = None
     try:
         conn = get_db_connection()
@@ -578,6 +609,35 @@ def update_quote(quote_id: str, quote_update) -> dict:
         included_charges = update_dict.pop('included_charges', None)
         # A1: choosing a tax type re-reads it from tax_types and stores the snapshot. Only Draft quotes get here.
         tax_type_code = update_dict.pop('tax_type_code', None)
+        edit_reason = update_dict.pop('edit_reason', None)
+
+        # Estimate quotes (quote_type = engineering_estimate): money fields are locked for regular users; an admin
+        # needs a reason and every change is audited. Other quotes never enter this block.
+        estimate_audit = []
+        if is_estimate(quote):
+            cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id", (quote_id,))
+            old_rows = [dict(r) for r in cursor.fetchall()]
+            new_items = None if items is None else [_item_as_dict(i) for i in items]
+            new_charges = None
+            if included_charges is not None:
+                new_charges = included_charges.dict() if hasattr(included_charges, 'dict') else (
+                    json.loads(included_charges) if isinstance(included_charges, str) else included_charges)
+            old_charges = quote.get("included_charges")
+            if isinstance(old_charges, str):
+                old_charges = json.loads(old_charges)
+            estimate_audit = money_changes(old_rows, new_items, old_charges, new_charges,
+                                           quote.get("tax_type_code"), tax_type_code)
+            if estimate_audit:
+                if (actor or {}).get("role") not in ADMIN_ROLES:
+                    raise api_error(403, "Los precios, cantidades, descuentos, cargos e impuestos de un estimado de ingeniería solo los puede cambiar un administrador", "ESTIMATE_LOCKED")
+                if not (edit_reason or "").strip():
+                    raise api_error(400, "Indique el motivo del cambio", "ESTIMATE_EDIT_REASON_REQUIRED")
+                for ch in estimate_audit:
+                    cursor.execute(
+                        "INSERT INTO quote_edit_audit (quote_id, quote_item_id, field, old_value, new_value, reason, user_id) "
+                        "SELECT id, %s, %s, %s, %s, %s, %s FROM quotes WHERE quote_id = %s",
+                        (ch["item_id"], ch["field"], ch["old"], ch["new"], edit_reason.strip(), (actor or {}).get("user_id"), quote_id),
+                    )
 
         if 'valid_until' in update_dict and update_dict['valid_until'] is not None:
             update_dict['valid_until'] = _serialize_date(update_dict['valid_until'])
@@ -776,7 +836,8 @@ def duplicate_quote(quote_id: str, created_by_user_id: Optional[str] = None) -> 
             SELECT quote_id, client_id, contact_id, project_name, notes, status,
                    included_charges, total_amount, payment_terms, valid_until, terms,
                    subtotal, discount_total, tax_amount, grand_total,
-                   tax_type_code, tax_rate, tax_label
+                   tax_type_code, tax_rate, tax_label,
+                   to_jsonb(quotes)->>'quote_type' AS quote_type
             FROM quotes
             WHERE quote_id = %s
         """, (quote_id,))
@@ -857,6 +918,11 @@ def duplicate_quote(quote_id: str, created_by_user_id: Optional[str] = None) -> 
         ]
         if rows:
             execute_values(cursor, INS_DUP_SQL, rows)
+
+        # R4: a copy of an estimate quote stays an estimate quote (the money lock follows the copy).
+        # to_jsonb in the SELECT above keeps this working before the quote_type column exists (NULL).
+        if original.get("quote_type"):
+            cursor.execute("UPDATE quotes SET quote_type = %s WHERE quote_id = %s", (original["quote_type"], new_quote_id))
 
         conn.commit()
 

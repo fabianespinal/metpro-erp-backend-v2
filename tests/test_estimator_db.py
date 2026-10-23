@@ -26,6 +26,12 @@ with open(os.path.join(ROOT, "tests", "fixtures", "estimator_golden.json")) as f
     GOLDEN = json.load(fh)
 
 
+@pytest.fixture(autouse=True)
+def _seed():
+    from tests.estimator_seed_helper import ensure_seed
+    ensure_seed(os.environ["ESTIMATOR_DB_URL"])
+
+
 @pytest.fixture
 def cur():
     conn = psycopg2.connect(os.environ["ESTIMATOR_DB_URL"])

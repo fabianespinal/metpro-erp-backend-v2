@@ -35,6 +35,8 @@ EXPECTED = {
     ("pdf/service.py", 404, "Factura no encontrada", "INVOICE_NOT_FOUND"),
     ("quotes/service.py", 409, "Esta cotización tiene líneas ocultas; actualice la pantalla antes de guardar", "PRINT_FLAG_REQUIRED"),  # A3
     ("quotes/service.py", 400, "El control de impresión no está habilitado", "PRINT_CONTROLS_DISABLED"),  # A3
+    ("quotes/service.py", 403, "Los precios, cantidades, descuentos, cargos e impuestos de un estimado de ingeniería solo los puede cambiar un administrador", "ESTIMATE_LOCKED"),  # I3
+    ("quotes/service.py", 400, "Indique el motivo del cambio", "ESTIMATE_EDIT_REASON_REQUIRED"),  # I3
     ("quotes/service.py", 404, "Cliente no encontrado", "CLIENT_NOT_FOUND"),
     ("quotes/service.py", 400, "El contacto {contact_id} no pertenece al cliente {client_id}", "CONTACT_CLIENT_MISMATCH"),
     ("quotes/service.py", 400, "Seleccione un contacto del cliente", "CONTACT_REQUIRED"),

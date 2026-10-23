@@ -118,6 +118,9 @@ class QuoteUpdate(BaseModel):
     included_charges: Optional[IncludedCharges] = None
     # A1: changes the snapshot. Draft only (the whole update is Draft-only).
     tax_type_code: Optional[str] = Field(default=None, max_length=40)
+    # Engineering estimate quotes: why an admin changed prices, quantities, discounts, charges or tax.
+    # Never stored on the quote; written to quote_edit_audit.
+    edit_reason: Optional[str] = Field(default=None, max_length=500)
 
 
 # -----------------------------

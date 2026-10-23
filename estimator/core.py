@@ -4,7 +4,7 @@ from typing import Dict, List, Optional
 
 from estimator.catalog import LINES, LineDef
 from estimator.constants import DEFAULT_CONSTANTS, Constants
-from estimator.inputs import EstimateInputs, validate_inputs
+from estimator.inputs import EstimateInputs, EstimatorInputError, validate_inputs
 from estimator.rules import LINE_RULES, RULES
 
 
@@ -39,8 +39,17 @@ def calculate(
     prices: Optional[Dict[int, float]] = None,
     *,
     refuse_fractional_frames: bool = False,
+    quantity_overrides: Optional[Dict[int, float]] = None,
 ) -> EstimateResult:
+    """quantity_overrides: workbook row -> quantity, allowed only for lines whose quantity is a typed
+    (fixed) value in the workbook. Calculated quantities cannot be overridden here."""
     inp = validate_inputs(inputs, refuse_fractional_frames=refuse_fractional_frames)
+    fixed_rows = {ld.row for ld in LINES if ld.fixed_qty is not None}
+    for row, qty in (quantity_overrides or {}).items():
+        if row not in fixed_rows:
+            raise EstimatorInputError("QUANTITY_OVERRIDE_NOT_ALLOWED", f"La línea {row} tiene cantidad calculada y no se puede cambiar")
+        if not isinstance(qty, (int, float)) or isinstance(qty, bool) or qty < 0:
+            raise EstimatorInputError("QUANTITY_OVERRIDE_INVALID", f"Cantidad no válida para la línea {row}")
     ctx: Dict[str, float] = {
         "E9": inp.ancho, "E11": inp.largo, "E13": inp.altura_laterales,
         "E15": inp.altura_techado_lateral, "E17": inp.distancia_ejes,
@@ -61,7 +70,10 @@ def calculate(
         if ld.total_is_price:
             qty, total = None, price
         else:
-            qty = float(ld.fixed_qty) if ld.qty_cell is None else ctx[ld.qty_cell]
+            if ld.qty_cell is None:
+                qty = float((quantity_overrides or {}).get(ld.row, ld.fixed_qty))
+            else:
+                qty = ctx[ld.qty_cell]
             total = qty * price
         lines.append(LineResult(ld.row, ld.label, ld.unit, ld.category, qty, price, total, ld.role))
 

@@ -348,7 +348,7 @@ def update_quote(
     current_user: dict = Depends(require_auth),
 ):
     """Update an existing quote"""
-    return service.update_quote(quote_id, quote_update)
+    return service.update_quote(quote_id, quote_update, actor=current_user)
 
 
 @router.patch("/{quote_id}/status")

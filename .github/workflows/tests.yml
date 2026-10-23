@@ -45,6 +45,12 @@ jobs:
           psql "postgresql://postgres:postgres@localhost:5432/metpro_test" -v ON_ERROR_STOP=1 -q -f tests/fixtures/ci_schema.sql
           psql "postgresql://postgres:postgres@localhost:5432/metpro_test" -v ON_ERROR_STOP=1 -q -f migrations/2026-10-22_estimator_schema.sql
           psql "postgresql://postgres:postgres@localhost:5432/metpro_test" -v ON_ERROR_STOP=1 -q -f migrations/2026-10-22_estimator_seed_v1.sql
+          psql "postgresql://postgres:postgres@localhost:5432/metpro_test" -v ON_ERROR_STOP=1 -q -f migrations/2026-10-22_estimator_run_idempotency.sql
           psql "postgresql://postgres:postgres@localhost:5432/metpro_test" -c "ALTER DATABASE metpro_test SET lock_timeout = '10s'"
       - name: Tests
         run: python -m pytest -q -p no:cacheprovider -rs
+      - name: Estimator API tests (database)
+        env:
+          ESTIMATOR_API_TESTS: "1"
+          DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/metpro_test"
+        run: python -m pytest -q -p no:cacheprovider -rs tests/test_estimator_api.py

@@ -3,7 +3,7 @@
 The public pages need document numbers, client/contact display data, lines and totals.
 They never need database ids, the internal quote UUID, or who created the document.
 """
-INTERNAL_KEYS = ("id", "quote_id", "client_id", "contact_id", "created_by_user_id", "created_by_name", "public_token")
+INTERNAL_KEYS = ("id", "quote_id", "client_id", "contact_id", "created_by_user_id", "created_by_name", "public_token", "quote_type")
 INTERNAL_ITEM_KEYS = ("id", "quote_id", "invoice_id", "product_id")
 
 

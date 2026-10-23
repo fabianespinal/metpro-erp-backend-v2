@@ -6,7 +6,7 @@ constant keys). Draft versions load only with allow_draft=True (tests and previe
 runs use an active version.
 """
 import dataclasses
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict
 
 from estimator import RULE_REVISION
@@ -28,6 +28,8 @@ class LoadedVersion:
     constants: Constants
     prices: Dict[int, float]
     profiles: Dict[str, ProfileChoice]
+    item_types: Dict[int, str] = field(default_factory=dict)
+    print_flags: Dict[int, bool] = field(default_factory=dict)
 
 
 def load_version(cur, version_id: int, *, allow_draft: bool = False) -> LoadedVersion:
@@ -52,7 +54,7 @@ def load_version(cur, version_id: int, *, allow_draft: bool = False) -> LoadedVe
     constants = Constants(**stored)
 
     cur.execute(
-        "SELECT row_ref, driver_key, fixed_quantity, unit_label, total_is_price, role_key, price "
+        "SELECT row_ref, driver_key, fixed_quantity, unit_label, total_is_price, role_key, price, item_type, print_on_pdf "
         "FROM public.estimator_materials WHERE version_id = %s",
         (version_id,),
     )
@@ -60,6 +62,8 @@ def load_version(cur, version_id: int, *, allow_draft: bool = False) -> LoadedVe
     if set(rows) != {ln.row for ln in LINES}:
         raise EstimatorVersionError("material lines do not match the deployed line catalog")
     prices: Dict[int, float] = {}
+    item_types: Dict[int, str] = {}
+    print_flags: Dict[int, bool] = {}
     for ln in LINES:
         r = rows[ln.row]
         fixed = None if r["fixed_quantity"] is None else float(r["fixed_quantity"])
@@ -72,10 +76,12 @@ def load_version(cur, version_id: int, *, allow_draft: bool = False) -> LoadedVe
         ):
             raise EstimatorVersionError(f"material line {ln.row} differs from the deployed rule set")
         prices[ln.row] = float(r["price"])
+        item_types[ln.row] = r["item_type"]
+        print_flags[ln.row] = bool(r["print_on_pdf"])
 
     cur.execute(
         "SELECT designation, lb_per_ft FROM public.estimator_profiles WHERE version_id = %s AND status = 'active'",
         (version_id,),
     )
     profiles = {r["designation"]: ProfileChoice(r["designation"], float(r["lb_per_ft"])) for r in cur.fetchall()}
-    return LoadedVersion(head["id"], head["version"], head["status"], head["rule_revision"], constants, prices, profiles)
+    return LoadedVersion(head["id"], head["version"], head["status"], head["rule_revision"], constants, prices, profiles, item_types, print_flags)

@@ -2,6 +2,7 @@ import logging
 from typing import List, Optional
 
 from fastapi import HTTPException
+import psycopg2.errors
 from psycopg2.extras import RealDictCursor
 
 from core.errors import api_error, internal_error
@@ -124,7 +125,11 @@ def delete_supplier(supplier_id: int) -> dict:
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute("DELETE FROM suppliers WHERE id = %s", (supplier_id,))
+        try:
+            cur.execute("DELETE FROM suppliers WHERE id = %s", (supplier_id,))
+        except psycopg2.errors.ForeignKeyViolation:
+            conn.rollback()
+            raise api_error(400, "El suplidor tiene RFQ u órdenes de compra y no se puede eliminar", "SUPPLIER_IN_USE")
         if cur.rowcount == 0:
             raise api_error(404, "Suplidor no encontrado", "SUPPLIER_NOT_FOUND")
         conn.commit()

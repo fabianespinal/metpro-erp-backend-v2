@@ -100,12 +100,14 @@ from terms_page.router import router as terms_router
 from company_settings.router import router as company_settings_router
 from tax.router import router as tax_router
 from estimator.router import router as estimator_router, status_router as estimator_status_router
+from rfq.router import router as rfq_router  # after quotes: pdf/quotes imports are order sensitive
 
 
 app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(clients_router)
 app.include_router(suppliers_router)
+app.include_router(rfq_router)
 app.include_router(products_router)
 app.include_router(quotes_router)
 app.include_router(invoices_router)

@@ -212,7 +212,7 @@ if DB:
         assert q["quote_type"] == "engineering_estimate" and q["status"] == "Draft"
         assert q["tax_type_code"] == "construction_17_2017"
         charges = json.loads(q["included_charges"]) if isinstance(q["included_charges"], str) else q["included_charges"]
-        assert all(charges[k] for k in ("supervision", "admin", "insurance", "transport", "contingency"))
+        assert not any(charges[k] for k in ("supervision", "admin", "insurance", "transport", "contingency"))  # CR-I4-1: charges start off
         items = _all("SELECT * FROM quote_items WHERE quote_id = %s", (out["quote_id"],))
         assert len(items) == 30
         run = _one("SELECT * FROM estimator_runs WHERE id = %s", (out["run_id"],))

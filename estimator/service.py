@@ -130,7 +130,12 @@ def _build(cur, req) -> dict:
 
 def _charges() -> dict:
     from quotes.models import IncludedCharges
-    return IncludedCharges().dict()
+    # Change record CR-I4-1 (approved 2026-10-22): estimate quotes start with all five indirect charges OFF.
+    # The workbook indirects are informational only. An admin can switch a charge on later (audited, reason required).
+    c = IncludedCharges().dict()
+    for k in ("supervision", "admin", "insurance", "transport", "contingency"):
+        c[k] = False
+    return c
 
 
 def calculate_preview(req) -> dict:

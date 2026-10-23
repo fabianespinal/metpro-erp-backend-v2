@@ -84,6 +84,7 @@ from database import get_db
 from auth.router import router as auth_router
 from users.router import router as users_router
 from clients.router import router as clients_router
+from suppliers.router import router as suppliers_router
 from products.router import router as products_router
 from quotes.router import router as quotes_router
 from invoices.router import router as invoices_router
@@ -104,6 +105,7 @@ from estimator.router import router as estimator_router, status_router as estima
 app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(clients_router)
+app.include_router(suppliers_router)
 app.include_router(products_router)
 app.include_router(quotes_router)
 app.include_router(invoices_router)

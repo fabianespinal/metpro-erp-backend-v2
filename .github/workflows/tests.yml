@@ -48,6 +48,8 @@ jobs:
           psql "postgresql://postgres:postgres@localhost:5432/metpro_test" -v ON_ERROR_STOP=1 -q -f migrations/2026-10-22_estimator_run_idempotency.sql
           psql "postgresql://postgres:postgres@localhost:5432/metpro_test" -v ON_ERROR_STOP=1 -q -f migrations/2026-10-23_pdf_medidas_print_items.sql
           psql "postgresql://postgres:postgres@localhost:5432/metpro_test" -v ON_ERROR_STOP=1 -q -f migrations/2026-10-23_status_history.sql
+          psql "postgresql://postgres:postgres@localhost:5432/metpro_test" -v ON_ERROR_STOP=1 -q -f migrations/2026-10-23_suppliers.sql
+          psql "postgresql://postgres:postgres@localhost:5432/metpro_test" -v ON_ERROR_STOP=1 -q -f migrations/2026-10-23_suppliers_seed_dummy.sql
           psql "postgresql://postgres:postgres@localhost:5432/metpro_test" -c "ALTER DATABASE metpro_test SET lock_timeout = '10s'"
       - name: Tests
         run: python -m pytest -q -p no:cacheprovider -rs

@@ -261,7 +261,7 @@ def test_revenue_report_counts_only_the_live_payment(db):
 @needs_db
 def test_payment_options_endpoint(db, monkeypatch):
     assert client.get("/invoices/payment-options", headers=_hdr()).json()["data"] == {
-        "void_enabled": True, "correction_enabled": True}
+        "void_enabled": True, "correction_enabled": True, "record_admin_only": False}
     monkeypatch.setenv("PAYMENT_CORRECTION_ENABLED", "false")
     assert client.get("/invoices/payment-options", headers=_hdr()).json()["data"]["correction_enabled"] is False
     assert client.get("/invoices/payment-options").status_code in (401, 403)

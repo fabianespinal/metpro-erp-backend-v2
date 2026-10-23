@@ -3,6 +3,8 @@
 Every query here filters invoice_payments by invoice_id (the foreign key),
 never by invoice_payments.id (the payment's own primary key).
 """
+import os
+
 from psycopg2.extras import RealDictCursor
 
 from core import status_history
@@ -125,6 +127,11 @@ def get_payments_for_invoice(conn, invoice_id: int):
     with conn.cursor(cursor_factory=RealDictCursor) as cursor:
         cursor.execute(LIST_PAYMENTS_SQL, (invoice_id,))
         return [dict(r) for r in cursor.fetchall()]
+
+
+def payment_record_admin_only() -> bool:
+    """Switch PAYMENT_RECORD_ADMIN_ONLY (default off). On: only admin and superadmin may record a payment."""
+    return os.environ.get("PAYMENT_RECORD_ADMIN_ONLY", "false").strip().lower() in ("1", "true", "yes", "on")
 
 
 def payment_void_enabled() -> bool:

@@ -14,7 +14,7 @@ from core.public_payload import public_payload
 
 from invoices.payments.models import PaymentCreate
 from invoices.payments.service import (
-    correct_payment, create_payment, get_payments_for_invoice, payment_correction_enabled, payment_void_enabled, void_payment,
+    correct_payment, create_payment, get_payments_for_invoice, payment_correction_enabled, payment_record_admin_only, payment_void_enabled, void_payment,
 )
 from pydantic import BaseModel
 from core.errors import internal_error
@@ -40,7 +40,8 @@ def create_invoice(invoice: InvoiceCreate, current_user: dict = Depends(require_
 @router.get("/payment-options")
 def payment_options(current_user: dict = Depends(require_auth)):
     """Which payment actions are switched on, so the screen shows only those."""
-    return {"void_enabled": payment_void_enabled(), "correction_enabled": payment_correction_enabled()}
+    return {"void_enabled": payment_void_enabled(), "correction_enabled": payment_correction_enabled(),
+            "record_admin_only": payment_record_admin_only()}
 
 
 @router.get("/", response_model=List[Invoice])
@@ -193,6 +194,9 @@ def delete_invoice(invoice_id: int, _admin: dict = Depends(require_role("admin")
 
 @router.post("/{invoice_id}/payments")
 def add_payment(invoice_id: int, data: PaymentCreate, current_user: dict = Depends(require_auth)):
+    # PAYMENT_RECORD_ADMIN_ONLY (default off): only admin and superadmin record payments, same rule as void and correct.
+    if payment_record_admin_only() and current_user.get("role") not in _allowed_roles("admin"):
+        raise api_error(403, "Permisos insuficientes", "INSUFFICIENT_PERMISSIONS")
     conn = get_db_connection()
     try:
         payment_id = create_payment(conn, invoice_id, data, current_user.get("user_id"))

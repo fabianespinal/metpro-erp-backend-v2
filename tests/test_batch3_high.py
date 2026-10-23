@@ -141,7 +141,7 @@ def test_quote_pdfs_receive_client_rnc_and_local_date(monkeypatch):
     monkeypatch.setattr(qrouter, "create_quote_pdf", fake_pdf)
     monkeypatch.setattr(qrouter.service, "get_quote_with_contact", lambda q: _quote_row())
     monkeypatch.setattr(qrouter.service, "quote_id_for_public_token", lambda t: "q1")
-    monkeypatch.setattr(qrouter.service, "mark_quote_sent", lambda q: "Sent")
+    monkeypatch.setattr(qrouter.service, "mark_quote_sent", lambda q, *a: "Sent")
     monkeypatch.setattr(qrouter, "send_quote_email", lambda **kw: None)
     assert client.get("/quotes/q1/pdf", headers=_hdr()).status_code == 200
     assert client.get("/quotes/public/0b8a6f1e-1c2d-4e5f-8a9b-0c1d2e3f4a5b/pdf").status_code == 200

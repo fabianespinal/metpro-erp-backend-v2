@@ -15,6 +15,7 @@ from core.numbering import invoice_label
 from estimator.quote_lock import ADMIN_ROLES, is_estimate, money_changes
 from psycopg2.extras import RealDictCursor, execute_values
 from core import pdf_options
+from core import status_history
 
 INS_SQL = "INSERT INTO quote_items (quote_id, product_name, quantity, unit_price, discount_type, discount_value) VALUES %s"
 # Create and update paths. Requires quoting_v1 migration (item_type, description).
@@ -357,6 +358,7 @@ def create_quote_in_tx(
         placeholders += ", %s"
         values.append(False)
     cursor.execute(f"INSERT INTO quotes ({columns}) VALUES ({placeholders})", values)
+    status_history.record(cursor, status_history.QUOTE, quote_id, None, "Draft", created_by_user_id)
 
     # No switch check on create: hidden lines here come from a template pack or a duplicate. The switch
     # (PRINT_CONTROLS_ENABLED) governs the screen control and hiding MORE lines on update.
@@ -589,8 +591,32 @@ def get_all_quotes(
         query += " ORDER BY q.id DESC"
 
         cursor.execute(query, params)
-        return cursor.fetchall()
+        rows = [dict(r) for r in cursor.fetchall()]
+        return status_history.attach_last(cursor, status_history.QUOTE, rows, "quote_id")
 
+    finally:
+        if conn:
+            conn.close()
+
+
+def get_quote_status_history(quote_id: str) -> dict:
+    """Full history, newest first. enabled=false when the switch is off (the screen then shows nothing extra)."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SELECT status, created_at, (SELECT COALESCE(u.full_name, u.username) FROM users u "
+                       "WHERE u.id = quotes.created_by_user_id) AS created_by_name FROM quotes WHERE quote_id = %s",
+                       (quote_id,))
+        quote = cursor.fetchone()
+        if not quote:
+            raise api_error(404, "Cotización no encontrada", "QUOTE_NOT_FOUND")
+        return {"enabled": status_history.enabled(), "current_status": quote["status"],
+                "entries": status_history.fetch(cursor, status_history.QUOTE, quote_id)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise internal_error("No se pudo leer el historial", e)
     finally:
         if conn:
             conn.close()
@@ -801,7 +827,7 @@ def update_quote(quote_id: str, quote_update, actor: Optional[dict] = None) -> d
             conn.close()
 
 
-def delete_quote(quote_id: str) -> dict:
+def delete_quote(quote_id: str, actor_user_id: Optional[str] = None) -> dict:
     """Delete a Draft or Rejected quote and its items. Finalized or invoiced quotes are kept."""
     conn = None
     try:
@@ -821,6 +847,7 @@ def delete_quote(quote_id: str) -> dict:
 
         cursor.execute("DELETE FROM quote_items WHERE quote_id = %s", (quote_id,))
         cursor.execute("DELETE FROM quotes WHERE quote_id = %s", (quote_id,))
+        status_history.record(cursor, status_history.QUOTE, quote_id, row["status"], "Deleted", actor_user_id)
         conn.commit()
         return {"message": "Cotización eliminada correctamente"}
 
@@ -950,6 +977,8 @@ def duplicate_quote(quote_id: str, created_by_user_id: Optional[str] = None) -> 
             execute_values(cursor, sql, rows)
         if original.get("print_items") is False:
             cursor.execute("UPDATE quotes SET print_items = false WHERE quote_id = %s", (new_quote_id,))
+        status_history.record(cursor, status_history.QUOTE, new_quote_id, None, "Draft", created_by_user_id,
+                              note="duplicate of " + str(quote_id))
 
         # R4: a copy of an estimate quote stays an estimate quote (the money lock follows the copy).
         # to_jsonb in the SELECT above keeps this working before the quote_type column exists (NULL).
@@ -989,7 +1018,7 @@ def duplicate_quote(quote_id: str, created_by_user_id: Optional[str] = None) -> 
             conn.close()
 
 
-def finalize_quote(quote_id: str) -> dict:
+def finalize_quote(quote_id: str, actor_user_id: Optional[str] = None) -> dict:
     """Draft -> Final. Persists totals, sets finalized_at, generates public_token.
 
     public_token is generated only if NULL, so an existing link keeps working
@@ -1048,6 +1077,7 @@ def finalize_quote(quote_id: str) -> dict:
             (QUOTE_STATUS_FINAL, str(uuid.uuid4()), quote_id),
         )
         cursor.execute(TOTALS_UPDATE_SQL, _totals_columns(totals) + (quote_id,))
+        status_history.record(cursor, status_history.QUOTE, quote_id, "Draft", QUOTE_STATUS_FINAL, actor_user_id)
         conn.commit()
 
         cursor.execute("""
@@ -1080,7 +1110,7 @@ def finalize_quote(quote_id: str) -> dict:
             conn.close()
 
 
-def update_quote_status(quote_id: str, status: str) -> dict:
+def update_quote_status(quote_id: str, status: str, actor_user_id: Optional[str] = None) -> dict:
     """Manual status change. Follows MANUAL_QUOTE_TRANSITIONS strictly."""
     conn = None
     try:
@@ -1116,6 +1146,7 @@ def update_quote_status(quote_id: str, status: str) -> dict:
         cursor.execute(
             "UPDATE quotes SET status = %s, updated_at = CURRENT_TIMESTAMP WHERE quote_id = %s", (status, quote_id)
         )
+        status_history.record(cursor, status_history.QUOTE, quote_id, current["status"], status, actor_user_id)
 
         # X-02 (approved 2026-10-18): rejecting a quote cancels its project. Completed projects are kept.
         if status == "Rejected":
@@ -1165,7 +1196,7 @@ def assert_quote_sendable(quote: dict) -> None:
         raise api_error(400, "El contacto de la cotización no tiene correo electrónico", "QUOTE_NO_CONTACT_EMAIL")
 
 
-def mark_quote_sent(quote_id: str) -> str:
+def mark_quote_sent(quote_id: str, actor_user_id: Optional[str] = None) -> str:
     """After a successful send: Final -> Sent. Sent and Approved keep their status."""
     conn = None
     try:
@@ -1175,6 +1206,8 @@ def mark_quote_sent(quote_id: str) -> str:
             "UPDATE quotes SET status = 'Sent', updated_at = CURRENT_TIMESTAMP WHERE quote_id = %s AND status = %s",
             (quote_id, QUOTE_STATUS_FINAL),
         )
+        if getattr(cursor, "rowcount", 0) > 0:
+            status_history.record(cursor, status_history.QUOTE, quote_id, QUOTE_STATUS_FINAL, "Sent", actor_user_id)
         conn.commit()
         cursor.execute("SELECT status FROM quotes WHERE quote_id = %s", (quote_id,))
         row = cursor.fetchone()
@@ -1338,6 +1371,11 @@ def convert_quote_to_invoice(quote_id: str, created_by_user_id: Optional[str] = 
             "UPDATE quotes SET status = 'Invoiced' WHERE quote_id = %s AND status = 'Approved'",
             (quote_id,),
         )
+        # The quote was read FOR UPDATE as Approved above, so the UPDATE always matches.
+        status_history.record(cursor, status_history.QUOTE, quote_id, "Approved", "Invoiced", created_by_user_id,
+                              note="invoice " + str(invoice_number))
+        status_history.record(cursor, status_history.INVOICE, invoice_id, None, "Pending", created_by_user_id,
+                              note="from quote " + str(quote_id))
 
         # X-01: an invoiced quote always has a project. Quotes approved before Phase 2 had none.
         # Idempotent (one project per quote). Savepoint: a project failure never blocks the invoice.

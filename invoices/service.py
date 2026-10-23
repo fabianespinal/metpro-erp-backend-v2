@@ -7,6 +7,7 @@ from database import get_db_connection
 from core.errors import internal_error
 from psycopg2.extras import RealDictCursor
 import logging
+from core import status_history
 
 logger = logging.getLogger("metpro.invoices")
 
@@ -214,7 +215,29 @@ def get_all_invoices(client_id: Optional[int] = None, status: Optional[str] = No
         query += " ORDER BY i.invoice_date DESC"
         cursor.execute(query, params)
 
-        return [dict(row) for row in cursor.fetchall()]
+        rows = [dict(row) for row in cursor.fetchall()]
+        return status_history.attach_last(cursor, status_history.INVOICE, rows, "id")
+    finally:
+        if conn:
+            conn.close()
+
+
+def get_invoice_status_history(invoice_id: int) -> dict:
+    """Full history, newest first. enabled=false when the switch is off."""
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute("SELECT status FROM invoices WHERE id = %s", (invoice_id,))
+        invoice = cursor.fetchone()
+        if not invoice:
+            raise api_error(404, "Factura no encontrada", "INVOICE_NOT_FOUND")
+        return {"enabled": status_history.enabled(), "current_status": invoice["status"],
+                "entries": status_history.fetch(cursor, status_history.INVOICE, invoice_id)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise internal_error("No se pudo leer el historial", e)
     finally:
         if conn:
             conn.close()
@@ -323,7 +346,7 @@ MANUAL_INVOICE_TRANSITIONS = {
 }
 
 
-def _release_quote_if_no_active_invoice(cursor, quote_id) -> bool:
+def _release_quote_if_no_active_invoice(cursor, quote_id, actor_user_id=None) -> bool:
     """Invoiced -> Approved when the quote has no other non-cancelled invoice (B-06).
 
     The quote can then be invoiced again. Returns True when the quote was released.
@@ -338,10 +361,14 @@ def _release_quote_if_no_active_invoice(cursor, quote_id) -> bool:
         """,
         (quote_id, quote_id),
     )
-    return cursor.rowcount > 0
+    released = cursor.rowcount > 0
+    if released:
+        status_history.record(cursor, status_history.QUOTE, quote_id, "Invoiced", "Approved", actor_user_id,
+                              note="invoice removed")
+    return released
 
 
-def update_invoice_status(invoice_id: int, status: str) -> dict:
+def update_invoice_status(invoice_id: int, status: str, actor_user_id: Optional[str] = None) -> dict:
     conn = None
     try:
         conn = get_db_connection()
@@ -371,9 +398,10 @@ def update_invoice_status(invoice_id: int, status: str) -> dict:
                 "UPDATE invoices SET status = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
                 (status, invoice_id),
             )
+            status_history.record(cursor, status_history.INVOICE, invoice_id, current["status"], status, actor_user_id)
             if status == "Cancelled":
                 # B-06: the quote returns to Approved so it can be invoiced again.
-                _release_quote_if_no_active_invoice(cursor, current["quote_id"])
+                _release_quote_if_no_active_invoice(cursor, current["quote_id"], actor_user_id)
             conn.commit()
 
         return get_invoice_by_id(invoice_id)
@@ -391,7 +419,7 @@ def update_invoice_status(invoice_id: int, status: str) -> dict:
             conn.close()
 
 
-def delete_invoice(invoice_id: int) -> dict:
+def delete_invoice(invoice_id: int, actor_user_id: Optional[str] = None) -> dict:
     """
     Delete one invoice and its line items in a single transaction.
     Refused when the invoice has payments: payment records are never deleted.
@@ -412,6 +440,10 @@ def delete_invoice(invoice_id: int) -> dict:
             raise api_error(400, "La factura tiene pagos y no se puede eliminar", "INVOICE_HAS_PAYMENTS")
 
         quote_id = invoice["quote_id"]
+        invoice_status = None
+        if status_history.enabled():  # one extra read, only when the history is on
+            cursor.execute("SELECT status FROM invoices WHERE id = %s", (invoice_id,))
+            invoice_status = (cursor.fetchone() or {}).get("status")
 
         cursor.execute("DELETE FROM invoice_items WHERE invoice_id = %s", (invoice_id,))
         # B-05: conduce records belong to the invoice (like its items). Without this the FK
@@ -419,7 +451,9 @@ def delete_invoice(invoice_id: int) -> dict:
         cursor.execute("DELETE FROM conduces WHERE invoice_id = %s", (invoice_id,))
         cursor.execute("DELETE FROM invoices WHERE id = %s", (invoice_id,))
         # Back to Approved only when no other active invoice remains (B-06 re-invoices).
-        quote_reverted = _release_quote_if_no_active_invoice(cursor, quote_id)
+        if status_history.enabled():
+            status_history.record(cursor, status_history.INVOICE, invoice_id, invoice_status, "Deleted", actor_user_id)
+        quote_reverted = _release_quote_if_no_active_invoice(cursor, quote_id, actor_user_id)
 
         conn.commit()
         return {"message": "Factura eliminada correctamente", "quote_reverted": quote_reverted}

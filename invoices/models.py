@@ -25,6 +25,8 @@ class Invoice(BaseModel):
     updated_at: datetime
     client_name: Optional[str] = None
     created_by_name: Optional[str] = None
+    last_status_by: Optional[str] = None  # status history (S1): null when the switch is off
+    last_status_at: Optional[datetime] = None
     # Detail view only (GET /invoices/{id}). Lists omit them.
     items: Optional[List[Dict[str, Any]]] = None
     totals: Optional[Dict[str, Any]] = None

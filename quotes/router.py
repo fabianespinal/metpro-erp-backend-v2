@@ -240,9 +240,15 @@ def send_quote(
     )
 
     # Final -> Sent. Sent and Approved keep their status. Cannot fail on transition rules.
-    new_status = service.mark_quote_sent(quote_id)
+    new_status = service.mark_quote_sent(quote_id, current_user.get("user_id"))
 
     return {"message": "Cotización enviada exitosamente", "quote_id": quote_id, "status": new_status}
+
+
+@router.get("/{quote_id}/status-history")
+def get_quote_status_history(quote_id: str, current_user: dict = Depends(require_auth)):
+    """Every status change: who and when. Any signed-in user can read it."""
+    return service.get_quote_status_history(quote_id)
 
 
 @router.get("/{quote_id}")
@@ -353,7 +359,7 @@ def create_draft_quote(quote: QuoteCreate, current_user: dict = Depends(require_
 @router.post("/{quote_id}/finalize")
 def finalize_quote(quote_id: str, current_user: dict = Depends(require_auth)):
     """Draft -> Final. Persists totals and generates the public_token."""
-    return service.finalize_quote(quote_id)
+    return service.finalize_quote(quote_id, current_user.get("user_id"))
 
 
 @router.put("/{quote_id}")
@@ -373,7 +379,7 @@ def update_quote_status(
     current_user: dict = Depends(require_auth),
 ):
     """Update quote status"""
-    return service.update_quote_status(quote_id, status_update.status)
+    return service.update_quote_status(quote_id, status_update.status, current_user.get("user_id"))
 
 
 @router.post("/{quote_id}/duplicate")
@@ -401,4 +407,4 @@ def convert_to_invoice(quote_id: str, current_user: dict = Depends(require_auth)
 @router.delete("/{quote_id}")
 def delete_quote(quote_id: str, _admin: dict = Depends(require_role("admin"))):
     """Delete a quote"""
-    return service.delete_quote(quote_id)
+    return service.delete_quote(quote_id, _admin.get("user_id"))

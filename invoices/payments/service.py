@@ -5,6 +5,7 @@ never by invoice_payments.id (the payment's own primary key).
 """
 from psycopg2.extras import RealDictCursor
 
+from core import status_history
 from core.errors import api_error
 
 # Invoices that may receive a payment. Paid and Cancelled are closed.
@@ -92,6 +93,7 @@ def create_payment(conn, invoice_id: int, data, user_id=None) -> int:
             """,
             (total_paid, amount_due, new_status, invoice_id),
         )
+        status_history.record(cursor, status_history.INVOICE, invoice_id, status, new_status, user_id, note="payment")
 
     conn.commit()
     return payment_id
@@ -174,6 +176,7 @@ def void_payment(conn, invoice_id: int, payment_id: int, reason: str, user_id=No
             "WHERE id = %s",
             (total_paid, max(amount_due, 0.0), new_status, invoice_id),
         )
+        status_history.record(cursor, status_history.INVOICE, invoice_id, status, new_status, user_id, note="payment voided")
     conn.commit()
     return {"payment_id": payment_id, "amount_paid": total_paid, "amount_due": max(amount_due, 0.0), "status": new_status}
 
@@ -269,6 +272,7 @@ def correct_payment(conn, invoice_id: int, payment_id: int, reason: str, data, u
             "WHERE id = %s",
             (total_paid, amount_due, new_status, invoice_id),
         )
+        status_history.record(cursor, status_history.INVOICE, invoice_id, status, new_status, user_id, note="payment corrected")
     conn.commit()
     return {
         "voided_payment_id": payment_id,

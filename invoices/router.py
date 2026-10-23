@@ -157,6 +157,12 @@ def send_invoice(
     return {"message": "Factura enviada exitosamente", "invoice_id": invoice_id}
 
 
+@router.get("/{invoice_id}/status-history")
+def get_invoice_status_history(invoice_id: int, current_user: dict = Depends(require_auth)):
+    """Every status change: who and when. Any signed-in user can read it."""
+    return service.get_invoice_status_history(invoice_id)
+
+
 @router.get("/{invoice_id}", response_model=Invoice)
 def get_invoice(invoice_id: int, current_user: dict = Depends(require_auth)):
     result = service.get_invoice_by_id(invoice_id)
@@ -176,13 +182,13 @@ def update_invoice_status(
     _admin: dict = Depends(require_role("admin")),
 ):
     """Manual status change. Admin only. Paid is reached by recording payments."""
-    result = service.update_invoice_status(invoice_id, status_update.status)
+    result = service.update_invoice_status(invoice_id, status_update.status, _admin.get("user_id"))
     return Invoice(**result)
 
 
 @router.delete("/{invoice_id}")
 def delete_invoice(invoice_id: int, _admin: dict = Depends(require_role("admin"))):
-    return service.delete_invoice(invoice_id)
+    return service.delete_invoice(invoice_id, _admin.get("user_id"))
 
 
 @router.post("/{invoice_id}/payments")

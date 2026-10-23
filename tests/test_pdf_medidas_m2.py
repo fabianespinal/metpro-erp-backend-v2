@@ -88,8 +88,8 @@ def test_switches_off_ignore_units_heading_and_stay_identical(monkeypatch):
 def test_heading_moves_out_of_the_header_and_prints_in_full(monkeypatch):
     monkeypatch.setenv("PDF_PROJECT_DESC_ENABLED", "true")
     t = text(build())
-    assert "Proyecto desc.: " in t and "Proyecto:" not in t
-    assert t.count("Proyecto desc.") == 1
+    assert t.count("Proyecto: ") == 1  # once, no longer in the header
+    assert t.index("Proyecto: ") < t.index("Detalle de Items") < t.index("DESCRIP")  # heading, then the title, then the table
     assert "largo" in t  # the whole name, no 60-character cut
 
 
@@ -120,7 +120,7 @@ def test_print_items_false_removes_the_table_but_keeps_heading_and_totals(monkey
     monkeypatch.setenv("PDF_PROJECT_DESC_ENABLED", "true")
     t = text(build(print_items=False))
     assert "Viga" not in t and "Tornillo" not in t and "Detalle de Items" not in t and "DESCRIP" not in t
-    assert "Proyecto desc.: " in t and "Resumen Financiero" in t and "1,239.00" in t and "1,050.00" in t
+    assert "Proyecto: " in t and "Resumen Financiero" in t and "1,239.00" in t and "1,050.00" in t
 
 
 def test_print_items_false_works_even_if_its_switch_is_off(monkeypatch):

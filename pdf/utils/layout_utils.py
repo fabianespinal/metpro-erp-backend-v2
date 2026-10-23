@@ -277,19 +277,17 @@ def build_quote_invoice_pdf(
         pdf.set_x(10)
         pdf.set_font('Arial', 'B', 9)
         pdf.set_text_color(30, 30, 30)
-        pdf.multi_cell(190, 5, sanitize_text('Proyecto desc.: ' + str(project_name)), 0, 'L')
+        pdf.multi_cell(190, 5, sanitize_text('Proyecto: ' + str(project_name)), 0, 'L')
         pdf.ln(2)
 
-    if not show_items and project_heading:
-        _project_heading()  # no table: the heading still prints, then the totals follow
+    if project_heading:
+        _project_heading()  # right on top of "Detalle de Items"; with no table it still prints, then the totals follow
 
     if show_items:
         pdf.set_font('Arial', 'B', 9)
         pdf.set_text_color(30, 30, 30)
         pdf.cell(0, 5, 'Detalle de Items', 0, 1, 'L')
         pdf.ln(2)
-        if project_heading:
-            _project_heading()
 
         pdf.set_fill_color(245, 245, 245)
         pdf.set_draw_color(220, 220, 220)

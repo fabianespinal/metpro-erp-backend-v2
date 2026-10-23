@@ -118,20 +118,22 @@ def test_case4_zero_percent_charge_keeps_default(base):
     assert rate == pytest.approx(0.18)
 
 
-def test_case2_custom_charge_gives_construction_rate(base):
+def test_case2_custom_charge_alone_keeps_default_rate(base):
+    # Decision 2026-10-22 (supersedes "any charge"): a custom charge alone does not trigger 1.8%.
     charges = _charges(supervision=False, admin=False, insurance=False, transport=False, contingency=False,
                        dynamic_charges=[{"id": "x", "name": "Prueba", "enabled": True, "percentage": 10}])
     q = _create(base, charges)
     _, rate = _tax_of(q["quote_id"] if isinstance(q, dict) and "quote_id" in q else q)
-    assert rate == pytest.approx(0.018)
+    assert rate == pytest.approx(0.18)
 
 
-def test_case5_removing_only_charge_returns_default(base):
-    q = _create(base, _charges(supervision=False, admin=False, insurance=False, transport=False, contingency=False,
+def test_case5_removing_only_construction_charge_returns_default(base):
+    q = _create(base, _charges(supervision=True, admin=False, insurance=False, transport=False, contingency=False,
                                dynamic_charges=[{"id": "x", "name": "Prueba", "enabled": True, "percentage": 10}]))
     qid = q["quote_id"] if isinstance(q, dict) and "quote_id" in q else q
     service.update_quote(qid, QuoteUpdate(included_charges=IncludedCharges(
-        supervision=False, admin=False, insurance=False, transport=False, contingency=False, dynamic_charges=[])))
+        supervision=False, admin=False, insurance=False, transport=False, contingency=False,
+        dynamic_charges=[{"id": "x", "name": "Prueba", "enabled": True, "percentage": 10}])))
     _, rate = _tax_of(qid)
     assert rate == pytest.approx(0.18)
 

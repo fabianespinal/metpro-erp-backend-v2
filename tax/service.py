@@ -91,22 +91,16 @@ def tax_from_charges_enabled() -> bool:
 
 
 def charges_trigger_construction_tax(charges: dict) -> bool:
-    """True when at least one charge is switched on AND has a percentage above 0."""
+    """True when at least one of the five construction overhead charges is switched on AND above 0.
+
+    Decision 2026-10-22 (supersedes "any charge"): only supervision, admin, insurance,
+    transport and contingency trigger construction_17_2017. Dynamic/custom charges never trigger it.
+    """
     charges = charges or {}
     for key in STATIC_CHARGE_KEYS:
         if charges.get(key):
             try:
                 if float(charges.get(f"{key}_percentage", 0) or 0) > 0:
-                    return True
-            except (TypeError, ValueError):
-                continue
-    raw = charges.get("dynamic_charges")
-    if isinstance(raw, list):
-        for dc in raw[:3]:
-            if not isinstance(dc, dict) or not dc.get("enabled"):
-                continue
-            try:
-                if float(dc.get("percentage") or 0) > 0:
                     return True
             except (TypeError, ValueError):
                 continue

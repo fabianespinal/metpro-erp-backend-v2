@@ -49,9 +49,22 @@ def test_static_charge_at_zero_percent_does_not_trigger():
     assert tax_code_for_charges(_charges(admin=True, admin_percentage=0)) is None
 
 
-def test_custom_charge_triggers_construction():
+def test_custom_charge_alone_does_not_trigger_construction():
+    # Decision 2026-10-22 (supersedes "any charge"): custom charges never trigger 1.8%.
     c = _charges(dynamic_charges=[{"id": "x", "name": "Prueba", "enabled": True, "percentage": 10}])
+    assert tax_code_for_charges(c) is None
+
+
+def test_custom_charge_does_not_change_construction_trigger_when_static_present():
+    c = _charges(admin=True, admin_percentage=4,
+                 dynamic_charges=[{"id": "x", "name": "Prueba", "enabled": True, "percentage": 10}])
     assert tax_code_for_charges(c) == CONSTRUCTION_TAX_CODE
+
+
+def test_named_delivery_or_rush_style_charge_does_not_trigger():
+    for name in ("Delivery surcharge", "Rush fee", "Ajuste misceláneo", "Temporary custom charge"):
+        c = _charges(dynamic_charges=[{"id": "x", "name": name, "enabled": True, "percentage": 5}])
+        assert tax_code_for_charges(c) is None, name
 
 
 def test_disabled_custom_charge_does_not_trigger():

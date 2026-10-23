@@ -225,6 +225,18 @@ if DB:
         assert float(q["grand_total"]) == pytest.approx(expected["grand_total"], abs=0.01)
 
     @needs_db
+    def test_generate_lines_carry_medidas_only_when_switched_on(world, monkeypatch):
+        monkeypatch.delenv("PDF_MEDIDAS_ENABLED", raising=False)
+        off = _gen(world).json()["data"]["quote_id"]
+        assert {r["unit_of_measure"] for r in _all("SELECT unit_of_measure FROM quote_items WHERE quote_id = %s", (off,))} == {None}
+        monkeypatch.setenv("PDF_MEDIDAS_ENABLED", "true")
+        on = _gen(world).json()["data"]["quote_id"]
+        rows = _all("SELECT product_name, unit_of_measure FROM quote_items WHERE quote_id = %s", (on,))
+        assert all(r["unit_of_measure"] for r in rows)
+        assert {r["unit_of_measure"] for r in rows} <= {"Lb", "Pie", "Unidad", "Cola", "Colas"}
+        assert [r["product_name"] for r in rows] == [r["product_name"] for r in _all("SELECT product_name FROM quote_items WHERE quote_id = %s", (off,))]  # descriptions unchanged
+
+    @needs_db
     def test_generate_is_idempotent(world):
         key = str(uuid.uuid4())
         a = _gen(world, idempotency_key=key).json()["data"]

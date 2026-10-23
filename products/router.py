@@ -15,6 +15,7 @@ def create_product(product: ProductBase, current_user: dict = Depends(require_au
         product.description,
         product.unit_price,
         product.cost,
+        **({"unit_of_measure": product.unit_of_measure} if product.unit_of_measure else {}),
     )
     return Product(**result)
 
@@ -34,6 +35,9 @@ def get_product(product_id: int, current_user: dict = Depends(require_auth)):
 def update_product(product_id: int, product: ProductBase, current_user: dict = Depends(require_auth)):
     """Update an existing product"""
     # Older clients that omit "cost" keep the stored cost (no silent wipe).
+    extra = {}
+    if "unit_of_measure" in product.model_fields_set:  # older clients that omit it keep the stored unit
+        extra = {"unit_of_measure": product.unit_of_measure, "unit_set": True}
     result = service.update_product(
         product_id,
         product.name,
@@ -41,6 +45,7 @@ def update_product(product_id: int, product: ProductBase, current_user: dict = D
         product.unit_price,
         product.cost,
         cost_set="cost" in product.model_fields_set,
+        **extra,
     )
     return Product(**result)
 

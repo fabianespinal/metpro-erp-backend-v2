@@ -14,6 +14,7 @@ from quotes.dynamic_charges import dynamic_charges_total
 from core.numbering import invoice_label
 from estimator.quote_lock import ADMIN_ROLES, is_estimate, money_changes
 from psycopg2.extras import RealDictCursor, execute_values
+from core import pdf_options
 
 INS_SQL = "INSERT INTO quote_items (quote_id, product_name, quantity, unit_price, discount_type, discount_value) VALUES %s"
 # Create and update paths. Requires quoting_v1 migration (item_type, description).
@@ -187,6 +188,12 @@ def _check_print_flags(cursor, quote_id, items: List[dict]) -> None:
         raise api_error(400, "El control de impresión no está habilitado", "PRINT_CONTROLS_DISABLED")
 
 
+def _check_print_items(print_items) -> None:
+    """Hiding the item table on the PDF needs its switch. True/None always pass."""
+    if print_items is False and not pdf_options.print_items_enabled():
+        raise api_error(400, "Ocultar productos en el PDF no está habilitado", "PDF_PRINT_ITEMS_DISABLED")
+
+
 def _item_as_dict(item) -> dict:
     if hasattr(item, "dict"):
         return item.dict()
@@ -281,6 +288,7 @@ def create_quote_in_tx(
     created_by_user_id: Optional[str] = None,
     tax_type_code: Optional[str] = None,
     quote_type: Optional[str] = None,
+    print_items: bool = True,
 ) -> str:
     """Validate and insert a Draft quote and its lines on the caller's cursor. No commit. Returns quote_id.
 
@@ -342,6 +350,12 @@ def create_quote_in_tx(
         columns += ", quote_type"
         placeholders += ", %s"
         values.append(quote_type)
+    _check_print_items(print_items)
+    if print_items is False:
+        # Named only when false, so the standard path works before the migration is applied.
+        columns += ", print_items"
+        placeholders += ", %s"
+        values.append(False)
     cursor.execute(f"INSERT INTO quotes ({columns}) VALUES ({placeholders})", values)
 
     # No switch check on create: hidden lines here come from a template pack or a duplicate. The switch
@@ -363,7 +377,9 @@ def create_quote_in_tx(
         for item in items
     ]
     if rows:
-        execute_values(cursor, INS_ITEMS_SQL, rows)
+        pdf_options.fill_units_from_products(cursor, items)
+        sql, rows = pdf_options.with_units(INS_ITEMS_SQL, rows, items)
+        execute_values(cursor, sql, rows)
     return quote_id
 
 
@@ -378,6 +394,7 @@ def create_quote(
     valid_until: Optional[date] = None,
     created_by_user_id: Optional[str] = None,
     tax_type_code: Optional[str] = None,
+    print_items: bool = True,
 ) -> dict:
     conn = None
     try:
@@ -386,7 +403,7 @@ def create_quote(
 
         quote_id = create_quote_in_tx(
             cursor, client_id, contact_id, project_name, notes, items, included_charges,
-            payment_terms, valid_until, created_by_user_id, tax_type_code,
+            payment_terms, valid_until, created_by_user_id, tax_type_code, print_items=print_items,
         )
 
         conn.commit()
@@ -435,6 +452,7 @@ def get_quote_by_id(quote_id: str) -> dict:
                    tax_type_code, tax_rate, tax_label,
                    finalized_at, public_token, created_at, updated_at,
                    to_jsonb(quotes)->>'quote_type' AS quote_type,
+                   COALESCE((to_jsonb(quotes)->>'print_items')::boolean, true) AS print_items,
                    (SELECT COALESCE(u.full_name, u.username) FROM users u WHERE u.id = quotes.created_by_user_id) AS created_by_name
             FROM quotes
             WHERE quote_id = %s
@@ -611,6 +629,8 @@ def update_quote(quote_id: str, quote_update, actor: Optional[dict] = None) -> d
         # A1: choosing a tax type re-reads it from tax_types and stores the snapshot. Only Draft quotes get here.
         tax_type_code = update_dict.pop('tax_type_code', None)
         edit_reason = update_dict.pop('edit_reason', None)
+        print_items = update_dict.pop('print_items', None)
+        _check_print_items(print_items)
 
         # Estimate quotes (quote_type = engineering_estimate): money fields are locked for regular users; an admin
         # needs a reason and every change is audited. Other quotes never enter this block.
@@ -642,6 +662,10 @@ def update_quote(quote_id: str, quote_update, actor: Optional[dict] = None) -> d
 
         if 'valid_until' in update_dict and update_dict['valid_until'] is not None:
             update_dict['valid_until'] = _serialize_date(update_dict['valid_until'])
+
+        if print_items is not None:
+            # Display only: totals are untouched. Allowed on estimate quotes (no money change).
+            cursor.execute("UPDATE quotes SET print_items = %s, updated_at = CURRENT_TIMESTAMP WHERE quote_id = %s", (print_items, quote_id))
 
         # Scalar fields update
         if update_dict:
@@ -698,7 +722,9 @@ def update_quote(quote_id: str, quote_update, actor: Optional[dict] = None) -> d
                 for item in normalized
             ]
             if rows:
-                execute_values(cursor, INS_ITEMS_SQL, rows)
+                pdf_options.fill_units_from_products(cursor, normalized)
+                sql, rows = pdf_options.with_units(INS_ITEMS_SQL, rows, normalized)
+                execute_values(cursor, sql, rows)
 
         # Recalculate totals if items, charges or the tax type changed
         if included_charges is not None or items is not None or tax_type_code is not None or derive_tax:
@@ -838,7 +864,8 @@ def duplicate_quote(quote_id: str, created_by_user_id: Optional[str] = None) -> 
                    included_charges, total_amount, payment_terms, valid_until, terms,
                    subtotal, discount_total, tax_amount, grand_total,
                    tax_type_code, tax_rate, tax_label,
-                   to_jsonb(quotes)->>'quote_type' AS quote_type
+                   to_jsonb(quotes)->>'quote_type' AS quote_type,
+                   COALESCE((to_jsonb(quotes)->>'print_items')::boolean, true) AS print_items
             FROM quotes
             WHERE quote_id = %s
         """, (quote_id,))
@@ -918,7 +945,10 @@ def duplicate_quote(quote_id: str, created_by_user_id: Optional[str] = None) -> 
             for item in original_items
         ]
         if rows:
-            execute_values(cursor, INS_DUP_SQL, rows)
+            sql, rows = pdf_options.with_units(INS_DUP_SQL, rows, [dict(i) for i in original_items])
+            execute_values(cursor, sql, rows)
+        if original.get("print_items") is False:
+            cursor.execute("UPDATE quotes SET print_items = false WHERE quote_id = %s", (new_quote_id,))
 
         # R4: a copy of an estimate quote stays an estimate quote (the money lock follows the copy).
         # to_jsonb in the SELECT above keeps this working before the quote_type column exists (NULL).
@@ -1194,7 +1224,8 @@ def convert_quote_to_invoice(quote_id: str, created_by_user_id: Optional[str] = 
         cursor.execute("""
             SELECT quote_id, quote_number, client_id, contact_id, project_name, notes, status,
                    included_charges, total_amount, grand_total, payment_terms, valid_until,
-                   tax_type_code, tax_rate, tax_label
+                   tax_type_code, tax_rate, tax_label,
+                   COALESCE((to_jsonb(quotes)->>'print_items')::boolean, true) AS print_items
             FROM quotes
             WHERE quote_id = %s
             FOR UPDATE
@@ -1293,11 +1324,13 @@ def convert_quote_to_invoice(quote_id: str, created_by_user_id: Optional[str] = 
             for n, item in enumerate(items, start=1)   # B-19: line_no keeps the quote's line order
         ]
         if invoice_item_rows:
-            execute_values(
-                cursor,
+            inv_sql, invoice_item_rows = pdf_options.with_units(
                 "INSERT INTO invoice_items (invoice_id, product_id, description, quantity, unit_price, discount, total, category, line_no, print_on_pdf) VALUES %s",
-                invoice_item_rows,
+                invoice_item_rows, items,
             )
+            execute_values(cursor, inv_sql, invoice_item_rows)
+        if quote.get("print_items") is False:
+            cursor.execute("UPDATE invoices SET print_items = false WHERE id = %s", (invoice_id,))  # the invoice inherits the checkbox
 
         # Same transaction: the quote moves to Invoiced with the invoice.
         cursor.execute(

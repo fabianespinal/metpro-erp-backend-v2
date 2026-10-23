@@ -75,6 +75,8 @@ class QuoteItemBase(BaseModel):
     category: Optional[str] = Field(default=None, max_length=120)
     # A3. None = the client did not send it (older screens). false = counted in totals, never printed to customers.
     print_on_pdf: Optional[bool] = None
+    # Medidas: free text unit (Unidad, Ft, M, M2, Ton, Lb, Set ...). None = take the product's unit. Needs PDF_MEDIDAS_ENABLED.
+    unit_of_measure: Optional[str] = Field(default=None, max_length=20)
 
 
 # -----------------------------
@@ -93,6 +95,8 @@ class QuoteBase(BaseModel):
     included_charges: IncludedCharges = IncludedCharges()
     # A1: code from tax_types. None = the default type. Unknown or inactive codes are rejected (400).
     tax_type_code: Optional[str] = Field(default=None, max_length=40)
+    # false = the PDF shows heading, charges and totals only. Totals never change. Needs PDF_PRINT_ITEMS_ENABLED.
+    print_items: bool = True
 
 
 # -----------------------------
@@ -121,6 +125,7 @@ class QuoteUpdate(BaseModel):
     # Engineering estimate quotes: why an admin changed prices, quantities, discounts, charges or tax.
     # Never stored on the quote; written to quote_edit_audit.
     edit_reason: Optional[str] = Field(default=None, max_length=500)
+    print_items: Optional[bool] = None
 
 
 # -----------------------------

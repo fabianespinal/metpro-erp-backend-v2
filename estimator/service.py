@@ -119,6 +119,7 @@ def _build(cur, req) -> dict:
             "discount_type": "none", "discount_value": 0.0, "item_type": lv.item_types[ln.row],
             "description": None, "product_id": None, "category": SECTION_ES[d.category],
             "print_on_pdf": lv.print_flags[ln.row],
+            "unit_of_measure": ln.unit.strip().capitalize() or None,  # PIE -> Pie; used only when PDF_MEDIDAS_ENABLED
         })
     q = result.quantities
     pounds = {"columnas": q["E42"], "frenado": q["E55"], "tijerillas": q["E51"], "frontales": q["E47"], "conexiones": q["E58"]}

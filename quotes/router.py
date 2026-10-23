@@ -44,6 +44,7 @@ def create_quote(quote: QuoteCreate, current_user: dict = Depends(require_auth))
         valid_until=quote.valid_until,
         created_by_user_id=current_user.get("user_id"),
         tax_type_code=quote.tax_type_code,
+        print_items=quote.print_items,
     )
     return result
 
@@ -68,6 +69,17 @@ def print_options(current_user: dict = Depends(require_auth)):
     """A3: may a line be marked "no imprimir"? Lets the screen show the control only when it is switched on."""
     from core.visibility import print_controls_enabled
     return {"print_controls_enabled": print_controls_enabled()}
+
+
+@router.get("/pdf-options")
+def pdf_option_flags(current_user: dict = Depends(require_auth)):
+    """PDF update: which of the new controls are switched on. Lets the screens show them only when enabled."""
+    from core import pdf_options
+    return {
+        "medidas_enabled": pdf_options.medidas_enabled(),
+        "print_items_enabled": pdf_options.print_items_enabled(),
+        "project_desc_enabled": pdf_options.project_desc_enabled(),
+    }
 
 
 @router.get("/public/{token}", dependencies=[Depends(public_rate_limit)])

@@ -7,6 +7,7 @@ import math
 from database import get_db_connection
 from core.errors import internal_error
 from psycopg2.extras import RealDictCursor
+from core import pdf_options
 
 
 
@@ -18,7 +19,8 @@ def _cell(row: dict, key: str) -> str:
 # CREATE PRODUCT
 # ============================================================
 
-def create_product(name: str, description: str, unit_price: float, cost: Optional[float] = None) -> dict:
+def create_product(name: str, description: str, unit_price: float, cost: Optional[float] = None,
+                   unit_of_measure: Optional[str] = None) -> dict:
     conn = None
     try:
         conn = get_db_connection()
@@ -31,6 +33,9 @@ def create_product(name: str, description: str, unit_price: float, cost: Optiona
         """, (name, description, unit_price, cost))
 
         new_id = cursor.fetchone()["id"]
+        unit = pdf_options.clean_unit(unit_of_measure)
+        if unit and pdf_options.medidas_enabled():  # column named only when used: works before the migration
+            cursor.execute("UPDATE products SET unit_of_measure = %s WHERE id = %s", (unit, new_id))
         conn.commit()
 
         cursor.execute("SELECT * FROM products WHERE id = %s", (new_id,))
@@ -92,7 +97,8 @@ def get_product_by_id(product_id: int) -> dict:
 # ============================================================
 
 def update_product(product_id: int, name: str, description: str, unit_price: float,
-                   cost: Optional[float] = None, cost_set: bool = False) -> dict:
+                   cost: Optional[float] = None, cost_set: bool = False,
+                   unit_of_measure: Optional[str] = None, unit_set: bool = False) -> dict:
     conn = None
     try:
         conn = get_db_connection()
@@ -114,6 +120,9 @@ def update_product(product_id: int, name: str, description: str, unit_price: flo
                 SET name = %s, description = %s, unit_price = %s
                 WHERE id = %s
             """, (name, description, unit_price, product_id))
+
+        if unit_set and pdf_options.medidas_enabled():  # blank clears it
+            cursor.execute("UPDATE products SET unit_of_measure = %s WHERE id = %s", (pdf_options.clean_unit(unit_of_measure), product_id))
 
         conn.commit()
 

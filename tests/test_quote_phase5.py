@@ -283,6 +283,7 @@ def test_draft_endpoint_delegates_to_create(monkeypatch):
         payment_terms = None
         valid_until = None
         tax_type_code = None
+        print_items = True
 
     result = router_mod.create_draft_quote(_Body(), current_user={})
     assert result["status"] == "Draft"

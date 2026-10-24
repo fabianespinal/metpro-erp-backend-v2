@@ -11,6 +11,7 @@ from database import get_db_connection
 from psycopg2.extras import RealDictCursor
 from . import service
 from auth.service import require_auth, require_role
+from core.role_policy import enforce_admin
 from core.errors import api_error
 from core.rate_limit import public_rate_limit
 from pdf.builder_quote import create_quote_pdf
@@ -392,7 +393,9 @@ def update_quote_status(
     status_update: StatusUpdate,
     current_user: dict = Depends(require_auth),
 ):
-    """Update quote status"""
+    """Update quote status. With ROLE_POLICY_ENABLED, approving or rejecting needs admin or superadmin."""
+    if status_update.status in ("Approved", "Rejected"):
+        enforce_admin(current_user)
     return service.update_quote_status(quote_id, status_update.status, current_user.get("user_id"))
 
 
@@ -416,6 +419,7 @@ def duplicate_quote(quote_id: str, body: Optional[DuplicateQuoteIn] = None, curr
 @router.post("/{quote_id}/convert-to-invoice")
 def convert_to_invoice(quote_id: str, current_user: dict = Depends(require_auth)):
     """Convert approved quote to invoice"""
+    enforce_admin(current_user)
     invoice = service.convert_quote_to_invoice(quote_id, current_user.get("user_id"))
     return {
         "invoice_id": invoice["id"],

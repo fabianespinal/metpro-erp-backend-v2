@@ -2,6 +2,7 @@ from core.errors import api_error
 from fastapi import APIRouter, Depends, HTTPException
 from database import get_db_connection
 from auth.service import require_auth, require_role
+from core.role_policy import enforce_admin
 from .models import ExpenseCreate, ExpenseUpdate
 from .services import (
     create_expense,
@@ -53,6 +54,7 @@ def get_expense_endpoint(expense_id: int, _user: dict = Depends(require_auth)):
 
 @router.put("/{expense_id}", response_model=dict)
 def update_expense_endpoint(expense_id: int, data: ExpenseUpdate, _user: dict = Depends(require_auth)):
+    enforce_admin(_user)
     conn = get_db_connection()
     try:
         updated = update_expense(conn, expense_id, data)

@@ -17,6 +17,8 @@ import uuid
 
 logger = logging.getLogger(__name__)
 
+from core.role_policy import role_policy_enabled
+
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
 # ============================
@@ -189,6 +191,12 @@ def get_current_user(user = Depends(require_auth)):
         "role": user.get("role"),
         "name": name,
     }
+
+
+@router.get("/policy")
+def get_policy(user = Depends(require_auth)):
+    """Switch state for the screens: with role_policy on, approve, convert and expense edit are admin only."""
+    return {"role_policy": role_policy_enabled()}
 
 
 # ============================

@@ -8,6 +8,7 @@ from typing import Annotated, List, Optional
 from .models import Invoice, InvoiceCreate, InvoiceStatusUpdate
 from . import service
 from auth.service import require_auth, require_role, _allowed_roles
+from core.role_policy import enforce_admin
 from core.rate_limit import public_rate_limit
 from core.email_attachments import read_extra_attachments
 from core.public_payload import public_payload
@@ -33,6 +34,7 @@ router = APIRouter(prefix="/invoices", tags=["invoices"])
 
 @router.post("/", response_model=Invoice)
 def create_invoice(invoice: InvoiceCreate, current_user: dict = Depends(require_auth)):
+    enforce_admin(current_user)
     result = service.create_invoice_from_quote(invoice.quote_id, invoice.notes, current_user.get("user_id"))
     return Invoice(**result)
 

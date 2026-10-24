@@ -268,3 +268,23 @@ def test_h2_user_with_status_history_is_refused_cleanly(db):
     assert e.value.status_code == 400 and e.value.code == "USER_HAS_HISTORY"
     clean = _user(db, f"af_{uuid.uuid4().hex[:6]}")
     assert users.delete_user(clean, actor_role="superadmin")["message"]
+
+
+def test_missing_percentage_reads_as_the_default_like_the_totals():
+    """A partial update stores only the keys sent; the tax rule must read the same default as the totals."""
+    from tax.service import tax_code_for_charges
+    assert tax_code_for_charges({"supervision": True}) == CONSTRUCTION
+    assert tax_code_for_charges({"supervision": True, "supervision_percentage": 0}) is None
+
+
+@needs_db
+def test_partial_api_update_turning_on_a_charge_switches_tax_and_totals_agree(db):
+    from quotes import service
+    from quotes.models import QuoteUpdate
+    qid = _create(db, dict(ALL_OFF))
+    upd = QuoteUpdate(**{"included_charges": {"supervision": True, "admin": False, "insurance": False,
+                                              "transport": False, "contingency": False}})
+    service.update_quote(qid, upd, actor={"role": "admin"})
+    r = _row(db, qid)
+    assert r["tax_type_code"] == CONSTRUCTION
+    assert abs(float(r["subtotal"]) - 110.0) <= 0.01  # 100 + 10% supervision at its default

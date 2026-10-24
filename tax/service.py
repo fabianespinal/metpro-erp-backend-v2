@@ -87,6 +87,8 @@ import os
 
 CONSTRUCTION_TAX_CODE = "construction_17_2017"
 STATIC_CHARGE_KEYS = ("supervision", "admin", "insurance", "transport", "contingency")
+# Same defaults as quotes.service.calculate_quote_totals and quotes.models.IncludedCharges.
+DEFAULT_CHARGE_PERCENTAGES = {"supervision": 10.0, "admin": 4.0, "insurance": 1.0, "transport": 3.0, "contingency": 3.0}
 
 
 def tax_from_charges_enabled() -> bool:
@@ -103,7 +105,9 @@ def charges_trigger_construction_tax(charges: dict) -> bool:
     for key in STATIC_CHARGE_KEYS:
         if charges.get(key):
             try:
-                if float(charges.get(f"{key}_percentage", 0) or 0) > 0:
+                # A missing percentage means the default, exactly as the totals calculation reads it
+                # (partial API updates store only the keys sent). Audit smoke 2026-10-24.
+                if float(charges.get(f"{key}_percentage", DEFAULT_CHARGE_PERCENTAGES[key]) or 0) > 0:
                     return True
             except (TypeError, ValueError):
                 continue

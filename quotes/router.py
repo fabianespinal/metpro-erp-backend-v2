@@ -340,7 +340,7 @@ def preview_quote_totals(body: TotalsPreviewIn, current_user: dict = Depends(req
     """Totals for a draft selection. Stateless. Same math as save and finalize."""
     items = [item.dict() for item in body.items]
     charges = body.included_charges.dict()
-    return service.preview_totals(items, charges, body.tax_type_code)
+    return service.preview_totals(items, charges, body.tax_type_code, body.quote_type)
 
 
 @router.post("/cost-estimate/preview")

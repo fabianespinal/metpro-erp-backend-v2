@@ -18,16 +18,16 @@ class DynamicCharge(BaseModel):
     def _default_blank_name(cls, v: str) -> str:
         # Toggle REQUIRE_CHARGE_NAME (2026-10-22, default OFF): with it on, a blank name is rejected
         # for any enabled charge above 0 (see _require_name below). With it off, legacy behavior.
-        import os
-        if os.getenv("REQUIRE_CHARGE_NAME", "0").strip().lower() in ("1", "true", "yes"):
+        from core.switches import switch_on
+        if switch_on("REQUIRE_CHARGE_NAME"):
             return v.strip()
         # The UI creates a charge with a blank name; label it instead of rejecting the save.
         return v.strip() or "Cargo adicional"
 
     @model_validator(mode="after")
     def _require_name(self):
-        import os
-        if os.getenv("REQUIRE_CHARGE_NAME", "0").strip().lower() in ("1", "true", "yes"):
+        from core.switches import switch_on
+        if switch_on("REQUIRE_CHARGE_NAME"):
             if self.enabled and self.percentage > 0 and not self.name:
                 raise ValueError("Cada cargo adicional activo necesita un nombre")
         return self
@@ -185,3 +185,5 @@ class TotalsPreviewIn(BaseModel):
     items: List[TotalsItemIn] = []
     included_charges: IncludedCharges = IncludedCharges()
     tax_type_code: Optional[str] = Field(default=None, max_length=40)
+    # Audit C2: the edit screen sends engineering_estimate so the preview keeps the quote's own 1.8%.
+    quote_type: Optional[Literal["standard", "template", "engineering_estimate"]] = None

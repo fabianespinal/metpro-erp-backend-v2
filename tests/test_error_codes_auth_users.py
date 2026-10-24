@@ -29,6 +29,7 @@ EXPECTED = {
     ("El correo ya existe", "EMAIL_TAKEN"),
     ("Usuario no encontrado", "USER_NOT_FOUND"),
     ("El usuario registró o anuló pagos; desactívelo en lugar de eliminarlo", "USER_HAS_PAYMENTS"),  # A2
+    ("El usuario tiene historial registrado (cambios de estado o estimados); desactívelo en lugar de eliminarlo", "USER_HAS_HISTORY"),  # audit H2
     ("La contraseña anterior es incorrecta", "PASSWORD_INCORRECT"),
     ("La contraseña actual es incorrecta", "PASSWORD_INCORRECT"),
     ("El token está vacío", "TOKEN_EMPTY"),

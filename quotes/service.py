@@ -226,10 +226,13 @@ def _validate_product_ids(cursor, items: List[dict]) -> None:
         raise api_error(400, "Producto no encontrado", "PRODUCT_NOT_FOUND")
 
 
-def preview_totals(items: List[dict], charges: dict, tax_type_code: Optional[str] = None) -> dict:
-    """Stateless totals for the take-off screen. Reads tax_types only; no writes."""
-    from tax.service import get_tax_snapshot, tax_from_charges_enabled, tax_code_for_charges
-    if tax_from_charges_enabled():
+def preview_totals(items: List[dict], charges: dict, tax_type_code: Optional[str] = None,
+                   quote_type: Optional[str] = None) -> dict:
+    """Stateless totals for the take-off screen. Reads tax_types only; no writes.
+
+    quote_type=engineering_estimate keeps the sent tax code (estimates stay at 1.8%, audit C2)."""
+    from tax.service import get_tax_snapshot, derives_tax_for, tax_code_for_charges
+    if derives_tax_for(quote_type):
         tax_type_code = tax_code_for_charges(charges)  # 2026-10-22: tax follows charges
     tax = get_tax_snapshot(tax_type_code)
     t = _compute_quote_totals(items, charges, tax["tax_rate"])
@@ -312,9 +315,9 @@ def create_quote_in_tx(
     _validate_product_ids(cursor, items)
     _validate_item_discounts(items)
     quote_id = generate_quote_id()
-    from tax.service import resolve_tax_type, tax_from_charges_enabled, tax_code_for_charges
-    if tax_from_charges_enabled():
-        tax_type_code = tax_code_for_charges(included_charges)  # client value ignored
+    from tax.service import resolve_tax_type, derives_tax_for, tax_code_for_charges
+    if derives_tax_for(quote_type):
+        tax_type_code = tax_code_for_charges(included_charges)  # client value ignored; estimates keep theirs
     tax = resolve_tax_type(cursor, tax_type_code)  # None = the default type
     totals = _compute_quote_totals(items, included_charges, tax["tax_rate"])
 
@@ -704,8 +707,9 @@ def update_quote(quote_id: str, quote_update, actor: Optional[dict] = None) -> d
             """
             cursor.execute(query, list(update_dict.values()) + [quote_id])
 
-        from tax.service import resolve_tax_type, tax_from_charges_enabled, tax_code_for_charges
-        derive_tax = tax_from_charges_enabled()
+        from tax.service import resolve_tax_type, derives_tax_for, tax_code_for_charges
+        # Estimate quotes never re-derive: their 1.8% survives every save (audit C2, decision 2026-10-24).
+        derive_tax = derives_tax_for(quote.get("quote_type"))
         if derive_tax:
             tax_type_code = None  # client value ignored; derived from charges below
         if tax_type_code is not None and not derive_tax:
@@ -827,6 +831,22 @@ def update_quote(quote_id: str, quote_update, actor: Optional[dict] = None) -> d
             conn.close()
 
 
+def _has_estimate_history(cursor, quote_id: str) -> bool:
+    """True when estimator runs or audited edits reference the quote. Works before the estimator tables exist."""
+    cursor.execute("SELECT to_regclass('public.estimator_runs') AS r, to_regclass('public.quote_edit_audit') AS a")
+    t = cursor.fetchone() or {}
+    checks = []
+    if t.get("r"):
+        checks.append("EXISTS (SELECT 1 FROM estimator_runs r JOIN quotes q ON q.id = r.quote_id WHERE q.quote_id = %s)")
+    if t.get("a"):
+        checks.append("EXISTS (SELECT 1 FROM quote_edit_audit a JOIN quotes q ON q.id = a.quote_id WHERE q.quote_id = %s)")
+    if not checks:
+        return False
+    cursor.execute("SELECT (" + " OR ".join(checks) + ") AS has_history", tuple(quote_id for _ in checks))
+    row = cursor.fetchone() or {}
+    return bool(row.get("has_history"))
+
+
 def delete_quote(quote_id: str, actor_user_id: Optional[str] = None) -> dict:
     """Delete a Draft or Rejected quote and its items. Finalized or invoiced quotes are kept."""
     conn = None
@@ -844,6 +864,11 @@ def delete_quote(quote_id: str, actor_user_id: Optional[str] = None) -> dict:
         cursor.execute("SELECT id FROM invoices WHERE quote_id = %s", (quote_id,))
         if cursor.fetchone():
             raise api_error(400, "La cotización tiene una factura y no se puede eliminar", "QUOTE_DELETE_BLOCKED")
+
+        # Audit H1 (2026-10-24): an estimate quote with a calculation run or audited edits keeps its history
+        # (append-only tables reference it). Refuse cleanly instead of failing in the database.
+        if _has_estimate_history(cursor, quote_id):
+            raise api_error(400, "Este estimado de ingeniería conserva su historial de cálculo y cambios auditados, por eso no se puede eliminar.", "ESTIMATE_QUOTE_HAS_HISTORY")
 
         cursor.execute("DELETE FROM quote_items WHERE quote_id = %s", (quote_id,))
         cursor.execute("DELETE FROM quotes WHERE quote_id = %s", (quote_id,))
@@ -1015,6 +1040,21 @@ def duplicate_quote(
         if original.get("quote_type"):
             cursor.execute("UPDATE quotes SET quote_type = %s WHERE quote_id = %s", (original["quote_type"], new_quote_id))
 
+        # Audit H3 (2026-10-24): with TAX_FROM_CHARGES on, the copy follows the current rule, not the
+        # original's snapshot. Estimate copies keep the original 1.8%.
+        from tax.service import derives_tax_for, resolve_tax_type, tax_code_for_charges
+        if derives_tax_for(original.get("quote_type")):
+            dup_charges = json.loads(included_charges) if included_charges else {}
+            tax = resolve_tax_type(cursor, tax_code_for_charges(dup_charges))
+            if tax["tax_type_code"] != original["tax_type_code"] or float(tax["tax_rate"]) != float(original["tax_rate"]):
+                cursor.execute(
+                    "UPDATE quotes SET tax_type_code = %s, tax_rate = %s, tax_label = %s WHERE quote_id = %s",
+                    (tax["tax_type_code"], tax["tax_rate"], tax["tax_label"], new_quote_id),
+                )
+                cursor.execute("SELECT * FROM quote_items WHERE quote_id = %s ORDER BY id", (new_quote_id,))
+                dup_totals = _compute_quote_totals([dict(r) for r in cursor.fetchall()], dup_charges, tax["tax_rate"])
+                cursor.execute(TOTALS_UPDATE_SQL, _totals_columns(dup_totals) + (new_quote_id,))
+
         conn.commit()
 
         # 8. Return new quote with items
@@ -1061,7 +1101,8 @@ def finalize_quote(quote_id: str, actor_user_id: Optional[str] = None) -> dict:
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
         cursor.execute(
-            "SELECT quote_id, status, included_charges, tax_rate FROM quotes WHERE quote_id = %s FOR UPDATE",
+            "SELECT quote_id, status, included_charges, tax_rate, to_jsonb(quotes)->>'quote_type' AS quote_type "
+            "FROM quotes WHERE quote_id = %s FOR UPDATE",
             (quote_id,),
         )
         quote = cursor.fetchone()
@@ -1071,10 +1112,17 @@ def finalize_quote(quote_id: str, actor_user_id: Optional[str] = None) -> dict:
             raise api_error(400, "Solo las cotizaciones en Borrador se pueden finalizar", "QUOTE_NOT_DRAFT")
 
         # M3 (2026-10-22, toggle BLOCK_ZERO_LINE_FINALIZE, default OFF): no finalize with a $0 line.
-        import os
-        if os.getenv("BLOCK_ZERO_LINE_FINALIZE", "0").strip().lower() in ("1", "true", "yes"):
+        # Audit M2 (2026-10-24): a $0 line is any line whose total is 0 or less: price 0, quantity 0,
+        # a 100% discount or a fixed discount that covers the whole line.
+        from core.switches import switch_on
+        if switch_on("BLOCK_ZERO_LINE_FINALIZE"):
             cursor.execute(
-                "SELECT product_name FROM quote_items WHERE quote_id = %s AND unit_price <= 0 ORDER BY id",
+                """SELECT product_name FROM quote_items
+                   WHERE quote_id = %s
+                     AND (unit_price <= 0 OR quantity <= 0
+                          OR (discount_type = 'percentage' AND discount_value >= 100)
+                          OR (discount_type = 'fixed' AND discount_value >= quantity * unit_price))
+                   ORDER BY id""",
                 (quote_id,),
             )
             zero = [r["product_name"] for r in cursor.fetchall()]
@@ -1093,7 +1141,26 @@ def finalize_quote(quote_id: str, actor_user_id: Optional[str] = None) -> dict:
         raw = quote.get("included_charges") or {}
         if isinstance(raw, str):
             raw = json.loads(raw) if raw else {}
-        totals = _compute_quote_totals(current_items, raw, float(quote["tax_rate"]))
+
+        # Audit M1 (2026-10-24): the charge-name rule also holds on the finalize path, not only on save.
+        if switch_on("REQUIRE_CHARGE_NAME"):
+            for dc in (raw.get("dynamic_charges") or [])[:3]:
+                if isinstance(dc, dict) and dc.get("enabled") and float(dc.get("percentage") or 0) > 0 \
+                        and not str(dc.get("name") or "").strip():
+                    raise api_error(400, "Cada cargo adicional activo necesita un nombre", "CHARGE_NAME_REQUIRED")
+
+        # Audit H3 (2026-10-24): a draft that was never saved under the rule (a duplicate, or a draft from
+        # before TAX_FROM_CHARGES) takes the rule's tax here. Estimate quotes keep theirs.
+        rate = float(quote["tax_rate"])
+        from tax.service import derives_tax_for, resolve_tax_type, tax_code_for_charges
+        if derives_tax_for(quote.get("quote_type")):
+            tax = resolve_tax_type(cursor, tax_code_for_charges(raw))
+            cursor.execute(
+                "UPDATE quotes SET tax_type_code = %s, tax_rate = %s, tax_label = %s WHERE quote_id = %s",
+                (tax["tax_type_code"], tax["tax_rate"], tax["tax_label"], quote_id),
+            )
+            rate = tax["tax_rate"]
+        totals = _compute_quote_totals(current_items, raw, rate)
 
         cursor.execute(
             """

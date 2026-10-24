@@ -110,7 +110,8 @@ def db(monkeypatch):
                 "RESTART IDENTITY CASCADE")
     for uid, name, role in ((USER_ID, "t_user", "user"), (ADMIN_ID, "t_admin", "admin")):
         cur.execute("INSERT INTO users (id, username, password_hash, email, role, is_active) VALUES "
-                    "(%s, %s, 'x', %s, %s, true) ON CONFLICT DO NOTHING", (uid, name, f"{name}@test.local", role))
+                    "(%s, %s, 'x', %s, %s, true) ON CONFLICT (id) DO UPDATE SET full_name = NULL",  # other tests name this user
+                    (uid, name, f"{name}@test.local", role))
     cur.execute("INSERT INTO clients (company_name) VALUES ('Cliente A2') RETURNING id")
     cid = cur.fetchone()["id"]
     cur.execute("INSERT INTO invoices (invoice_number, client_id, status, total_amount, grand_total, invoice_date, "

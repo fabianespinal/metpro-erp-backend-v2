@@ -75,10 +75,13 @@ def snapshot_from_document(doc: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Tax from charges (2026-10-22 decision). Toggle TAX_FROM_CHARGES, default OFF.
-# Any charge with a value above 0 (static five or enabled dynamic charge) = construction_17_2017.
-# No charge = the default type. The client-sent tax_type_code is ignored while the toggle is on.
-# construction_17_2017 is seeded INACTIVE, so resolve_tax_type fails loudly until it is activated.
+# Tax from charges. Toggle TAX_FROM_CHARGES, default OFF.
+# Rule (authoritative, 2026-10-22 option 2, confirmed 2026-10-24): one of the five construction charges
+# (supervision, admin, insurance, transport, contingency) switched on and above 0 = construction_17_2017.
+# Custom (dynamic) charges never trigger it. No construction charge = the default type.
+# The client-sent tax_type_code is ignored while the toggle is on.
+# Engineering estimate quotes are the exception: they always keep the 1.8% the estimator sets
+# (decision 2026-10-24); callers skip derivation for them (see derives_tax_for).
 # ---------------------------------------------------------------------------
 import os
 
@@ -87,7 +90,7 @@ STATIC_CHARGE_KEYS = ("supervision", "admin", "insurance", "transport", "conting
 
 
 def tax_from_charges_enabled() -> bool:
-    return os.getenv("TAX_FROM_CHARGES", "0").strip().lower() in ("1", "true", "yes")
+    return os.getenv("TAX_FROM_CHARGES", "0").strip().lower() in ("1", "true", "yes", "on")
 
 
 def charges_trigger_construction_tax(charges: dict) -> bool:
@@ -110,3 +113,15 @@ def charges_trigger_construction_tax(charges: dict) -> bool:
 def tax_code_for_charges(charges: dict) -> Optional[str]:
     """Code to resolve for a document's charges. None = default type."""
     return CONSTRUCTION_TAX_CODE if charges_trigger_construction_tax(charges) else None
+
+
+ESTIMATE_QUOTE_TYPE = "engineering_estimate"
+
+
+def derives_tax_for(quote_type: Optional[str]) -> bool:
+    """True when the tax of a quote of this type follows its charges right now.
+
+    Off when TAX_FROM_CHARGES is off. Never for engineering estimate quotes: their 1.8% is fixed by the
+    estimator and survives every save, duplicate and finalize (audit C2, decision 2026-10-24).
+    """
+    return tax_from_charges_enabled() and quote_type != ESTIMATE_QUOTE_TYPE

@@ -340,6 +340,26 @@ def reset_user_password(user_id: str, new_password: str, actor_role: Optional[st
             conn.close()
 
 
+_USER_HISTORY_REFS = (
+    ("status_history", "actor_user_id"),
+    ("estimator_runs", "generated_by"),
+    ("quote_edit_audit", "user_id"),
+    ("estimator_versions", "activated_by"),
+)
+
+
+def _has_user_history(cursor, user_id) -> bool:
+    """True when an append-only or no-action history table references the user. Tables that do not exist yet are skipped."""
+    for table, column in _USER_HISTORY_REFS:
+        cursor.execute("SELECT to_regclass(%s) AS t", ("public." + table,))
+        if not (cursor.fetchone() or {}).get("t"):
+            continue
+        cursor.execute(f"SELECT 1 FROM public.{table} WHERE {column} = %s LIMIT 1", (user_id,))
+        if cursor.fetchone():
+            return True
+    return False
+
+
 def delete_user(user_id: str, actor_role: Optional[str] = None) -> dict:
     conn = None
     try:
@@ -361,6 +381,11 @@ def delete_user(user_id: str, actor_role: Optional[str] = None) -> dict:
         )
         if cursor.fetchone():
             raise api_error(400, "El usuario registró o anuló pagos; desactívelo en lugar de eliminarlo", "USER_HAS_PAYMENTS")
+
+        # Audit H2 (2026-10-24): append-only history keeps who did what (status changes, estimator runs,
+        # audited estimate edits, version activation). Deleting such a user fails in the database, so refuse it here.
+        if _has_user_history(cursor, user_id):
+            raise api_error(400, "El usuario tiene historial registrado (cambios de estado o estimados); desactívelo en lugar de eliminarlo", "USER_HAS_HISTORY")
 
         cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
 

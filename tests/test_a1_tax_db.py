@@ -9,6 +9,8 @@ import uuid
 
 import pytest
 
+os.environ.setdefault("SECRET_KEY", "test-secret-key")  # collection must not depend on the caller's shell
+
 pytestmark = pytest.mark.skipif(os.getenv("A1_DB_TESTS") != "1", reason="set A1_DB_TESTS=1 with a loaded database")
 
 from database import get_db_connection  # noqa: E402

@@ -63,6 +63,8 @@ EXPECTED = {
     ("quotes/service.py", 400, "El contacto de la cotización no tiene correo electrónico", "QUOTE_NO_CONTACT_EMAIL"),
     ("quotes/service.py", 400, "Solo se pueden eliminar cotizaciones en Borrador o Rechazadas", "QUOTE_DELETE_BLOCKED"),
     ("quotes/service.py", 400, "La cotización tiene una factura y no se puede eliminar", "QUOTE_DELETE_BLOCKED"),
+    ("quotes/service.py", 400, "Este estimado de ingeniería conserva su historial de cálculo y cambios auditados, por eso no se puede eliminar.", "ESTIMATE_QUOTE_HAS_HISTORY"),  # audit H1
+    ("quotes/service.py", 400, "Cada cargo adicional activo necesita un nombre", "CHARGE_NAME_REQUIRED"),  # audit M1
     ("quotes/service.py", 400, "El descuento porcentual no puede exceder 100", "QUOTE_DISCOUNT_INVALID"),
     ("quotes/service.py", 400, "El descuento fijo no puede exceder el monto de la línea", "QUOTE_DISCOUNT_INVALID"),
 }
